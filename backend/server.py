@@ -7,6 +7,10 @@ import cv2
 import uuid
 from tracker import BehaviorTracker
 from typing import Optional
+import logging
+
+# configure logging so INFO/DEBUG messages are shown
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # Local VLM (BLIP) imports will be optional and loaded lazily
 _local_captioner = None
@@ -246,35 +250,91 @@ async def vlm_local(
     except Exception as e:
         analysis.update({"error": str(e)})
 
-    # Run local captioner on the extracted frame if available
+    # Run local captioner on multiple sampled frames if available
     captioner = get_local_captioner()
     if captioner is None:
         analysis.update({"local_captioner": "not available (install transformers/torch)"})
+        analysis["video_url"] = f"/backend/vlm_video/{filename}"
         return {"message": "VLM local stub response", "analysis": analysis}
 
     try:
-        # convert BGR (cv2) to RGB and to PIL-like input acceptable by pipeline
         import cv2 as _cv2
         from PIL import Image
-        rgb = _cv2.cvtColor(frame, _cv2.COLOR_BGR2RGB)
-        pil = Image.fromarray(rgb)
-        # Some transformers ImageToText pipelines don't accept generation kwargs
-        # like `max_length`. Call without extra kwargs and normalize output.
-        captions = captioner(pil)
-        # Normalize possible return formats
-        if isinstance(captions, list) and len(captions) > 0:
-            first = captions[0]
-            if isinstance(first, dict):
-                if 'generated_text' in first:
-                    analysis["captions"] = [c.get('generated_text') for c in captions]
-                elif 'caption' in first:
-                    analysis["captions"] = [c.get('caption') for c in captions]
+
+        # Decide sampling strategy: up to `max_samples` evenly across the video
+        max_samples = 30
+        total_frames = int(frame_count)
+        desired = min(max_samples, max(1, total_frames))
+        step = max(1, total_frames // desired) if total_frames > 0 else 1
+
+        samples = []
+        work_frames = []
+        idle_frames = []
+
+        # simple keyword-based classifier for 'work' vs 'idle'
+        work_keywords = [
+            'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
+            'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
+            'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
+        ]
+
+        cap2 = cv2.VideoCapture(save_path)
+        if not cap2.isOpened():
+            analysis.update({"error": "could not open video for sampling"})
+            analysis["video_url"] = f"/backend/vlm_video/{filename}"
+            return {"message": "VLM local response", "analysis": analysis}
+
+        for idx in range(0, total_frames, step):
+            if len(samples) >= max_samples:
+                break
+
+            cap2.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret_s, f = cap2.read()
+            if not ret_s or f is None:
+                continue
+
+            # Convert to RGB PIL image and caption
+            rgb = _cv2.cvtColor(f, _cv2.COLOR_BGR2RGB)
+            pil = Image.fromarray(rgb)
+            try:
+                out = captioner(pil)
+            except Exception as ex:
+                samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": None, "error": str(ex)})
+                idle_frames.append(idx)
+                continue
+
+            # normalize output to text
+            text = None
+            if isinstance(out, list) and len(out) > 0:
+                first = out[0]
+                if isinstance(first, dict):
+                    text = first.get('generated_text') or first.get('caption') or str(first)
                 else:
-                    analysis["captions"] = captions
+                    text = str(first)
             else:
-                analysis["captions"] = captions
-        else:
-            analysis["captions"] = captions
+                text = str(out)
+
+            text_lower = (text or '').lower()
+            is_work = any(k in text_lower for k in work_keywords)
+
+            samples.append({
+                "frame_index": idx,
+                "time_sec": float(idx / fps) if fps > 0 else 0.0,
+                "caption": text,
+                "label": "work" if is_work else "idle",
+            })
+
+            if is_work:
+                work_frames.append(idx)
+            else:
+                idle_frames.append(idx)
+
+        cap2.release()
+
+        analysis["samples"] = samples
+        analysis["idle_frames"] = idle_frames
+        analysis["work_frames"] = work_frames
+
     except Exception as e:
         analysis.update({"caption_error": str(e)})
 
@@ -315,7 +375,10 @@ async def vlm_local_models():
         # transformers/torch not installed; return entries but mark unavailable
         return {"available": False, "models": [{"id": e.get('id'), "name": e.get('name'), "available": False, "error": 'transformers or torch not installed'} for e in entries]}
 
+    logging.info(f"Probing {len(entries)} local VLM models...")
     for e in entries:
+        # print("entry:", e)
+        logging.info(f"Probing Entry {e}")
         mid = e.get('id')
         task = e.get('task', 'image-to-text')
         info = {"id": mid, "name": e.get('name'), "available": False}

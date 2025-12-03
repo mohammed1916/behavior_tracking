@@ -3,7 +3,8 @@ import cv2
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import logging
-logging.getLogger('absl').setLevel(logging.ERROR)
+# logging.getLogger('absl').setLevel(logging.ERROR)
+logging.getLogger('absl')
 
 import os
 import numpy as np
