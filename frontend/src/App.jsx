@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
@@ -11,6 +11,7 @@ function App() {
 
   // VLM state
   const [vlmModel, setVlmModel] = useState('gpt-4o-vlm');
+  const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
   const [vlmResult, setVlmResult] = useState(null);
@@ -58,6 +59,27 @@ function App() {
       setVlmLoading(false);
     }
   };
+
+  // Fetch local models when user switches to local VLM
+  useEffect(() => {
+    let abort = false;
+    async function fetchLocalModels() {
+      if (!vlmUseLocal) return setVlmAvailableModels([]);
+      try {
+        const resp = await fetch('http://localhost:8001/backend/vlm_local_models');
+        if (!resp.ok) return setVlmAvailableModels([]);
+        const data = await resp.json();
+        if (abort) return;
+        setVlmAvailableModels(data.models || []);
+        if ((data.models || []).length > 0) setVlmModel(data.models[0].id);
+      } catch (e) {
+        console.warn('Could not fetch local VLM models', e);
+        setVlmAvailableModels([]);
+      }
+    }
+    fetchLocalModels();
+    return () => { abort = true; };
+  }, [vlmUseLocal]);
 
   const handleUpload = async () => {
     if (!file) return alert('Please select a file first!');
@@ -138,9 +160,19 @@ function App() {
           <div className="vlm-section">
             <label>Model:
               <select value={vlmModel} onChange={(e) => setVlmModel(e.target.value)}>
-                <option value="gpt-4o-vlm">gpt-4o-vlm</option>
-                <option value="gpt-5-vlm">gpt-5-vlm</option>
-                <option value="openai-vision">openai-vision</option>
+                {vlmUseLocal ? (
+                  vlmAvailableModels.length > 0 ? (
+                    vlmAvailableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)
+                  ) : (
+                    <option value="">(no local models available)</option>
+                  )
+                ) : (
+                  <>
+                    <option value="gpt-4o-vlm">gpt-4o-vlm (remote placeholder)</option>
+                    <option value="gpt-5-vlm">gpt-5-vlm (remote placeholder)</option>
+                    <option value="openai-vision">openai-vision (remote placeholder)</option>
+                  </>
+                )}
               </select>
             </label>
 
@@ -155,6 +187,13 @@ function App() {
             <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLocal} onChange={(e) => setVlmUseLocal(e.target.checked)} /> Use local VLM
             </label>
+            <div style={{ marginTop: 6 }}>
+              {vlmUseLocal ? (
+                <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${vlmAvailableModels[0].name}` : 'No local VLM models detected on the server.'}</small>
+              ) : (
+                <small style={{ color: '#666' }}>Remote model identifiers (placeholders for cloud VLMs).</small>
+              )}
+            </div>
 
             <div style={{ marginTop: 8 }}>
               <button onClick={handleVlmSubmit} disabled={vlmLoading}>{vlmLoading ? 'Running...' : 'Run VLM on Video'}</button>

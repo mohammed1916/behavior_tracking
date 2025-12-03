@@ -258,10 +258,21 @@ async def vlm_local(
         from PIL import Image
         rgb = _cv2.cvtColor(frame, _cv2.COLOR_BGR2RGB)
         pil = Image.fromarray(rgb)
-        captions = captioner(pil, max_length=64)
-        # pipeline returns list of dicts with 'generated_text'
-        if isinstance(captions, list) and len(captions) > 0 and 'generated_text' in captions[0]:
-            analysis["captions"] = [c['generated_text'] for c in captions]
+        # Some transformers ImageToText pipelines don't accept generation kwargs
+        # like `max_length`. Call without extra kwargs and normalize output.
+        captions = captioner(pil)
+        # Normalize possible return formats
+        if isinstance(captions, list) and len(captions) > 0:
+            first = captions[0]
+            if isinstance(first, dict):
+                if 'generated_text' in first:
+                    analysis["captions"] = [c.get('generated_text') for c in captions]
+                elif 'caption' in first:
+                    analysis["captions"] = [c.get('caption') for c in captions]
+                else:
+                    analysis["captions"] = captions
+            else:
+                analysis["captions"] = captions
         else:
             analysis["captions"] = captions
     except Exception as e:
@@ -277,6 +288,47 @@ async def get_vlm_video(filename: str):
     if os.path.exists(file_path):
         return FileResponse(file_path, media_type="video/mp4", filename=filename)
     raise HTTPException(status_code=404, detail="File not found")
+
+
+@app.get("/backend/vlm_local_models")
+async def vlm_local_models():
+    """Return a list of locally-available VLM/image-captioning models (if any).
+    Probes model entries listed in `local_vlm_models.json` using
+    `transformers.pipeline(..., local_files_only=True)` so no downloads occur.
+    """
+    cfg_path = os.path.join(os.path.dirname(__file__), 'local_vlm_models.json')
+    models_found = []
+    try:
+        import json
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+            entries = cfg.get('models', [])
+    except Exception:
+        entries = []
+
+    # Try to probe each entry; do not trigger downloads (local_files_only=True)
+    try:
+        from transformers import pipeline
+        import torch
+        device = 0 if torch.cuda.is_available() else -1
+    except Exception:
+        # transformers/torch not installed; return entries but mark unavailable
+        return {"available": False, "models": [{"id": e.get('id'), "name": e.get('name'), "available": False, "error": 'transformers or torch not installed'} for e in entries]}
+
+    for e in entries:
+        mid = e.get('id')
+        task = e.get('task', 'image-to-text')
+        info = {"id": mid, "name": e.get('name'), "available": False}
+        try:
+            # local_files_only prevents downloads and will raise if missing
+            _p = pipeline(task, model=mid, device=device, local_files_only=True)
+            info['available'] = True
+        except Exception as ex:
+            info['available'] = False
+            info['error'] = str(ex)
+        models_found.append(info)
+
+    return {"available": any(m.get('available') for m in models_found), "models": models_found}
 
 if __name__ == "__main__":
     import uvicorn
