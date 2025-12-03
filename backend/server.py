@@ -34,6 +34,34 @@ def get_local_captioner():
         _local_captioner = None
     return _local_captioner
 
+
+# Lazy loader for a local text LLM (optional)
+_local_text_llm = None
+def get_local_text_llm():
+    global _local_text_llm
+    if _local_text_llm is not None:
+        return _local_text_llm
+    try:
+        from transformers import pipeline
+        import torch
+    except Exception:
+        _local_text_llm = None
+        return None
+    device = 0 if torch.cuda.is_available() else -1
+    # Try a small local-capable model first (must be cached locally to avoid downloads)
+    candidates = [
+        'Qwen/Qwen-2.5',
+        'qwen/Qwen-2.5',
+        'gpt2',
+    ]
+    for cid in candidates:
+        try:
+            _local_text_llm = pipeline('text-generation', model=cid, device=device, local_files_only=True)
+            return _local_text_llm
+        except Exception:
+            _local_text_llm = None
+    return None
+
 app = FastAPI()
 
 app.add_middleware(
@@ -392,6 +420,58 @@ async def vlm_local_models():
         models_found.append(info)
 
     return {"available": any(m.get('available') for m in models_found), "models": models_found}
+
+
+@app.post('/backend/llm_length_check')
+async def llm_length_check(text: str = Form(...), max_context: int = Form(2048)):
+    """Check whether `text` is too long for a model with `max_context` tokens.
+    Attempts to use a local text LLM to give a suggested summary or strategy; falls
+    back to a heuristic token estimate if no local LLM is available.
+    """
+    if not isinstance(text, str) or len(text.strip()) == 0:
+        raise HTTPException(status_code=400, detail='No text provided')
+
+    # rough token estimate: approx 1 token ~= 4 characters (very approximate)
+    approx_tokens = max(1, int(len(text) / 4))
+    too_long = approx_tokens > int(max_context)
+
+    suggestions = []
+    if too_long:
+        suggestions.append({"type": "summarize", "desc": f"Summarize the text to ~{int(max_context * 0.25)} tokens (short summary)."})
+        suggestions.append({"type": "split", "desc": f"Split the text into {max(2, approx_tokens // int(max_context))} segments each <= {max_context} tokens."})
+        suggestions.append({"type": "extract_actions", "desc": "Extract action items or steps only (reduce verbose context)."})
+    else:
+        suggestions.append({"type": "ok", "desc": "Text fits within the context window; no change required."})
+
+    # Try to use a local text LLM to produce a short example summary/proposal
+    example_summary = None
+    text_llm = get_local_text_llm()
+    if text_llm is not None:
+        try:
+            prompt = (
+                f"You are an assistant that evaluates whether a text is too long for a model with "
+                f"context {max_context} tokens. Respond with a 1-2 sentence summary and a single suggestion.\n\nText:\n" + text
+            )
+            # some pipelines return list/dict; call safely
+            out = text_llm(prompt, max_new_tokens=128)
+            if isinstance(out, list) and len(out) > 0:
+                first = out[0]
+                if isinstance(first, dict):
+                    example_summary = first.get('generated_text') or first.get('text') or str(first)
+                else:
+                    example_summary = str(first)
+            else:
+                example_summary = str(out)
+        except Exception as e:
+            logging.info('Local text LLM failed: %s', e)
+
+    return {
+        "too_long": bool(too_long),
+        "approx_tokens": int(approx_tokens),
+        "max_context": int(max_context),
+        "suggestions": suggestions,
+        "example_summary": example_summary,
+    }
 
 if __name__ == "__main__":
     import uvicorn

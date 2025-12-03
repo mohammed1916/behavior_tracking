@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 function App() {
@@ -17,6 +17,12 @@ function App() {
   const [vlmResult, setVlmResult] = useState(null);
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmUseLocal, setVlmUseLocal] = useState(true);
+  // LLM length check state
+  const [llmText, setLlmText] = useState('');
+  const [llmMaxContext, setLlmMaxContext] = useState(2048);
+  const [llmResult, setLlmResult] = useState(null);
+  const [llmLoading, setLlmLoading] = useState(false);
+  const vlmVideoRef = useRef(null);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
@@ -57,6 +63,25 @@ function App() {
       setVlmResult({ error: err.message });
     } finally {
       setVlmLoading(false);
+    }
+  };
+
+  const handleLlmCheck = async () => {
+    if (!llmText || llmText.trim().length === 0) return alert('Enter text to check');
+    setLlmLoading(true);
+    setLlmResult(null);
+    try {
+      const form = new FormData();
+      form.append('text', llmText);
+      form.append('max_context', String(llmMaxContext));
+      const resp = await fetch('http://localhost:8001/backend/llm_length_check', { method: 'POST', body: form });
+      if (!resp.ok) throw new Error(await resp.text());
+      const data = await resp.json();
+      setLlmResult(data);
+    } catch (e) {
+      setLlmResult({ error: e.message });
+    } finally {
+      setLlmLoading(false);
     }
   };
 
@@ -211,12 +236,84 @@ function App() {
                       <div><strong>Captions</strong><ul className="captions-list">{vlmResult.analysis.captions ? vlmResult.analysis.captions.map((c, i) => <li key={i}>{c}</li>) : <li>{vlmResult.analysis.caption}</li>}</ul></div>
                     )}
                     {vlmResult.analysis && vlmResult.analysis.video_url && (
-                      <div style={{ marginTop: 8 }}><strong>Preview</strong><video controls width="100%" style={{ marginTop: 8 }}><source src={`http://localhost:8001${vlmResult.analysis.video_url}`} type="video/mp4" /></video></div>
+                      <div style={{ marginTop: 8 }}>
+                        <strong>Preview</strong>
+                        <video ref={vlmVideoRef} controls width="100%" style={{ marginTop: 8 }}>
+                          <source src={`http://localhost:8001${vlmResult.analysis.video_url}`} type="video/mp4" />
+                        </video>
+
+                        <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+                          <div style={{ flex: 1, textAlign: 'left' }}>
+                            <strong>Idle Frames</strong>
+                            {vlmResult.analysis.idle_frames && vlmResult.analysis.idle_frames.length > 0 ? (
+                              <div className="captions-list">
+                                {vlmResult.analysis.idle_frames.slice(0, 50).map((fi, i) => {
+                                  const sample = (vlmResult.analysis.samples || []).find(s => s.frame_index === fi) || {};
+                                  return (
+                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                      <div style={{ flex: 1 }}>
+                                        <small>t={sample.time_sec ? sample.time_sec.toFixed(2) + 's' : (fi+'')}</small>
+                                        <div style={{ fontSize: 12, color: '#444' }}>{sample.caption ? sample.caption : sample.error ? ('Err: '+sample.error) : ''}</div>
+                                      </div>
+                                      <div>
+                                        <button onClick={() => { if (vlmVideoRef.current) { vlmVideoRef.current.currentTime = sample.time_sec || 0; vlmVideoRef.current.play(); } }}>Jump</button>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            ) : (<div style={{ color: '#666' }}>No idle frames detected.</div>)}
+                          </div>
+
+                          <div style={{ flex: 1, textAlign: 'left' }}>
+                            <strong>Work Frames</strong>
+                            {vlmResult.analysis.work_frames && vlmResult.analysis.work_frames.length > 0 ? (
+                              <div className="captions-list">
+                                {vlmResult.analysis.work_frames.slice(0,50).map((fi, i) => {
+                                  const sample = (vlmResult.analysis.samples || []).find(s => s.frame_index === fi) || {};
+                                  return (
+                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                      <div style={{ flex: 1 }}>
+                                        <small>t={sample.time_sec ? sample.time_sec.toFixed(2) + 's' : (fi+'')}</small>
+                                        <div style={{ fontSize: 12, color: '#444' }}>{sample.caption ? sample.caption : sample.error ? ('Err: '+sample.error) : ''}</div>
+                                      </div>
+                                      <div>
+                                        <button onClick={() => { if (vlmVideoRef.current) { vlmVideoRef.current.currentTime = sample.time_sec || 0; vlmVideoRef.current.play(); } }}>Jump</button>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            ) : (<div style={{ color: '#666' }}>No work frames detected.</div>)}
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </>
                 )}
               </div>
             )}
+            {/* LLM Length Check */}
+            <div style={{ marginTop: 16, textAlign: 'left' }}>
+              <h4>LLM Length Check</h4>
+              <label style={{ display: 'block', marginBottom: 6 }}>
+                Text to check:
+                <textarea value={llmText} onChange={(e) => setLlmText(e.target.value)} rows={4} style={{ width: '100%', marginTop: 6 }} />
+              </label>
+              <label style={{ display: 'block', marginBottom: 8 }}>
+                Max context tokens:
+                <input type="number" value={llmMaxContext} onChange={(e) => setLlmMaxContext(Number(e.target.value))} style={{ width: 120, marginLeft: 8 }} />
+              </label>
+              <div>
+                <button onClick={handleLlmCheck} disabled={llmLoading}>{llmLoading ? 'Checking...' : 'Check Length'}</button>
+              </div>
+              {llmResult && (
+                <div style={{ marginTop: 8 }}>
+                  <strong>Result:</strong>
+                  <pre style={{ whiteSpace: 'pre-wrap', textAlign: 'left', background: '#f6f7fb', padding: 8, borderRadius: 6 }}>{JSON.stringify(llmResult, null, 2)}</pre>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
