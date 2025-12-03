@@ -2,7 +2,7 @@
   "models": [
     {
       "id": "Salesforce/blip-image-captioning-large",
-      "name": "BLIP — Salesforce/blip-image-captioning-large",
+      "name": "BLIP - Salesforce/blip-image-captioning-large",
       "task": "image-to-text"
     },
     {
