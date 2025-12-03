@@ -6,3 +6,4 @@
 *.pyc
 *jpg
 *.svg
+node_modules/

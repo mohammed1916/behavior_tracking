@@ -1,0 +1,13 @@
+{
+  "name": "specbot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start:server": "cd frontend && npm run dev",
+    "start:client": "cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload",
+    "start": "concurrently --kill-others-on-fail \"npm run start:server\" \"npm run start:client\""
+  },
+  "devDependencies": {
+    "concurrently": "8.2.1"
+  }
+}
