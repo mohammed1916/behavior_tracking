@@ -7,10 +7,21 @@ import cv2
 import uuid
 from tracker import BehaviorTracker
 from typing import Optional
+from fastapi import Query
+import json
 import logging
 
 # configure logging so INFO/DEBUG messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+
+# write logs to a file so the frontend can tail recent activity
+LOG_FILE = "server.log"
+logger = logging.getLogger()
+if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', '') == os.path.abspath(LOG_FILE) for h in logger.handlers):
+    fh = logging.FileHandler(LOG_FILE)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    logger.addHandler(fh)
 
 # Local VLM (BLIP) imports will be optional and loaded lazily
 _local_captioner = None
@@ -219,6 +230,107 @@ async def vlm_endpoint(
 
     # Placeholder response - in a real integration you'd call your VLM here
     return {"message": "VLM (video) stub response", "analysis": analysis}
+
+
+@app.post("/backend/upload_vlm")
+async def upload_vlm(video: UploadFile = File(...)):
+    """Save an uploaded video to `vlm_uploads/` and return the saved filename.
+    This is used when the frontend wants to start a streaming processing session.
+    """
+    file_id = str(uuid.uuid4())
+    filename = f"{file_id}_{video.filename}"
+    save_path = os.path.join(VLM_UPLOAD_DIR, filename)
+    with open(save_path, "wb") as buffer:
+        while True:
+            chunk = await video.read(1024 * 1024)
+            if not chunk:
+                break
+            buffer.write(chunk)
+    logging.info(f"Saved VLM upload to {save_path}")
+    return {"filename": filename}
+
+
+def _sse_event(data: dict, event: Optional[str] = None) -> bytes:
+    payload = ''
+    if event:
+        payload += f"event: {event}\n"
+    payload += "data: " + json.dumps(data, default=str) + "\n\n"
+    return payload.encode('utf-8')
+
+
+@app.get("/backend/vlm_local_stream")
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query('')):
+    """Stream processing events (SSE) for a previously-uploaded VLM video.
+    The frontend should first POST the file to `/backend/upload_vlm` and then open
+    an EventSource to this endpoint with the returned `filename`.
+    """
+    file_path = os.path.join(VLM_UPLOAD_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Uploaded file not found")
+
+    def gen():
+        try:
+            yield _sse_event({"stage": "started", "message": "processing started"})
+
+            # Basic video info
+            cap = cv2.VideoCapture(file_path)
+            if not cap.isOpened():
+                yield _sse_event({"stage": "error", "message": "failed to open video"})
+                return
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            fps = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+            duration = frame_count / (fps if fps > 0 else 30.0)
+            yield _sse_event({"stage": "video_info", "fps": fps, "frame_count": frame_count, "width": width, "height": height, "duration": duration})
+
+            # Build sample indices (safe-guard)
+            max_samples = min(30, max(1, frame_count))
+            indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
+
+            captioner = get_local_captioner()
+            if captioner is None:
+                yield _sse_event({"stage": "error", "message": "no local captioner available"})
+                return
+
+            # Open second capture for seeking samples
+            cap2 = cv2.VideoCapture(file_path)
+            for fi in indices:
+                try:
+                    cap2.set(cv2.CAP_PROP_POS_FRAMES, fi)
+                    ret, frame = cap2.read()
+                    if not ret:
+                        yield _sse_event({"stage": "sample_error", "frame_index": fi, "error": "read_failed"})
+                        continue
+                    # convert BGR->RGB PIL image
+                    from PIL import Image
+                    import numpy as np
+                    img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    out = captioner(img)
+                    caption = None
+                    if isinstance(out, list) and len(out) > 0:
+                        o0 = out[0]
+                        caption = o0.get('generated_text') or o0.get('caption') or str(o0)
+                    else:
+                        caption = str(out)
+
+                    label = 'idle'
+                    lw = caption.lower() if isinstance(caption, str) else ''
+                    work_keywords = ['work', 'welding', 'screw', 'screwing', 'tool', 'using', 'assemble', 'hands', 'holding']
+                    if any(w in lw for w in work_keywords):
+                        label = 'work'
+
+                    time_sec = fi / (fps if fps > 0 else 30.0)
+                    yield _sse_event({"stage": "sample", "frame_index": fi, "time_sec": time_sec, "caption": caption, "label": label})
+                except Exception as e:
+                    yield _sse_event({"stage": "sample_error", "frame_index": fi, "error": str(e)})
+            cap2.release()
+
+            yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})
+        except Exception as e:
+            yield _sse_event({"stage": "error", "message": str(e)})
+
+    return StreamingResponse(gen(), media_type='text/event-stream')
 
 
 @app.post("/backend/vlm_local")
