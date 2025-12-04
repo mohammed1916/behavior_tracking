@@ -182,8 +182,17 @@ def get_local_text_llm():
                     self.model_id = model_id
                 def __call__(self, prompt, max_new_tokens=128):
                     try:
-                        p = subprocess.run(['ollama', 'run', self.model_id, prompt], capture_output=True, text=True, timeout=120)
-                        out = p.stdout.strip()
+                        # Ensure subprocess output is decoded using UTF-8 and
+                        # replace undecodable bytes to avoid UnicodeDecodeError
+                        p = subprocess.run(
+                            ['ollama', 'run', self.model_id, prompt],
+                            capture_output=True,
+                            text=True,
+                            encoding='utf-8',
+                            errors='replace',
+                            timeout=120,
+                        )
+                        out = (p.stdout or '').strip()
                         return [{'generated_text': out}]
                     except Exception as e:
                         logging.info('Ollama run failed: %s', e)
