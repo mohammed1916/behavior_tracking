@@ -98,16 +98,13 @@ def get_captioner_for_model(model_id: str):
 
     # Default task; try to read from local_vlm_models.json if present
     task = 'image-to-text'
-    try:
-        cfg_path = os.path.join(os.path.dirname(__file__), 'local_vlm_models.json')
-        with open(cfg_path, 'r', encoding='utf-8') as f:
-            cfg = json.load(f)
-            for e in cfg.get('models', []):
-                if e.get('id') == model_id:
-                    task = e.get('task', task)
-                    break
-    except Exception:
-        pass
+    cfg_path = os.path.join(os.path.dirname(__file__), 'local_vlm_models.json')
+    with open(cfg_path, 'r', encoding='utf-8') as f:
+        cfg = json.load(f)
+        for e in cfg.get('models', []):
+            if e.get('id') == model_id:
+                task = e.get('task', task)
+                break
 
     # Try local-only load first
     try:
