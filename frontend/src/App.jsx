@@ -206,6 +206,9 @@ function App() {
     return () => { abort = true; };
   }, [vlmUseLocal]);
 
+  // derive selected local model's display name
+  const selectedVlmModelName = (vlmAvailableModels || []).find(m => m.id === vlmModel)?.name || (vlmAvailableModels && vlmAvailableModels[0] && vlmAvailableModels[0].name) || '';
+
   const handleUpload = async () => {
     if (!file) return alert('Please select a file first!');
     setLoading(true);
@@ -231,7 +234,7 @@ function App() {
       <h1>Behavior Tracking Analysis</h1>
 
       <div className="controls">
-        <div className="panel left">
+        {/* <div className="panel left">
           <div style={{ marginBottom: 12 }} className="mode-toggle">
             <input id="mode-upload" type="radio" name="mode" value="upload" checked={mode === 'upload'} onChange={() => { setMode('upload'); setShowPose(false); }} />
             <label htmlFor="mode-upload">Upload</label>
@@ -278,7 +281,7 @@ function App() {
               <p>No results yet.</p>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="panel right">
           <h3>VLM (Video)</h3>
@@ -314,7 +317,7 @@ function App() {
             </label>
             <div style={{ marginTop: 6 }}>
               {vlmUseLocal ? (
-                <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${vlmAvailableModels[0].name}` : 'No local VLM models detected on the server.'}</small>
+                <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${selectedVlmModelName}` : 'No local VLM models detected on the server.'}</small>
               ) : (
                 <small style={{ color: '#666' }}>Remote model identifiers (placeholders for cloud VLMs).</small>
               )}
@@ -402,7 +405,7 @@ function App() {
               </div>
             )}
             {/* LLM Length Check */}
-            <div style={{ marginTop: 16, textAlign: 'left' }}>
+            {/* <div style={{ marginTop: 16, textAlign: 'left' }}>
               <h4>LLM Length Check</h4>
               <label style={{ display: 'block', marginBottom: 6 }}>
                 Text to check:
@@ -421,7 +424,7 @@ function App() {
                   <pre style={{ whiteSpace: 'pre-wrap', textAlign: 'left', background: '#f6f7fb', padding: 8, borderRadius: 6 }}>{JSON.stringify(llmResult, null, 2)}</pre>
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
