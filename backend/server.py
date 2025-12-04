@@ -6,7 +6,7 @@ import os
 import cv2
 import uuid
 from tracker import BehaviorTracker
-from typing import Optional
+from typing import Optional, Callable
 from fastapi import Query
 import json
 import logging
@@ -46,6 +46,54 @@ def get_local_captioner():
     return _local_captioner
 
 
+# Cache captioners by model id so repeated requests don't reload them
+_captioner_cache = {}
+
+def get_captioner_for_model(model_id: str):
+    """Return a captioner pipeline for the given `model_id` if available locally.
+    Falls back to the default local captioner when `model_id` is empty.
+    Uses `local_vlm_models.json` to detect the task (defaults to 'image-to-text').
+    """
+    global _captioner_cache
+    if not model_id:
+        return get_local_captioner()
+
+    if model_id in _captioner_cache:
+        return _captioner_cache[model_id]
+
+    try:
+        from transformers import pipeline
+        import torch
+    except Exception:
+        _captioner_cache[model_id] = None
+        return None
+
+    device = 0 if torch.cuda.is_available() else -1
+
+    # Default task; try to read from local_vlm_models.json if present
+    task = 'image-to-text'
+    try:
+        cfg_path = os.path.join(os.path.dirname(__file__), 'local_vlm_models.json')
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+            for e in cfg.get('models', []):
+                if e.get('id') == model_id:
+                    task = e.get('task', task)
+                    break
+    except Exception:
+        pass
+
+    try:
+        p = pipeline(task, model=model_id, device=device, local_files_only=True)
+        _captioner_cache[model_id] = p
+        logging.info('Loaded captioner for model %s (task=%s) on device=%s', model_id, task, device)
+        return p
+    except Exception as ex:
+        logging.info('Failed to load captioner for %s: %s', model_id, ex)
+        _captioner_cache[model_id] = None
+        return None
+
+
 # Lazy loader for a local text LLM (optional)
 _local_text_llm = None
 def get_local_text_llm():
@@ -72,6 +120,136 @@ def get_local_text_llm():
         except Exception:
             _local_text_llm = None
     return None
+
+def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None):
+    """Process a video file: compute basic video_info and sample frames to caption.
+    If `stream_callback` is provided, call it with event dicts for each stage/sample.
+    Returns a dict with video_info, samples, idle_frames, work_frames.
+    """
+    result = {}
+    try:
+        cap = cv2.VideoCapture(file_path)
+        if not cap.isOpened():
+            msg = {"stage": "error", "message": "could not open video"}
+            if stream_callback:
+                stream_callback(msg)
+            else:
+                result.update({"error": "could not open video"})
+            return result
+
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        duration = frame_count / (fps if fps > 0 else 30.0)
+
+        video_info = {"fps": fps, "frame_count": frame_count, "width": width, "height": height, "duration": duration}
+        if stream_callback:
+            stream_callback({"stage": "video_info", **video_info})
+
+        total_frames = max(1, frame_count)
+        desired = min(max_samples, max(1, total_frames))
+        step = max(1, total_frames // desired) if total_frames > 0 else 1
+
+        samples = []
+        work_frames = []
+        idle_frames = []
+
+        # keyword classifier
+        work_keywords = [
+            'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
+            'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
+            'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
+        ]
+
+        if captioner is None:
+            captioner = get_local_captioner()
+
+        if captioner is None:
+            msg = {"stage": "error", "message": "no local captioner available"}
+            if stream_callback:
+                stream_callback(msg)
+            else:
+                result.update({"local_captioner": "not available"})
+            cap.release()
+            return result
+
+        cap2 = cv2.VideoCapture(file_path)
+        if not cap2.isOpened():
+            msg = {"stage": "error", "message": "could not open video for sampling"}
+            if stream_callback:
+                stream_callback(msg)
+            else:
+                result.update({"error": "could not open video for sampling"})
+            cap.release()
+            return result
+
+        for idx in range(0, int(total_frames), step):
+            if len(samples) >= max_samples:
+                break
+            try:
+                cap2.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                ret, f = cap2.read()
+                if not ret or f is None:
+                    if stream_callback:
+                        stream_callback({"stage": "sample_error", "frame_index": idx, "error": "read_failed"})
+                    else:
+                        samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": "read_failed"})
+                    continue
+
+                # caption
+                rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
+                from PIL import Image
+                pil = Image.fromarray(rgb)
+                try:
+                    out = captioner(pil)
+                except Exception as ex:
+                    if stream_callback:
+                        stream_callback({"stage": "sample_error", "frame_index": idx, "error": str(ex)})
+                    else:
+                        samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": str(ex)})
+                        idle_frames.append(idx)
+                    continue
+
+                text = None
+                if isinstance(out, list) and len(out) > 0:
+                    first = out[0]
+                    if isinstance(first, dict):
+                        text = first.get('generated_text') or first.get('caption') or str(first)
+                    else:
+                        text = str(first)
+                else:
+                    text = str(out)
+
+                text_lower = (text or '').lower()
+                is_work = any(k in text_lower for k in work_keywords)
+
+                sample = {"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": text, "label": "work" if is_work else "idle"}
+                if stream_callback:
+                    stream_callback({"stage": "sample", **sample})
+                else:
+                    samples.append(sample)
+                    if is_work:
+                        work_frames.append(idx)
+                    else:
+                        idle_frames.append(idx)
+            except Exception as e:
+                if stream_callback:
+                    stream_callback({"stage": "sample_error", "frame_index": idx, "error": str(e)})
+                else:
+                    samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": str(e)})
+
+        cap2.release()
+        cap.release()
+
+        if not stream_callback:
+            result.update({"video_info": video_info, "samples": samples, "idle_frames": idle_frames, "work_frames": work_frames})
+        return result
+    except Exception as e:
+        if stream_callback:
+            stream_callback({"stage": "error", "message": str(e)})
+            return {}
+        return {"error": str(e)}
 
 app = FastAPI()
 
@@ -193,7 +371,7 @@ async def vlm_endpoint(
         with open(save_path, "wb") as buffer:
             shutil.copyfileobj(video.file, buffer)
 
-        # Basic video analysis via OpenCV: duration, fps, width, height
+        # duration, fps, width, height
         try:
             cap = cv2.VideoCapture(save_path)
             if not cap.isOpened():
@@ -205,7 +383,6 @@ async def vlm_endpoint(
                 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
                 duration = frame_count / fps if fps > 0 else 0
 
-                # Try to read first frame for a quick visual summary
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 ret, frame = cap.read()
                 if ret and frame is not None:
@@ -228,7 +405,29 @@ async def vlm_endpoint(
         video_url = f"/backend/vlm_video/{filename}"
         analysis["video_url"] = video_url
 
-    # Placeholder response - in a real integration you'd call your VLM here
+    # If a local captioner is available for the requested model, run the sampling/captioning helper
+    captioner = get_captioner_for_model(model)
+    if captioner is not None:
+        try:
+            proc = process_video_samples(save_path, captioner=captioner, max_samples=30, stream_callback=None)
+            # merge proc results into analysis
+            if isinstance(proc, dict):
+                # if video_info present, expose fields at top-level for backward compat
+                vi = proc.get('video_info') or {}
+                analysis.update(vi)
+                if 'samples' in proc:
+                    analysis['samples'] = proc.get('samples')
+                if 'idle_frames' in proc:
+                    analysis['idle_frames'] = proc.get('idle_frames')
+                if 'work_frames' in proc:
+                    analysis['work_frames'] = proc.get('work_frames')
+            analysis["video_url"] = video_url
+            return {"message": "VLM (video) local response", "analysis": analysis}
+        except Exception as e:
+            logging.exception('Local VLM processing failed')
+            analysis.update({"error": str(e)})
+
+    # Fallback/stub response (no local captioner available or processing failed)
     return {"message": "VLM (video) stub response", "analysis": analysis}
 
 
@@ -288,9 +487,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             max_samples = min(30, max(1, frame_count))
             indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
 
-            captioner = get_local_captioner()
+            captioner = get_captioner_for_model(model)
             if captioner is None:
-                yield _sse_event({"stage": "error", "message": "no local captioner available"})
+                yield _sse_event({"stage": "error", "message": f"no local captioner available for model '{model}'"})
                 return
 
             # Open second capture for seeking samples
@@ -390,10 +589,10 @@ async def vlm_local(
     except Exception as e:
         analysis.update({"error": str(e)})
 
-    # Run local captioner on multiple sampled frames if available
-    captioner = get_local_captioner()
+    # Run local captioner on multiple sampled frames if available (respect requested model)
+    captioner = get_captioner_for_model(model)
     if captioner is None:
-        analysis.update({"local_captioner": "not available (install transformers/torch)"})
+        analysis.update({"local_captioner": "not available (install transformers/torch or cache model)"})
         analysis["video_url"] = f"/backend/vlm_video/{filename}"
         return {"message": "VLM local stub response", "analysis": analysis}
 
