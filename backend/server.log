@@ -29,3 +29,69 @@
 2025-12-03 17:35:03,071 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
 2025-12-03 17:35:07,612 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
 2025-12-03 17:36:39,645 INFO Saved VLM upload to vlm_uploads\b0df66e5-7989-4586-b8e3-dbe12b03b919_assembly_idle.mp4
+2025-12-03 17:45:56,982 INFO Saved VLM upload to vlm_uploads\2c362c0d-a6f3-4111-b506-a5a0b29eaa3e_assembly_idle.mp4
+2025-12-03 17:55:04,161 INFO Saved VLM upload to vlm_uploads\5ccbd58f-9cac-49da-ac91-59177f73a8b6_assembly_idle.mp4
+2025-12-04 09:11:45,231 INFO Probing 2 local VLM models...
+2025-12-04 09:11:45,231 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 09:11:52,660 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 09:12:18,122 INFO Probing 2 local VLM models...
+2025-12-04 09:12:18,122 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 09:12:24,369 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 09:15:54,711 INFO Saved VLM upload to vlm_uploads\364d2121-5985-4a75-bc84-6f64d1d88962_assembly_idle.mp4
+2025-12-04 09:16:21,821 INFO Failed to load captioner for omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-04 09:16:37,965 INFO Saved VLM upload to vlm_uploads\f9b86c3c-11c1-4198-91fb-f0ed2ffdabe8_assembly_idle.mp4
+2025-12-04 09:16:45,670 INFO Saved VLM upload to vlm_uploads\f57ea612-804a-4974-8f79-6e4f394a5eb0_assembly_idle.mp4
+2025-12-04 09:16:54,080 INFO Failed to load captioner for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-04 09:17:15,612 INFO Saved VLM upload to vlm_uploads\2cb5a2a8-4c65-4915-9292-4ad081efafae_assembly_idle.mp4
+2025-12-04 09:39:30,473 INFO Probing 2 local VLM models...
+2025-12-04 09:39:30,473 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 09:39:36,668 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 09:39:46,525 INFO Probing 2 local VLM models...
+2025-12-04 09:39:46,525 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 09:39:50,279 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 09:39:59,918 INFO Saved VLM upload to vlm_uploads\32ed470f-28cd-48fd-a339-19b70d17ce10_assembly_idle.mp4
+2025-12-04 09:40:00,307 INFO Failed to load captioner for gpt-4o-vlm: gpt-4o-vlm is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
+2025-12-04 09:41:48,479 INFO Saved VLM upload to vlm_uploads\c0a7c772-0ee7-41a8-ae73-91dd0e1e940a_assembly_idle.mp4
+2025-12-04 10:00:12,452 INFO Saved VLM upload to vlm_uploads\12efb212-d2d1-43f6-9844-0832e4789f07_assembly_idle.mp4
+2025-12-04 10:25:05,193 INFO Saved VLM upload to vlm_uploads\5e9b57e2-7bc3-4c9d-8a27-32200892a7ee_assembly_idle.mp4
+2025-12-04 10:25:27,486 INFO Local-only load failed for omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-04 10:25:27,489 INFO Attempting to download model omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321 (task=image-to-text)...
+2025-12-04 10:25:53,304 INFO Failed to download/load captioner for omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321: CUDA error: out of memory
+Search for `cudaErrorMemoryAllocation' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+2025-12-04 10:42:28,444 INFO Probing 2 local VLM models...
+2025-12-04 10:42:28,451 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 10:42:31,351 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 10:42:33,973 INFO Probing 2 local VLM models...
+2025-12-04 10:42:33,973 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 10:42:38,457 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 10:44:46,606 INFO Saved VLM upload to vlm_uploads\b46ecd4c-02e6-4124-a9cf-4274e1a70eab_assembly_idle.mp4
+2025-12-04 11:11:11,683 INFO Probing 2 local VLM models...
+2025-12-04 11:11:11,683 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 11:11:17,640 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 11:16:44,438 WARNING Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-12-04 11:29:45,740 INFO Saved VLM upload to vlm_uploads\44f737ea-c3f7-4326-80b2-d7c1c7a79c60_assembly_idle.mp4
+2025-12-04 11:29:50,027 INFO Local-only load failed for gpt-4o-vlm: gpt-4o-vlm is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
+2025-12-04 11:29:50,027 INFO Attempting to download model gpt-4o-vlm (task=image-to-text)...
+2025-12-04 11:29:50,252 INFO Failed to download/load captioner for gpt-4o-vlm: gpt-4o-vlm is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
+2025-12-04 11:43:12,529 INFO Probing 2 local VLM models...
+2025-12-04 11:43:12,545 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 11:43:17,430 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 11:43:28,254 INFO Probing 2 local VLM models...
+2025-12-04 11:43:28,255 INFO Probing Entry {'id': 'Salesforce/blip-image-captioning-large', 'name': 'BLIP - Salesforce/blip-image-captioning-large', 'task': 'image-to-text'}
+2025-12-04 11:43:31,990 INFO Probing Entry {'id': 'omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321', 'name': 'Qwen2.5-VL', 'task': 'image-to-text'}
+2025-12-04 11:45:17,917 INFO Saved VLM upload to vlm_uploads\8f521876-8c05-434e-a7d5-4c7196c023a2_assembly_idle.mp4
+2025-12-04 11:45:40,357 INFO Local-only load failed for omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-04 11:45:40,389 INFO Attempting to download model omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321 (task=image-to-text)...
+2025-12-04 11:46:09,241 INFO Failed to download/load captioner for omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321: CUDA error: out of memory
+Search for `cudaErrorMemoryAllocation' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

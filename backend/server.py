@@ -10,6 +10,7 @@ from typing import Optional, Callable
 from fastapi import Query
 import json
 import logging
+import subprocess
 
 # configure logging so INFO/DEBUG messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -26,11 +27,21 @@ if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', '')
 # Local VLM (BLIP) imports will be optional and loaded lazily
 _local_captioner = None
 
+# Prompt template for LLM classification of captions (work vs idle).
+# Use .format(prompt=..., caption=...) to substitute values.
+CLASSIFY_PROMPT_TEMPLATE = (
+    "Decide whether the following caption describes active 'work' or 'idle' (single word response: work or idle).\n\n"
+    "Context prompt: {prompt}\nCaption: {caption}\n"
+)
+
+# Cache captioners by model id so repeated requests don't reload them
+_captioner_cache = {}
+
 def get_local_captioner():
+    """Return a default local captioner (BLIP) if available."""
     global _local_captioner
     if _local_captioner is not None:
         return _local_captioner
-
     try:
         from transformers import pipeline
         import torch
@@ -40,19 +51,16 @@ def get_local_captioner():
 
     device = 0 if torch.cuda.is_available() else -1
     try:
-        _local_captioner = pipeline("image-to-text", model="Salesforce/blip-image-captioning-large", device=device)
+        _local_captioner = pipeline("image-to-text", model="Salesforce/blip-image-captioning-large", device=device, local_files_only=True)
+        logging.info('Loaded default local captioner Salesforce/blip-image-captioning-large')
     except Exception:
         _local_captioner = None
     return _local_captioner
 
 
-# Cache captioners by model id so repeated requests don't reload them
-_captioner_cache = {}
-
 def get_captioner_for_model(model_id: str):
-    """Return a captioner pipeline for the given `model_id` if available locally.
-    Falls back to the default local captioner when `model_id` is empty.
-    Uses `local_vlm_models.json` to detect the task (defaults to 'image-to-text').
+    """Return a captioner pipeline for `model_id`.
+    Tries local cache first (`local_files_only=True`), then falls back to downloading the model.
     """
     global _captioner_cache
     if not model_id:
@@ -83,15 +91,61 @@ def get_captioner_for_model(model_id: str):
     except Exception:
         pass
 
+    # Try local-only load first
     try:
         p = pipeline(task, model=model_id, device=device, local_files_only=True)
         _captioner_cache[model_id] = p
-        logging.info('Loaded captioner for model %s (task=%s) on device=%s', model_id, task, device)
+        logging.info('Loaded captioner for model %s (task=%s) from local cache on device=%s', model_id, task, device)
         return p
-    except Exception as ex:
-        logging.info('Failed to load captioner for %s: %s', model_id, ex)
-        _captioner_cache[model_id] = None
-        return None
+    except Exception as ex_local:
+        logging.info('Local-only load failed for %s: %s', model_id, ex_local)
+        # If this looks like a CUDA OOM / CUDA error, try falling back to CPU to avoid OOM
+        ex_text = str(ex_local).lower()
+        tried_cpu_fallback = False
+        try:
+            if 'out of memory' in ex_text or 'cuda' in ex_text or 'cudart' in ex_text:
+                logging.info('Detected CUDA-related error while loading %s, attempting CPU fallback...', model_id)
+                try:
+                    # free some GPU memory if possible
+                    try:
+                        import torch as _torch_for_cleanup
+                        if _torch_for_cleanup.cuda.is_available():
+                            _torch_for_cleanup.cuda.empty_cache()
+                    except Exception:
+                        pass
+                    p = pipeline(task, model=model_id, device=-1, local_files_only=True)
+                    _captioner_cache[model_id] = p
+                    logging.info('Loaded captioner for model %s on CPU (fallback)', model_id)
+                    return p
+                except Exception as ex_cpu:
+                    logging.info('CPU fallback failed for %s: %s', model_id, ex_cpu)
+                tried_cpu_fallback = True
+        except Exception:
+            tried_cpu_fallback = False
+
+        # Attempt a fallback download (may be slow). If the earlier failure was CUDA-related
+        # and we haven't yet tried CPU, try downloading then falling back to CPU on failure.
+        try:
+            logging.info('Attempting to download model %s (task=%s)...', model_id, task)
+            p = pipeline(task, model=model_id, device=device)
+            _captioner_cache[model_id] = p
+            logging.info('Downloaded and loaded captioner for model %s (task=%s)', model_id, task)
+            return p
+        except Exception as ex_fetch:
+            logging.info('Failed to download/load captioner for %s on device=%s: %s', model_id, device, ex_fetch)
+            # If download/load failed and we haven't yet tried CPU, try CPU download/load (may still OOM but often works)
+            if not tried_cpu_fallback:
+                try:
+                    logging.info('Attempting to download/load %s on CPU...', model_id)
+                    p = pipeline(task, model=model_id, device=-1)
+                    _captioner_cache[model_id] = p
+                    logging.info('Downloaded and loaded captioner for %s on CPU', model_id)
+                    return p
+                except Exception as ex_cpu_fetch:
+                    logging.info('Failed to download/load captioner for %s on CPU: %s', model_id, ex_cpu_fetch)
+
+            _captioner_cache[model_id] = None
+            return None
 
 
 # Lazy loader for a local text LLM (optional)
@@ -100,6 +154,28 @@ def get_local_text_llm():
     global _local_text_llm
     if _local_text_llm is not None:
         return _local_text_llm
+
+    # Prefer Ollama CLI if available
+    try:
+        if shutil.which('ollama'):
+            ollama_model = os.environ.get('OLLAMA_MODEL', 'strat')
+            class OllamaWrapper:
+                def __init__(self, model_id):
+                    self.model_id = model_id
+                def __call__(self, prompt, max_new_tokens=128):
+                    try:
+                        p = subprocess.run(['ollama', 'run', self.model_id, prompt], capture_output=True, text=True, timeout=120)
+                        out = p.stdout.strip()
+                        return [{'generated_text': out}]
+                    except Exception as e:
+                        logging.info('Ollama run failed: %s', e)
+                        return [{'generated_text': ''}]
+            _local_text_llm = OllamaWrapper(ollama_model)
+            logging.info('Using Ollama CLI model %s for text LLM', ollama_model)
+            return _local_text_llm
+    except Exception:
+        pass
+
     try:
         from transformers import pipeline
         import torch
@@ -107,7 +183,7 @@ def get_local_text_llm():
         _local_text_llm = None
         return None
     device = 0 if torch.cuda.is_available() else -1
-    # Try a small local-capable model first (must be cached locally to avoid downloads)
+    # Try a small local-capable HF model first (must be cached locally to avoid downloads)
     candidates = [
         'Qwen/Qwen-2.5',
         'qwen/Qwen-2.5',
@@ -121,10 +197,19 @@ def get_local_text_llm():
             _local_text_llm = None
     return None
 
-def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None):
+def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None, prompt: str = '', use_llm: bool = False):
     """Process a video file: compute basic video_info and sample frames to caption.
-    If `stream_callback` is provided, call it with event dicts for each stage/sample.
-    Returns a dict with video_info, samples, idle_frames, work_frames.
+
+    Args:
+        file_path (str): Path to the video file.
+        captioner: Optional captioning model to use for frame captions.
+        max_samples (int): Maximum number of frames to sample and caption.
+        stream_callback (Optional[Callable]): If provided, called with event dicts for each stage/sample.
+        prompt (str): Optional prompt to guide the captioning or LLM, if applicable.
+        use_llm (bool): If True, use a language model (LLM) for captioning or analysis.
+
+    Returns:
+        dict: A dictionary with video_info, samples, idle_frames, work_frames.
     """
     result = {}
     try:
@@ -155,12 +240,22 @@ def process_video_samples(file_path: str, captioner=None, max_samples: int = 30,
         work_frames = []
         idle_frames = []
 
-        # keyword classifier
+        # keyword classifier (backup)
         work_keywords = [
             'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
             'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
             'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
         ]
+
+        # Optionally prepare a local text LLM for semantic classification
+        text_llm = None
+        if use_llm:
+            try:
+                text_llm = get_local_text_llm()
+                if text_llm is None:
+                    logging.info('LLM classification requested but no local text LLM available')
+            except Exception:
+                text_llm = None
 
         if captioner is None:
             captioner = get_local_captioner()
@@ -221,8 +316,37 @@ def process_video_samples(file_path: str, captioner=None, max_samples: int = 30,
                 else:
                     text = str(out)
 
-                text_lower = (text or '').lower()
-                is_work = any(k in text_lower for k in work_keywords)
+                # Decide label: prefer LLM-based classification if requested and available,
+                # otherwise fall back to simple keyword matching.
+                is_work = False
+                if use_llm and text_llm is not None:
+                    try:
+                        cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=text)
+                        out = text_llm(cls_prompt, max_new_tokens=8)
+                        out_text = None
+                        if isinstance(out, list) and len(out) > 0:
+                            first = out[0]
+                            if isinstance(first, dict):
+                                out_text = first.get('generated_text') or first.get('text') or str(first)
+                            else:
+                                out_text = str(first)
+                        else:
+                            out_text = str(out)
+                        if out_text:
+                            out_text = out_text.lower()
+                            if 'work' in out_text and 'idle' not in out_text:
+                                is_work = True
+                            elif 'idle' in out_text and 'work' not in out_text:
+                                is_work = False
+                            else:
+                                # ambiguous -> fallback to keyword
+                                is_work = any(k in (text or '').lower() for k in work_keywords)
+                    except Exception as e:
+                        logging.info('LLM classifier failed: %s', e)
+                        is_work = any(k in (text or '').lower() for k in work_keywords)
+                else:
+                    text_lower = (text or '').lower()
+                    is_work = any(k in text_lower for k in work_keywords)
 
                 sample = {"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": text, "label": "work" if is_work else "idle"}
                 if stream_callback:
@@ -356,6 +480,7 @@ async def vlm_endpoint(
     model: str = Form(...),
     prompt: str = Form(''),
     video: UploadFile = File(None),
+    use_llm: bool = Form(False),
 ):
     """VLM endpoint stub for videos: saves optional video and returns basic analysis.
     Placeholder — extend to call a real VLM when available.
@@ -409,7 +534,7 @@ async def vlm_endpoint(
     captioner = get_captioner_for_model(model)
     if captioner is not None:
         try:
-            proc = process_video_samples(save_path, captioner=captioner, max_samples=30, stream_callback=None)
+            proc = process_video_samples(save_path, captioner=captioner, max_samples=30, stream_callback=None, prompt=prompt, use_llm=use_llm)
             # merge proc results into analysis
             if isinstance(proc, dict):
                 # if video_info present, expose fields at top-level for backward compat
@@ -458,7 +583,7 @@ def _sse_event(data: dict, event: Optional[str] = None) -> bytes:
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query('')):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False)):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -513,11 +638,36 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     else:
                         caption = str(out)
 
+                    # Decide label: optionally via LLM
                     label = 'idle'
-                    lw = caption.lower() if isinstance(caption, str) else ''
-                    work_keywords = ['work', 'welding', 'screw', 'screwing', 'tool', 'using', 'assemble', 'hands', 'holding']
-                    if any(w in lw for w in work_keywords):
-                        label = 'work'
+                    if use_llm:
+                        text_llm = get_local_text_llm()
+                        if text_llm is not None:
+                            try:
+                                cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=caption)
+                                cls_out = text_llm(cls_prompt, max_new_tokens=8)
+                                cls_text = None
+                                if isinstance(cls_out, list) and len(cls_out) > 0:
+                                    f0 = cls_out[0]
+                                    if isinstance(f0, dict):
+                                        cls_text = f0.get('generated_text') or f0.get('text') or str(f0)
+                                    else:
+                                        cls_text = str(f0)
+                                else:
+                                    cls_text = str(cls_out)
+                                if cls_text:
+                                    ct = cls_text.lower()
+                                    if 'work' in ct and 'idle' not in ct:
+                                        label = 'work'
+                                    elif 'idle' in ct and 'work' not in ct:
+                                        label = 'idle'
+                            except Exception as e:
+                                logging.info('SSE LLM classification failed: %s', e)
+                    if label == 'idle':
+                        lw = caption.lower() if isinstance(caption, str) else ''
+                        work_keywords = ['work', 'welding', 'screw', 'screwing', 'tool', 'using', 'assemble', 'hands', 'holding']
+                        if any(w in lw for w in work_keywords):
+                            label = 'work'
 
                     time_sec = fi / (fps if fps > 0 else 30.0)
                     yield _sse_event({"stage": "sample", "frame_index": fi, "time_sec": time_sec, "caption": caption, "label": label})
@@ -537,6 +687,7 @@ async def vlm_local(
     model: str = Form(...),
     prompt: str = Form(''),
     video: UploadFile = File(None),
+    use_llm: bool = Form(False),
 ):
     """Run a local lightweight VLM-like captioner on a representative frame.
     This uses a BLIP image->text pipeline (Salesforce/blip-image-captioning-large) if installed.

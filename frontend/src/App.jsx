@@ -186,24 +186,22 @@ function App() {
   };
 
   // Fetch local models when user switches to local VLM
-  useEffect(() => {
-    let abort = false;
-    async function fetchLocalModels() {
-      if (!vlmUseLocal) return setVlmAvailableModels([]);
-      try {
-        const resp = await fetch('http://localhost:8001/backend/vlm_local_models');
-        if (!resp.ok) return setVlmAvailableModels([]);
-        const data = await resp.json();
-        if (abort) return;
-        setVlmAvailableModels(data.models || []);
-        if ((data.models || []).length > 0) setVlmModel(data.models[0].id);
-      } catch (e) {
-        console.warn('Could not fetch local VLM models', e);
-        setVlmAvailableModels([]);
-      }
+  const fetchLocalModels = async () => {
+    if (!vlmUseLocal) return setVlmAvailableModels([]);
+    try {
+      const resp = await fetch('http://localhost:8001/backend/vlm_local_models');
+      if (!resp.ok) return setVlmAvailableModels([]);
+      const data = await resp.json();
+      setVlmAvailableModels(data.models || []);
+      if ((data.models || []).length > 0) setVlmModel(data.models[0].id);
+    } catch (e) {
+      console.warn('Could not fetch local VLM models', e);
+      setVlmAvailableModels([]);
     }
+  };
+
+  useEffect(() => {
     fetchLocalModels();
-    return () => { abort = true; };
   }, [vlmUseLocal]);
 
   // derive selected local model's display name
@@ -266,6 +264,7 @@ function App() {
 
             <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLocal} onChange={(e) => setVlmUseLocal(e.target.checked)} /> Use local VLM
+              <button type="button" onClick={fetchLocalModels} style={{ marginLeft: 8 }}>Refresh</button>
             </label>
             <div style={{ marginTop: 6 }}>
               {vlmUseLocal ? (

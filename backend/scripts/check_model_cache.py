@@ -1,11 +1,11 @@
 import os
 import json
 import sys
-import pkgutil
+from importlib.util import find_spec
 
 res = {
-    'transformers_installed': pkgutil.find_loader('transformers') is not None,
-    'torch_installed': pkgutil.find_loader('torch') is not None,
+    'transformers_installed': find_spec('transformers') is not None,
+    'torch_installed': find_spec('torch') is not None,
     'hf_cache_paths': [],
     'model_present': False,
 }
