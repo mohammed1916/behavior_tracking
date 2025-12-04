@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "start:client",
+			"problemMatcher": [],
+			"label": "npm: start:client",
+			"detail": "cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload"
+		},
+		{
+			"type": "npm",
+			"script": "start:server",
+			"problemMatcher": [],
+			"label": "npm: start:server",
+			"detail": "cd frontend && npm run dev"
+		}
+	]
+}
