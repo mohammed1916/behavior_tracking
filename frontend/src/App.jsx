@@ -18,6 +18,7 @@ function App() {
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
   const [vlmUseLocal, setVlmUseLocal] = useState(true);
+  const [vlmUseLLM, setVlmUseLLM] = useState(false);
   // LLM length check state
   const [llmText, setLlmText] = useState('');
   const [llmMaxContext, setLlmMaxContext] = useState(2048);
@@ -98,7 +99,7 @@ function App() {
         const upj = await up.json();
         const filename = upj.filename;
 
-        const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}`;
+        const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}`;
         if (vlmStream) { try { vlmStream.close(); } catch {} }
         const es = new EventSource(url);
         setVlmStream(es);
@@ -152,6 +153,7 @@ function App() {
         formData.append('model', vlmModel);
         formData.append('prompt', vlmPrompt);
         if (vlmVideo) formData.append('video', vlmVideo);
+        formData.append('use_llm', vlmUseLLM ? 'true' : 'false');
 
         const endpoint = 'http://localhost:8001/backend/vlm';
         const resp = await fetch(endpoint, { method: 'POST', body: formData });
@@ -265,6 +267,10 @@ function App() {
             <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLocal} onChange={(e) => setVlmUseLocal(e.target.checked)} /> Use local VLM
               <button type="button" onClick={fetchLocalModels} style={{ marginLeft: 8 }}>Refresh</button>
+            </label>
+            <label style={{ display: 'block', marginTop: 8 }}>
+              <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
+              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
             </label>
             <div style={{ marginTop: 6 }}>
               {vlmUseLocal ? (
