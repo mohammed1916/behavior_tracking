@@ -234,55 +234,7 @@ function App() {
       <h1>Behavior Tracking Analysis</h1>
 
       <div className="controls">
-        {/* <div className="panel left">
-          <div style={{ marginBottom: 12 }} className="mode-toggle">
-            <input id="mode-upload" type="radio" name="mode" value="upload" checked={mode === 'upload'} onChange={() => { setMode('upload'); setShowPose(false); }} />
-            <label htmlFor="mode-upload">Upload</label>
-            <input id="mode-stream" type="radio" name="mode" value="stream" checked={mode === 'stream'} onChange={() => { setMode('stream'); setShowPose(false); }} />
-            <label htmlFor="mode-stream">Live</label>
-          </div>
-
-          {mode === 'upload' && (
-            <div className="upload-section">
-              <input type="file" accept="video/*" onChange={handleFileChange} />
-              <button onClick={handleUpload} disabled={loading || !file}>{loading ? 'Processing...' : 'Analyze Video'}</button>
-            </div>
-          )}
-
-          {mode === 'stream' && (
-            <div className="stream-section">
-              <div style={{ marginBottom: 8 }}>
-                <button onClick={() => setShowPose((s) => !s)}>{showPose ? 'Stop Stream' : 'Start Stream'}</button>
-              </div>
-              {showPose && (
-                <div className="pose-stream">
-                  <h3>Live Pose</h3>
-                  <img src="http://localhost:8001/backend/stream_pose" alt="Live Pose" style={{ maxWidth: '100%' }} onError={() => setShowPose(false)} />
-                </div>
-              )}
-            </div>
-          )}
-
-          <div style={{ marginTop: 14 }} className="panel">
-            <h3>Results</h3>
-            {status && <p className="status">{status}</p>}
-            {result ? (
-              <>
-                <p><strong>Task Completed:</strong> {result.task_completed ? 'YES' : 'NO'}</p>
-                {result.download_url && (
-                  <div className="video-container">
-                    <h4>Processed Video</h4>
-                    <video controls width="100%"><source src={`http://localhost:8001${result.download_url}`} type="video/mp4" /></video>
-                    <div style={{ marginTop: 8 }}><a href={`http://localhost:8001${result.download_url}`} download><button>Download Processed Video</button></a></div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p>No results yet.</p>
-            )}
-          </div>
-        </div> */}
-
+       
         <div className="panel right">
           <h3>VLM (Video)</h3>
           <div className="vlm-section">
@@ -404,27 +356,6 @@ function App() {
                 )}
               </div>
             )}
-            {/* LLM Length Check */}
-            {/* <div style={{ marginTop: 16, textAlign: 'left' }}>
-              <h4>LLM Length Check</h4>
-              <label style={{ display: 'block', marginBottom: 6 }}>
-                Text to check:
-                <textarea value={llmText} onChange={(e) => setLlmText(e.target.value)} rows={4} style={{ width: '100%', marginTop: 6 }} />
-              </label>
-              <label style={{ display: 'block', marginBottom: 8 }}>
-                Max context tokens:
-                <input type="number" value={llmMaxContext} onChange={(e) => setLlmMaxContext(Number(e.target.value))} style={{ width: 120, marginLeft: 8 }} />
-              </label>
-              <div>
-                <button onClick={handleLlmCheck} disabled={llmLoading}>{llmLoading ? 'Checking...' : 'Check Length'}</button>
-              </div>
-              {llmResult && (
-                <div style={{ marginTop: 8 }}>
-                  <strong>Result:</strong>
-                  <pre style={{ whiteSpace: 'pre-wrap', textAlign: 'left', background: '#f6f7fb', padding: 8, borderRadius: 6 }}>{JSON.stringify(llmResult, null, 2)}</pre>
-                </div>
-              )}
-            </div> */}
           </div>
         </div>
       </div>
