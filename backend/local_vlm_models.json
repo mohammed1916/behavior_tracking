@@ -9,6 +9,11 @@
       "id": "omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321",
       "name": "Qwen2.5-VL",
       "task": "image-to-text"
+    },
+    {
+      "id": "microsoft/Florence-2-base",
+      "name": "Florence-2-base",
+      "task": "image-to-text"
     }
   ]
 }

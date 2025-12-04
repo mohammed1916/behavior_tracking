@@ -893,46 +893,47 @@ async def get_vlm_video(filename: str):
 
 @app.get("/backend/vlm_local_models")
 async def vlm_local_models():
-    """Return a list of locally-available VLM/image-captioning models (if any).
-    Probes model entries listed in `local_vlm_models.json` using
-    `transformers.pipeline(..., local_files_only=True)` so no downloads occur.
+    """Return the list of candidate local VLM/image-captioning models without
+    automatically instantiating heavy pipelines. This avoids loading/downloading
+    models during probing; use `/backend/load_vlm_model` to load a model on demand.
     """
     cfg_path = os.path.join(os.path.dirname(__file__), 'local_vlm_models.json')
-    models_found = []
     try:
-        import json
         with open(cfg_path, 'r', encoding='utf-8') as f:
             cfg = json.load(f)
             entries = cfg.get('models', [])
     except Exception:
         entries = []
 
-    # Try to probe each entry; do not trigger downloads (local_files_only=True)
-    try:
-        from transformers import pipeline
-        import torch
-        device = 0 if torch.cuda.is_available() else -1
-    except Exception:
-        # transformers/torch not installed; return entries but mark unavailable
-        return {"available": False, "models": [{"id": e.get('id'), "name": e.get('name'), "available": False, "error": 'transformers or torch not installed'} for e in entries]}
-
-    logging.info(f"Probing {len(entries)} local VLM models...")
+    models_out = []
     for e in entries:
-        # print("entry:", e)
-        logging.info(f"Probing Entry {e}")
-        mid = e.get('id')
-        task = e.get('task', 'image-to-text')
-        info = {"id": mid, "name": e.get('name'), "available": False}
-        try:
-            # local_files_only prevents downloads and will raise if missing
-            _p = pipeline(task, model=mid, device=device, local_files_only=True)
-            info['available'] = True
-        except Exception as ex:
-            info['available'] = False
-            info['error'] = str(ex)
-        models_found.append(info)
+        models_out.append({
+            "id": e.get('id'),
+            "name": e.get('name'),
+            "task": e.get('task', 'image-to-text'),
+            # We don't probe availability here to avoid loading models.
+            "available": False,
+            "probed": False,
+        })
 
-    return {"available": any(m.get('available') for m in models_found), "models": models_found}
+    return {"available": False, "models": models_out, "probed": False}
+
+
+@app.post('/backend/load_vlm_model')
+async def load_vlm_model(model: str = Form(...)):
+    """Load and cache a VLM/captioner model on demand.
+    Returns JSON indicating whether the model was successfully loaded.
+    """
+    if not model:
+        raise HTTPException(status_code=400, detail='No model specified')
+    try:
+        p = get_captioner_for_model(model)
+        if p is None:
+            return {"loaded": False, "model": model, "error": "failed to load model (not available)"}
+        return {"loaded": True, "model": model}
+    except Exception as e:
+        logging.exception('Error loading model %s', model)
+        return {"loaded": False, "model": model, "error": str(e)}
 
 
 @app.post('/backend/llm_length_check')

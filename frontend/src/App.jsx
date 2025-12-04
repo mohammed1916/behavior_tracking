@@ -2,16 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 function App() {
-  const [file, setFile] = useState(null);
-  const [status, setStatus] = useState('');
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [showPose, setShowPose] = useState(false);
-  const [mode, setMode] = useState('upload');
+  // const [file, setFile] = useState(null);
+  // const [status, setStatus] = useState('');
+  // const [result, setResult] = useState(null);
+  // const [loading, setLoading] = useState(false);
+  // const [showPose, setShowPose] = useState(false);
+  // const [mode, setMode] = useState('upload');
 
   // VLM state
   const [vlmModel, setVlmModel] = useState('gpt-4o-vlm');
   const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
+  const [modelLoading, setModelLoading] = useState(false);
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
   const [vlmResult, setVlmResult] = useState(null);
@@ -206,6 +207,28 @@ function App() {
     fetchLocalModels();
   }, [vlmUseLocal]);
 
+  const loadModel = async () => {
+    if (!vlmModel) return alert('Select a model first');
+    setModelLoading(true);
+    try {
+      const form = new FormData();
+      form.append('model', vlmModel);
+      const resp = await fetch('http://localhost:8001/backend/load_vlm_model', { method: 'POST', body: form });
+      const data = await resp.json();
+      if (!resp.ok || !data.loaded) {
+        alert('Model load failed: ' + (data.error || resp.statusText));
+      } else {
+        alert('Model loaded: ' + data.model);
+        // refresh list to reflect loaded status (if server updates it)
+        fetchLocalModels();
+      }
+    } catch (e) {
+      alert('Load model error: ' + (e.message || String(e)));
+    } finally {
+      setModelLoading(false);
+    }
+  };
+
   // derive selected local model's display name
   const selectedVlmModelName = (vlmAvailableModels || []).find(m => m.id === vlmModel)?.name || (vlmAvailableModels && vlmAvailableModels[0] && vlmAvailableModels[0].name) || '';
 
@@ -254,6 +277,7 @@ function App() {
                   </>
                 )}
               </select>
+              <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
             </label>
 
             <label>Prompt:
