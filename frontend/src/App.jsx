@@ -209,25 +209,25 @@ function App() {
   // derive selected local model's display name
   const selectedVlmModelName = (vlmAvailableModels || []).find(m => m.id === vlmModel)?.name || (vlmAvailableModels && vlmAvailableModels[0] && vlmAvailableModels[0].name) || '';
 
-  const handleUpload = async () => {
-    if (!file) return alert('Please select a file first!');
-    setLoading(true);
-    setStatus('Uploading and processing...');
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const response = await fetch('http://localhost:8001/backend/analyze_video', { method: 'POST', body: formData });
-      if (!response.ok) throw new Error(`Error: ${response.statusText}`);
-      const data = await response.json();
-      setResult(data);
-      setStatus('Processing complete!');
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      setStatus(`Failed: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // const handleUpload = async () => {
+  //   if (!file) return alert('Please select a file first!');
+  //   setLoading(true);
+  //   setStatus('Uploading and processing...');
+  //   const formData = new FormData();
+  //   formData.append('file', file);
+  //   try {
+  //     const response = await fetch('http://localhost:8001/backend/analyze_video', { method: 'POST', body: formData });
+  //     if (!response.ok) throw new Error(`Error: ${response.statusText}`);
+  //     const data = await response.json();
+  //     setResult(data);
+  //     setStatus('Processing complete!');
+  //   } catch (error) {
+  //     console.error('Error uploading file:', error);
+  //     setStatus(`Failed: ${error.message}`);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   return (
     <div className="App">

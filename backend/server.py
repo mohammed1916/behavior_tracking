@@ -166,63 +166,61 @@ def get_captioner_for_model(model_id: str):
             return None
 
 
-# Lazy loader for a local text LLM (optional)
+# Lazy loader for a local text LLM 
 _local_text_llm = None
 def get_local_text_llm():
     global _local_text_llm
     if _local_text_llm is not None:
         return _local_text_llm
 
-    # Prefer Ollama CLI if available
-    try:
-        if shutil.which('ollama'):
-            ollama_model = os.environ.get('OLLAMA_MODEL', 'strat')
-            class OllamaWrapper:
-                def __init__(self, model_id):
-                    self.model_id = model_id
-                def __call__(self, prompt, max_new_tokens=128):
+    if shutil.which('ollama'):
+        ollama_model = os.environ.get('OLLAMA_MODEL', 'strat')
+        class OllamaWrapper:
+            def __init__(self, model_id):
+                self.model_id = model_id
+            def __call__(self, prompt, max_new_tokens=128):
+                try:
+                    # Capture raw bytes and decode explicitly with UTF-8 and
+                    # replacement to avoid platform-default cp1252 decoding errors
+                    p = subprocess.run(
+                        ['ollama', 'run', self.model_id, prompt],
+                        capture_output=True,
+                        timeout=120,
+                    )
+                    out_bytes = p.stdout or b''
                     try:
-                        # Ensure subprocess output is decoded using UTF-8 and
-                        # replace undecodable bytes to avoid UnicodeDecodeError
-                        p = subprocess.run(
-                            ['ollama', 'run', self.model_id, prompt],
-                            capture_output=True,
-                            text=True,
-                            encoding='utf-8',
-                            errors='replace',
-                            timeout=120,
-                        )
-                        out = (p.stdout or '').strip()
-                        return [{'generated_text': out}]
-                    except Exception as e:
-                        logging.info('Ollama run failed: %s', e)
-                        return [{'generated_text': ''}]
-            _local_text_llm = OllamaWrapper(ollama_model)
-            logging.info('Using Ollama CLI model %s for text LLM', ollama_model)
-            return _local_text_llm
-    except Exception:
-        pass
+                        out = out_bytes.decode('utf-8', errors='replace').strip()
+                    except Exception:
+                        out = str(out_bytes)
+                    return [{'generated_text': out}]
+                except Exception as e:
+                    logging.info('Ollama run failed: %s', e)
+                    return [{'generated_text': ''}]
+        _local_text_llm = OllamaWrapper(ollama_model)
+        logging.info('Using Ollama CLI model %s for text LLM', ollama_model)
+        return _local_text_llm
 
-    try:
-        from transformers import pipeline
-        import torch
-    except Exception:
-        _local_text_llm = None
-        return None
-    device = 0 if torch.cuda.is_available() else -1
-    # Try a small local-capable HF model first (must be cached locally to avoid downloads)
-    candidates = [
-        'Qwen/Qwen-2.5',
-        'qwen/Qwen-2.5',
-        'gpt2',
-    ]
-    for cid in candidates:
-        try:
-            _local_text_llm = pipeline('text-generation', model=cid, device=device, local_files_only=True)
-            return _local_text_llm
-        except Exception:
-            _local_text_llm = None
-    return None
+
+    # try:
+    #     from transformers import pipeline
+    #     import torch
+    # except Exception:
+    #     _local_text_llm = None
+    #     return None
+    # device = 0 if torch.cuda.is_available() else -1
+    # # Try a small local-capable HF model first (must be cached locally to avoid downloads)
+    # candidates = [
+    #     'Qwen/Qwen-2.5',
+    #     'qwen/Qwen-2.5',
+    #     'gpt2',
+    # ]
+    # for cid in candidates:
+    #     try:
+    #         _local_text_llm = pipeline('text-generation', model=cid, device=device, local_files_only=True)
+    #         return _local_text_llm
+    #     except Exception:
+    #         _local_text_llm = None
+    # return None
 
 
 def _normalize_caption_output(captioner, out):
@@ -316,14 +314,12 @@ def process_video_samples(file_path: str, captioner=None, max_samples: int = 30,
         work_frames = []
         idle_frames = []
 
-        # keyword classifier (backup)
         work_keywords = [
             'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
             'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
             'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
         ]
 
-        # Optionally prepare a local text LLM for semantic classification
         text_llm = None
         if use_llm:
             try:
@@ -461,57 +457,57 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 
-@app.post("/backend/analyze_video")
-async def analyze_video(file: UploadFile = File(...)):
-    # Save uploaded file
-    file_id = str(uuid.uuid4())
-    input_filename = f"{file_id}_{file.filename}"
-    input_path = os.path.join(UPLOAD_DIR, input_filename)
+# @app.post("/backend/analyze_video")
+# async def analyze_video(file: UploadFile = File(...)):
+#     # Save uploaded file
+#     file_id = str(uuid.uuid4())
+#     input_filename = f"{file_id}_{file.filename}"
+#     input_path = os.path.join(UPLOAD_DIR, input_filename)
     
-    with open(input_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+#     with open(input_path, "wb") as buffer:
+#         shutil.copyfileobj(file.file, buffer)
         
-    # Process video
-    output_filename = f"processed_{input_filename}"
-    output_path = os.path.join(PROCESSED_DIR, output_filename)
+#     # Process video
+#     output_filename = f"processed_{input_filename}"
+#     output_path = os.path.join(PROCESSED_DIR, output_filename)
     
-    cap = cv2.VideoCapture(input_path)
-    if not cap.isOpened():
-        raise HTTPException(status_code=400, detail="Could not open video file")
+#     cap = cv2.VideoCapture(input_path)
+#     if not cap.isOpened():
+#         raise HTTPException(status_code=400, detail="Could not open video file")
         
-    # Get video properties
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
+#     # Get video properties
+#     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+#     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+#     fps = int(cap.get(cv2.CAP_PROP_FPS))
     
-    # Define codec and create VideoWriter
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+#     # Define codec and create VideoWriter
+#     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+#     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     
-    tracker = BehaviorTracker()
-    task_completed = False
+#     tracker = BehaviorTracker()
+#     task_completed = False
     
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+#     while cap.isOpened():
+#         ret, frame = cap.read()
+#         if not ret:
+#             break
             
-        # Process frame
-        processed_frame, state, completed = tracker.process_frame(frame)
-        if completed:
-            task_completed = True
+#         # Process frame
+#         processed_frame, state, completed = tracker.process_frame(frame)
+#         if completed:
+#             task_completed = True
             
-        out.write(processed_frame)
+#         out.write(processed_frame)
         
-    cap.release()
-    out.release()
+#     cap.release()
+#     out.release()
     
-    return {
-        "message": "Video processed successfully",
-        "task_completed": task_completed,
-        "processed_video_path": output_path,
-        "download_url": f"/backend/download/{output_filename}"
-    }
+#     return {
+#         "message": "Video processed successfully",
+#         "task_completed": task_completed,
+#         "processed_video_path": output_path,
+#         "download_url": f"/backend/download/{output_filename}"
+#     }
 
 @app.get("/backend/download/{filename}")
 async def download_video(filename: str):
@@ -520,27 +516,27 @@ async def download_video(filename: str):
         return FileResponse(file_path, media_type="video/mp4", filename=filename, headers={"Accept-Ranges": "bytes"})
     raise HTTPException(status_code=404, detail="File not found")
 
-@app.get("/backend/stream_pose")
-async def stream_pose():
-    """Stream webcam frames with only pose/hand landmarks."""
-    def gen_frames():
-        cap = cv2.VideoCapture(0)
-        tracker = BehaviorTracker()
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            # Mirror frame for selfie view so landmarks match user's expectation
-            frame = cv2.flip(frame, 1)
-            processed_frame, _, _ = tracker.process_frame(frame)
-            ret, buffer = cv2.imencode('.jpg', processed_frame)
-            if not ret:
-                continue
-            frame_bytes = buffer.tobytes()
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        cap.release()
-    return StreamingResponse(gen_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
+# @app.get("/backend/stream_pose")
+# async def stream_pose():
+#     """Stream webcam frames with only pose/hand landmarks."""
+#     def gen_frames():
+#         cap = cv2.VideoCapture(0)
+#         tracker = BehaviorTracker()
+#         while True:
+#             ret, frame = cap.read()
+#             if not ret:
+#                 break
+#             # Mirror frame for selfie view so landmarks match user's expectation
+#             frame = cv2.flip(frame, 1)
+#             processed_frame, _, _ = tracker.process_frame(frame)
+#             ret, buffer = cv2.imencode('.jpg', processed_frame)
+#             if not ret:
+#                 continue
+#             frame_bytes = buffer.tobytes()
+#             yield (b'--frame\r\n'
+#                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+#         cap.release()
+#     return StreamingResponse(gen_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
 
 
 @app.post("/backend/vlm")
