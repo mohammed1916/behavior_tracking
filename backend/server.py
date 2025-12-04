@@ -76,7 +76,25 @@ def get_captioner_for_model(model_id: str):
         _captioner_cache[model_id] = None
         return None
 
+    # Choose device: prefer GPU if available and it has sufficient free memory,
+    # otherwise fall back to CPU to avoid CUDA OOM during model load.
     device = 0 if torch.cuda.is_available() else -1
+    try:
+        if device >= 0:
+            # torch.cuda.mem_get_info(device) -> (free, total)
+            try:
+                free, total = torch.cuda.mem_get_info(device)
+            except Exception:
+                free = None
+                total = None
+            # Require a safety margin (e.g., 2 GiB) to attempt GPU loads
+            MIN_GPU_FREE = 2 * 1024 * 1024 * 1024
+            if free is not None and free < MIN_GPU_FREE:
+                logging.info('GPU available but free memory (%s bytes) < %s bytes; preferring CPU to avoid OOM', free, MIN_GPU_FREE)
+                device = -1
+    except Exception:
+        # If querying GPU memory fails for any reason, silently prefer CPU fallback to be safe
+        device = -1
 
     # Default task; try to read from local_vlm_models.json if present
     task = 'image-to-text'
@@ -197,6 +215,55 @@ def get_local_text_llm():
             _local_text_llm = None
     return None
 
+
+def _normalize_caption_output(captioner, out):
+    """Normalize various pipeline outputs into a text string.
+    Some models/pipelines may return dicts containing token ids (e.g. 'input_ids').
+    Try to decode those using the pipeline's tokenizer when possible.
+    """
+    try:
+        first = None
+        if isinstance(out, list) and len(out) > 0:
+            first = out[0]
+        else:
+            first = out
+
+        if isinstance(first, dict):
+            # common keys
+            for k in ('generated_text', 'caption', 'text'):
+                if k in first and first.get(k):
+                    return first.get(k)
+
+            # If token ids are present, try to decode via tokenizer
+            if 'input_ids' in first:
+                ids = first.get('input_ids')
+                try:
+                    # handle tensors or nested lists
+                    if hasattr(ids, 'tolist'):
+                        ids_list = ids.tolist()
+                    else:
+                        ids_list = list(ids)
+                    # flatten if necessary
+                    if isinstance(ids_list, (list,)) and len(ids_list) > 0 and isinstance(ids_list[0], (list,)):
+                        ids_list = ids_list[0]
+                except Exception:
+                    ids_list = None
+
+                if ids_list and hasattr(captioner, 'tokenizer'):
+                    try:
+                        return captioner.tokenizer.decode(ids_list, skip_special_tokens=True)
+                    except Exception:
+                        pass
+
+            return str(first)
+
+        return str(first)
+    except Exception:
+        try:
+            return str(out)
+        except Exception:
+            return ''
+
 def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None, prompt: str = '', use_llm: bool = False):
     """Process a video file: compute basic video_info and sample frames to caption.
 
@@ -306,15 +373,7 @@ def process_video_samples(file_path: str, captioner=None, max_samples: int = 30,
                         idle_frames.append(idx)
                     continue
 
-                text = None
-                if isinstance(out, list) and len(out) > 0:
-                    first = out[0]
-                    if isinstance(first, dict):
-                        text = first.get('generated_text') or first.get('caption') or str(first)
-                    else:
-                        text = str(first)
-                else:
-                    text = str(out)
+                text = _normalize_caption_output(captioner, out)
 
                 # Decide label: prefer LLM-based classification if requested and available,
                 # otherwise fall back to simple keyword matching.
@@ -631,12 +690,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     import numpy as np
                     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                     out = captioner(img)
-                    caption = None
-                    if isinstance(out, list) and len(out) > 0:
-                        o0 = out[0]
-                        caption = o0.get('generated_text') or o0.get('caption') or str(o0)
-                    else:
-                        caption = str(out)
+                    caption = _normalize_caption_output(captioner, out)
 
                     # Decide label: optionally via LLM
                     label = 'idle'
@@ -794,15 +848,7 @@ async def vlm_local(
                 continue
 
             # normalize output to text
-            text = None
-            if isinstance(out, list) and len(out) > 0:
-                first = out[0]
-                if isinstance(first, dict):
-                    text = first.get('generated_text') or first.get('caption') or str(first)
-                else:
-                    text = str(first)
-            else:
-                text = str(out)
+            text = _normalize_caption_output(captioner, out)
 
             text_lower = (text or '').lower()
             is_work = any(k in text_lower for k in work_keywords)
