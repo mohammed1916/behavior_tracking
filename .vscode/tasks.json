@@ -3,16 +3,16 @@
 	"tasks": [
 		{
 			"type": "npm",
-			"script": "start:client",
+			"script": "start:server",
 			"problemMatcher": [],
-			"label": "npm: start:client",
+			"label": "npm: start:server",
 			"detail": "cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload"
 		},
 		{
 			"type": "npm",
-			"script": "start:server",
+			"script": "start:client",
 			"problemMatcher": [],
-			"label": "npm: start:server",
+			"label": "npm: start:client",
 			"detail": "cd frontend && npm run dev"
 		}
 	]
