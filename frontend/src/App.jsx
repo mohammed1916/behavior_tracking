@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
+import StoredAnalyses from './components/StoredAnalyses';
+import AnalysisDetails from './components/AnalysisDetails';
 
 function App() {
   // const [file, setFile] = useState(null);
@@ -20,6 +22,8 @@ function App() {
   const [vlmStream, setVlmStream] = useState(null);
   const [vlmUseLocal, setVlmUseLocal] = useState(true);
   const [vlmUseLLM, setVlmUseLLM] = useState(false);
+  const [showStoredPanel, setShowStoredPanel] = useState(false);
+  const [viewAnalysisId, setViewAnalysisId] = useState(null);
   // LLM length check state
   const [llmText, setLlmText] = useState('');
   const [llmMaxContext, setLlmMaxContext] = useState(2048);
@@ -119,6 +123,9 @@ function App() {
             } else if (data.stage === 'sample') {
               const sample = { frame_index: data.frame_index, time_sec: data.time_sec, caption: data.caption, label: data.label };
               analysis.samples.push(sample);
+              if (data.llm_output) {
+                analysis.samples[analysis.samples.length - 1].llm_output = data.llm_output;
+              }
               if (data.label === 'idle') analysis.idle_frames.push(data.frame_index);
               if (data.label === 'work') analysis.work_frames.push(data.frame_index);
               setVlmResult({ message: 'streaming', analysis: { ...analysis } });
@@ -131,6 +138,11 @@ function App() {
               setVlmLoading(false);
               try { es.close(); } catch {}
               setVlmStream(null);
+              // If server saved analysis and returned stored id, surface link
+              if (data.stored_analysis_id) {
+                setViewAnalysisId(data.stored_analysis_id);
+                setShowStoredPanel(true);
+              }
             } else if (data.stage === 'error') {
               analysis.error = data.message;
               setVlmResult({ message: 'error', analysis: { ...analysis } });
@@ -257,7 +269,26 @@ function App() {
       <h1>Behavior Tracking Analysis</h1>
 
       <div className="controls">
-       
+        <div className="panel left">
+          <div style={{ marginBottom: 12 }}>
+            <button onClick={() => setShowStoredPanel(s => !s)} style={{ marginRight: 8 }}>{showStoredPanel ? 'Hide' : 'Stored Analyses'}</button>
+          </div>
+        </div>
+
+        {/* Render stored analyses panel independently so it shows even when no VLM result is present */}
+        {showStoredPanel && (
+          <div style={{ marginTop: 12, width: '100%' }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <StoredAnalyses onView={(id) => { setViewAnalysisId(id); setShowStoredPanel(true); }} />
+              </div>
+              <div style={{ width: 520 }}>
+                <AnalysisDetails analysisId={viewAnalysisId} onClose={() => setViewAnalysisId(null)} />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="panel right">
           <h3>VLM (Video)</h3>
           <div className="vlm-section">
@@ -381,6 +412,7 @@ function App() {
                         </div>
                       </div>
                     )}
+                    {/* Stored analyses panel is rendered in the left controls now */}
                   </>
                 )}
               </div>
