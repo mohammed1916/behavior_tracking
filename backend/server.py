@@ -13,6 +13,8 @@ import logging
 import subprocess
 from transformers import pipeline
 import torch
+import sqlite3
+from datetime import datetime
 
 # configure logging so INFO/DEBUG messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -31,10 +33,24 @@ _local_captioner = None
 
 # Prompt template for LLM classification of captions (work vs idle).
 # Use .format(prompt=..., caption=...) to substitute values.
+# This prompt instructs the model to reply with exactly one lowercase word: either
+# "work" or "idle" and nothing else. Keep responses machine-parsable.
 CLASSIFY_PROMPT_TEMPLATE = (
-    "Decide whether the following caption describes active 'work' or 'idle' (single word response: work or idle).\n\n"
-    "Context prompt: {prompt}\nCaption: {caption}\n"
+    "You are a strict classifier. Respond with exactly one lowercase word: either work or idle.\n"
+    "Do NOT add any punctuation, explanation, quotes, or extra text — only the single word.\n\n"
+    "Context: {prompt}\nCaption: {caption}\n"
 )
+
+# Prompt for duration estimation: ask the LLM to return a single integer (seconds)
+DURATION_PROMPT_TEMPLATE = (
+    "You are an assistant that estimates how long a described manual task typically takes.\n"
+    "Given the task description below, respond with a single integer representing the estimated time in seconds.\n"
+    "Do NOT add any explanation or text — only the integer number of seconds.\n\n"
+    "Task: {task}\n"
+)
+
+# In-memory assignments store (id -> dict)
+ASSIGNMENTS = {}
 
 # Cache captioners by model id so repeated requests don't reload them
 _captioner_cache = {}
@@ -291,6 +307,36 @@ def _normalize_caption_output(captioner, out):
         except Exception:
             return ''
 
+
+def _ask_duration_llm(task_text: str):
+    """Ask the local LLM to estimate an expected duration in seconds.
+    Returns integer seconds or None if unavailable/parse failed."""
+    try:
+        text_llm = get_local_text_llm()
+        if text_llm is None:
+            return None
+        prompt = DURATION_PROMPT_TEMPLATE.format(task=task_text)
+        out = text_llm(prompt, max_new_tokens=32)
+        out_text = None
+        if isinstance(out, list) and len(out) > 0:
+            first = out[0]
+            if isinstance(first, dict):
+                out_text = first.get('generated_text') or first.get('text') or str(first)
+            else:
+                out_text = str(first)
+        else:
+            out_text = str(out)
+        if not out_text:
+            return None
+        # Extract integer from response
+        import re
+        m = re.search(r"(\d+)", out_text)
+        if m:
+            return int(m.group(1))
+    except Exception:
+        pass
+    return None
+
 def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None, prompt: str = '', use_llm: bool = False):
     """Process a video file: compute basic video_info and sample frames to caption.
 
@@ -401,26 +447,31 @@ def process_video_samples(file_path: str, captioner=None, max_samples: int = 30,
                 text = _normalize_caption_output(captioner, out)
 
                 # Decide label: prefer LLM-based classification if requested and available,
-                # otherwise fall back to simple keyword matching.
+                # otherwise fall back to simple keyword matching. Also capture LLM output
+                # into the sample so it appears in the returned `analysis`.
                 is_work = False
+                llm_output = None
                 if use_llm and text_llm is not None:
                     try:
                         cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=text)
-                        out = text_llm(cls_prompt, max_new_tokens=8)
+                        llm_raw = text_llm(cls_prompt, max_new_tokens=8)
                         out_text = None
-                        if isinstance(out, list) and len(out) > 0:
-                            first = out[0]
+                        if isinstance(llm_raw, list) and len(llm_raw) > 0:
+                            first = llm_raw[0]
                             if isinstance(first, dict):
                                 out_text = first.get('generated_text') or first.get('text') or str(first)
                             else:
                                 out_text = str(first)
                         else:
-                            out_text = str(out)
+                            out_text = str(llm_raw)
+
+                        llm_output = out_text
+
                         if out_text:
-                            out_text = out_text.lower()
-                            if 'work' in out_text and 'idle' not in out_text:
+                            out_text_l = out_text.lower()
+                            if 'work' in out_text_l and 'idle' not in out_text_l:
                                 is_work = True
-                            elif 'idle' in out_text and 'work' not in out_text:
+                            elif 'idle' in out_text_l and 'work' not in out_text_l:
                                 is_work = False
                             else:
                                 # ambiguous -> fallback to keyword
@@ -428,11 +479,12 @@ def process_video_samples(file_path: str, captioner=None, max_samples: int = 30,
                     except Exception as e:
                         logging.info('LLM classifier failed: %s', e)
                         is_work = any(k in (text or '').lower() for k in work_keywords)
+                        llm_output = None
                 else:
                     text_lower = (text or '').lower()
                     is_work = any(k in text_lower for k in work_keywords)
 
-                sample = {"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": text, "label": "work" if is_work else "idle"}
+                sample = {"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": text, "label": "work" if is_work else "idle", "llm_output": llm_output}
                 if stream_callback:
                     stream_callback({"stage": "sample", **sample})
                 else:
@@ -476,6 +528,128 @@ VLM_UPLOAD_DIR = "vlm_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
+
+# SQLite DB setup
+DB_PATH = os.path.join(os.path.dirname(__file__), 'analyses.db')
+_db_initialized = False
+
+def init_db():
+    global _db_initialized
+    if _db_initialized:
+        return
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS analyses (
+        id TEXT PRIMARY KEY,
+        filename TEXT,
+        model TEXT,
+        prompt TEXT,
+        video_url TEXT,
+        fps REAL,
+        frame_count INTEGER,
+        width INTEGER,
+        height INTEGER,
+        duration REAL,
+        assignment_id TEXT,
+        created_at TEXT
+    )
+    ''')
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        analysis_id TEXT,
+        frame_index INTEGER,
+        time_sec REAL,
+        caption TEXT,
+        label TEXT,
+        llm_output TEXT,
+        FOREIGN KEY(analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
+    )
+    ''')
+    conn.commit()
+    conn.close()
+    _db_initialized = True
+
+def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_info, samples, assignment_id=None):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    created = datetime.utcnow().isoformat() + 'Z'
+    cur.execute('''INSERT OR REPLACE INTO analyses (id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, assignment_id, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+        analysis_id, filename, model, prompt, video_url,
+        video_info.get('fps') if video_info else None,
+        video_info.get('frame_count') if video_info else None,
+        video_info.get('width') if video_info else None,
+        video_info.get('height') if video_info else None,
+        video_info.get('duration') if video_info else None,
+        assignment_id,
+        created
+    ))
+
+    # insert samples
+    if samples:
+        for s in samples:
+            cur.execute('''INSERT INTO samples (analysis_id, frame_index, time_sec, caption, label, llm_output) VALUES (?, ?, ?, ?, ?, ?)''', (
+                analysis_id,
+                s.get('frame_index'),
+                s.get('time_sec'),
+                s.get('caption'),
+                s.get('label'),
+                s.get('llm_output')
+            ))
+
+    conn.commit()
+    conn.close()
+
+def list_analyses_from_db(limit=100):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, assignment_id, created_at FROM analyses ORDER BY created_at DESC LIMIT ?', (limit,))
+    rows = cur.fetchall()
+    conn.close()
+    out = []
+    for r in rows:
+        out.append({
+            'id': r[0], 'filename': r[1], 'model': r[2], 'prompt': r[3], 'video_url': r[4],
+            'fps': r[5], 'frame_count': r[6], 'width': r[7], 'height': r[8], 'duration': r[9],
+            'assignment_id': r[10], 'created_at': r[11]
+        })
+    return out
+
+def get_analysis_from_db(aid):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, assignment_id, created_at FROM analyses WHERE id=?', (aid,))
+    r = cur.fetchone()
+    if not r:
+        conn.close()
+        return None
+    analysis = {
+        'id': r[0], 'filename': r[1], 'model': r[2], 'prompt': r[3], 'video_url': r[4],
+        'fps': r[5], 'frame_count': r[6], 'width': r[7], 'height': r[8], 'duration': r[9],
+        'assignment_id': r[10], 'created_at': r[11]
+    }
+    cur.execute('SELECT frame_index, time_sec, caption, label, llm_output FROM samples WHERE analysis_id=? ORDER BY frame_index ASC', (aid,))
+    rows = cur.fetchall()
+    samples = []
+    for s in rows:
+        samples.append({'frame_index': s[0], 'time_sec': s[1], 'caption': s[2], 'label': s[3], 'llm_output': s[4]})
+    analysis['samples'] = samples
+    conn.close()
+    return analysis
+
+def delete_analysis_from_db(aid):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('DELETE FROM samples WHERE analysis_id=?', (aid,))
+    cur.execute('DELETE FROM analyses WHERE id=?', (aid,))
+    conn.commit()
+    conn.close()
 
 # @app.post("/backend/analyze_video")
 # async def analyze_video(file: UploadFile = File(...)):
@@ -565,6 +739,7 @@ async def vlm_endpoint(
     prompt: str = Form(''),
     video: UploadFile = File(None),
     use_llm: bool = Form(False),
+    assignment_id: str = Form(None),
 ):
     """VLM endpoint stub for videos: saves optional video and returns basic analysis.
     Placeholder — extend to call a real VLM when available.
@@ -630,6 +805,31 @@ async def vlm_endpoint(
                     analysis['idle_frames'] = proc.get('idle_frames')
                 if 'work_frames' in proc:
                     analysis['work_frames'] = proc.get('work_frames')
+                # If an assignment is provided, compare expected vs actual work time
+                if assignment_id:
+                    try:
+                        assign = ASSIGNMENTS.get(assignment_id)
+                        if assign is not None:
+                            fps_local = vi.get('fps') or 30.0
+                            work_frames = proc.get('work_frames') or []
+                            actual_work_time = len(work_frames) / (fps_local if fps_local > 0 else 30.0)
+                            expected = assign.get('expected_duration_sec')
+                            analysis['assignment'] = {
+                                'id': assignment_id,
+                                'task': assign.get('task_text'),
+                                'expected_duration_sec': expected,
+                                'actual_work_time_sec': actual_work_time,
+                                'overrun': (expected is not None and actual_work_time > expected)
+                            }
+                    except Exception:
+                        pass
+                # Persist final analysis to SQLite DB (samples + meta)
+                try:
+                    aid = str(uuid.uuid4())
+                    save_analysis_to_db(aid, filename, model, prompt, video_url, vi, proc.get('samples'), assignment_id=assignment_id)
+                    analysis['stored_analysis_id'] = aid
+                except Exception:
+                    logging.exception('Failed to save analysis to DB')
             analysis["video_url"] = video_url
             return {"message": "VLM (video) local response", "analysis": analysis}
         except Exception as e:
@@ -667,7 +867,7 @@ def _sse_event(data: dict, event: Optional[str] = None) -> bytes:
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False)):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), assignment_id: str = Query(None)):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -703,6 +903,12 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
 
             # Open second capture for seeking samples
             cap2 = cv2.VideoCapture(file_path)
+            # Track cumulative work frames when assignment monitoring is requested
+            cumulative_work_frames = 0
+            # Collect final samples to allow storing into DB at the end
+            collected_samples = []
+            collected_idle = []
+            collected_work = []
             for fi in indices:
                 try:
                     cap2.set(cv2.CAP_PROP_POS_FRAMES, fi)
@@ -719,13 +925,13 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
 
                     # Decide label: optionally via LLM
                     label = 'idle'
+                    cls_text = None
                     if use_llm:
                         text_llm = get_local_text_llm()
                         if text_llm is not None:
                             try:
                                 cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=caption)
                                 cls_out = text_llm(cls_prompt, max_new_tokens=8)
-                                cls_text = None
                                 if isinstance(cls_out, list) and len(cls_out) > 0:
                                     f0 = cls_out[0]
                                     if isinstance(f0, dict):
@@ -749,12 +955,49 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                             label = 'work'
 
                     time_sec = fi / (fps if fps > 0 else 30.0)
-                    yield _sse_event({"stage": "sample", "frame_index": fi, "time_sec": time_sec, "caption": caption, "label": label})
+
+                    # If monitoring an assignment, compute cumulative work time and emit a flag event when exceeded
+                    assignment_overrun = None
+                    if assignment_id and label == 'work':
+                        cumulative_work_frames += 1
+                        try:
+                            assign = ASSIGNMENTS.get(assignment_id)
+                            if assign is not None and assign.get('expected_duration_sec') is not None:
+                                expected = assign.get('expected_duration_sec')
+                                actual_work_time = cumulative_work_frames / (fps if fps > 0 else 30.0)
+                                if actual_work_time > expected:
+                                    assignment_overrun = True
+                                else:
+                                    assignment_overrun = False
+                        except Exception:
+                            assignment_overrun = None
+
+                    payload = {"stage": "sample", "frame_index": fi, "time_sec": time_sec, "caption": caption, "label": label, "llm_output": cls_text}
+                    if assignment_overrun is not None:
+                        payload['assignment_overrun'] = assignment_overrun
+
+                    # collect
+                    collected_samples.append({
+                        'frame_index': fi, 'time_sec': time_sec, 'caption': caption, 'label': label, 'llm_output': cls_text
+                    })
+                    if label == 'work':
+                        collected_work.append(fi)
+                    else:
+                        collected_idle.append(fi)
+
+                    yield _sse_event(payload)
                 except Exception as e:
                     yield _sse_event({"stage": "sample_error", "frame_index": fi, "error": str(e)})
             cap2.release()
 
-            yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})
+            # Persist the final collected analysis to DB
+            try:
+                vid_info = {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height, 'duration': duration}
+                aid = str(uuid.uuid4())
+                save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, assignment_id=assignment_id)
+                yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid})
+            except Exception:
+                yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})
         except Exception as e:
             yield _sse_event({"stage": "error", "message": str(e)})
 
@@ -767,6 +1010,7 @@ async def vlm_local(
     prompt: str = Form(''),
     video: UploadFile = File(None),
     use_llm: bool = Form(False),
+    assignment_id: str = Form(None),
 ):
     """Run a local lightweight VLM-like captioner on a representative frame.
     This uses a BLIP image->text pipeline (Salesforce/blip-image-captioning-large) if installed.
@@ -1092,6 +1336,67 @@ async def llm_length_check(text: str = Form(...), max_context: int = Form(2048))
         "suggestions": suggestions,
         "example_summary": example_summary,
     }
+
+
+@app.post('/backend/assign_task')
+async def assign_task(task_text: str = Form(...), expected_duration_sec: int = Form(None)):
+    """Create an assignment with optional expected duration. If duration is not
+    supplied, attempt to ask the local LLM for a suggested duration in seconds.
+    Returns an assignment id and the stored data.
+    """
+    if not task_text or not isinstance(task_text, str):
+        raise HTTPException(status_code=400, detail='task_text required')
+
+    suggested = expected_duration_sec
+    if suggested is None:
+        suggested = _ask_duration_llm(task_text)
+
+    aid = str(uuid.uuid4())
+    ASSIGNMENTS[aid] = {
+        'id': aid,
+        'task_text': task_text,
+        'expected_duration_sec': suggested,
+    }
+
+    return {'assignment_id': aid, 'task_text': task_text, 'expected_duration_sec': suggested}
+
+
+@app.get('/backend/assignment/{assignment_id}')
+async def get_assignment(assignment_id: str):
+    a = ASSIGNMENTS.get(assignment_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail='assignment not found')
+    return a
+
+
+@app.get('/backend/analyses')
+async def list_analyses(limit: int = 100):
+    try:
+        return list_analyses_from_db(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/backend/analysis/{analysis_id}')
+async def get_analysis(analysis_id: str):
+    try:
+        res = get_analysis_from_db(analysis_id)
+        if res is None:
+            raise HTTPException(status_code=404, detail='analysis not found')
+        return res
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete('/backend/analysis/{analysis_id}')
+async def delete_analysis(analysis_id: str):
+    try:
+        delete_analysis_from_db(analysis_id)
+        return {"deleted": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
