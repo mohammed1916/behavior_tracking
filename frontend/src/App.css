@@ -62,6 +62,16 @@ body{
   background: linear-gradient(180deg, transparent, rgba(0,0,0,0.01));
 }
 
+.upload-section.drag-over {
+  border-color: var(--accent-strong);
+  background: linear-gradient(180deg, rgba(100,108,255,0.02), rgba(100,108,255,0.01));
+}
+
+.tabs { display: inline-flex; background: transparent; }
+.tab { padding: 8px 12px; border-radius: 8px; background: transparent; border: 1px solid transparent; color: var(--text); cursor: pointer; }
+.tab.active { background: var(--accent); color: white; border-color: var(--accent-strong); }
+.tab:hover { filter: brightness(0.98); }
+
 .controls {
   display: flex;
   gap: 20px;

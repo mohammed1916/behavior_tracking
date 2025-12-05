@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import StoredAnalyses from './components/StoredAnalyses';
 import AnalysisDetails from './components/AnalysisDetails';
+import FileUpload from './components/FileUpload';
+import LiveView from './components/LiveView';
 
 function App() {
   // const [file, setFile] = useState(null);
@@ -84,6 +86,8 @@ function App() {
     setVlmVideo(e.target.files[0] || null);
     setVlmResult(null);
   };
+
+  const [activeTab, setActiveTab] = useState('upload');
 
   const handleVlmSubmit = async () => {
     if (!vlmPrompt && !vlmVideo) {
@@ -315,9 +319,20 @@ function App() {
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
             </label>
 
-            <label>Optional Video:
-              <input type="file" accept="video/*" onChange={handleVlmVideoChange} />
-            </label>
+            <div style={{ marginTop: 8 }}>
+              <div className="tabs" style={{ display: 'flex', gap: 8 }}>
+                <button className={`tab ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>Upload</button>
+                <button className={`tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>Live</button>
+              </div>
+
+              <div style={{ marginTop: 10 }}>
+                {activeTab === 'upload' ? (
+                  <FileUpload accept="video/*" onFileSelect={(f) => setVlmVideo(f)} initialFile={vlmVideo} label="Select a video for analysis" />
+                ) : (
+                  <LiveView />
+                )}
+              </div>
+            </div>
 
             <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLocal} onChange={(e) => setVlmUseLocal(e.target.checked)} /> Use local VLM
