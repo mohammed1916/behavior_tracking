@@ -534,3 +534,242 @@ Now, the question is whether this is active work or idle. Active work usually me
 ...done thinking.
 
 work
+2025-12-05 13:05:08,921 INFO Saved VLM upload to vlm_uploads\4e1bbc00-247c-439c-b0c0-47c25bd47a1b_assembly_idle.mp4
+2025-12-05 13:05:13,243 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-05 13:05:26,221 INFO Using Ollama CLI model qwen3:0.6b for text LLM
+2025-12-05 13:05:29,105 INFO Ollama decoded output: Thinking...
+Okay, so I need to figure out whether the caption describes active work or idle work. The user provided the context: a close-up of a person holding a remote control in a factory. Let me break this down.
+
+First, the key elements here are a person in a factory. A remote control is an object typically associated with a home or office, not a factory. Factories are places where manufacturing takes place, but the remote control is an external device used in a home setting. The person is holding it, which suggests they are using it for a purpose beyond just idle. 
+
+Active work would mean the person is engaged in a task, like in a factory. But remote controls are more like tools used in the home. So even though it's a factory, the person isn't using it for work in the traditional sense. Wait, but maybe in the context of a factory, remote control could be part of the work environment. However, the term 'idle' usually refers to being not doing anything, which would be a different scenario. 
+
+Alternatively, maybe the person is using the remote control to operate machinery in the factory. If the person is in a factory, they might be operating equipment, which would be active work. But the remote control itself is an object, not a person. So the person is holding it, implying they are actively using it. Therefore, the caption is describing active work. 
+
+I think the answer is work because the person is using a remote control in a factory setting, which is part of their active work. Even though the remote control is an object, the person's action indicates they are engaged.
+...done thinking.
+
+work
+2025-12-05 13:05:35,915 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The context prompt says: "Arafed man working on a computer with a small machine."
+
+First, I need to parse the words. The caption mentions "working on a computer with a small machine." The key here is the action of working. "Working" is definitely an active action, which implies that the man is engaged in some form of work. There's no mention of being idle or resting, so the answer should be "work." I should make sure there's no other possibility, but "idle" doesn't fit here. So the correct response is work.
+...done thinking.
+
+work
+2025-12-05 13:05:45,904 INFO Ollama decoded output: Thinking...
+Okay, let me try to figure this out. The user wants to know if the caption describes active work or idle. The caption says, "Arafed man working on a motorcycle in a factory."
+
+First, I need to break down the words. "Arafed" might be a typo, maybe "Arafid"? Or perhaps it's a name. But regardless, the main action here is working on a motorcycle. The context mentions a factory, which is a place where work is done. So the man is in a factory, which implies he's engaged in a job there.
+
+Now, thinking about the keywords: working, motorcycle, factory. All of these points towards being in the process of work. There's no mention of idle, like resting or not working. So it's not idle. Therefore, the answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:05:52,190 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The caption is "Arafed image of a man working on a computer motherboard."
+
+First, I need to understand the context. The word "rafed" is a term from the film "Rajiv Gandhi: The Raft of Adventure," which is a movie about a raft. But here it's an image of a man working on a computer. The term "rafed" might be a red herring, but I should focus on the main content.
+
+Next, the man is working on a computer, which is a typical activity associated with work. The word "working" directly indicates an active state. Even though "rafed" is a movie, the caption's main subject is the man's action, not the movie itself. So, the answer should be "work" because it's about work activity.
+...done thinking.
+
+work
+2025-12-05 13:05:58,270 INFO Ollama decoded output: Thinking...
+Okay, let me figure this out. The user wants to know if the caption describes active work or idle. The caption says, "there is a man working on a computer that is on a table."
+
+First, I need to parse the words. The key part here is "working on a computer." That clearly indicates that the man is actively engaged in an activity. The computer is mentioned as being on a table, but that's just a location, not the activity itself. So the main action is working, which is active. There's no mention of him being idle, like sleeping or taking a break. So the answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:06:04,153 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to determine if the caption describes active work or idle. The caption says, "there is a man that is working on a computer in a factory." So first, I need to break down the sentence.
+
+The key here is identifying whether the man is engaged in a task or not. The phrase "working on a computer" clearly indicates that he's actively doing something. Factories are workplaces, so the context is about a worker in a factory. The presence of a computer suggests he's using it for work, not idle. So the answer should be "work" because it's about his current activity. I don't see any other words like "idle" here. Let me double-check to make sure I'm not missing anything. Yeah, the caption directly states he's working, so it's definitely work.
+...done thinking.
+
+work
+2025-12-05 13:06:10,209 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to determine if the caption describes active work or idle work. The caption is "Arafed man in a factory with a machine in the background."
+
+First, I need to figure out if the man is working or idle. The term "factory" is a place where people work, so that's definitely a work context. Arafed is a name, but I think that's a common name for a man in a factory. The machine in the background also points to a work environment. There's no mention of him being idle or away from his job. So the answer should be "work."
+...done thinking.
+
+work
+2025-12-05 13:06:27,956 INFO Ollama decoded output: Thinking...
+Okay, let's see. The caption says, "Arafed man in a factory with a laptop and a pair of gloves." Hmm, the word "rafed" is probably a typo for "rafid" or maybe "rafed" is from a different language. Wait, maybe it's from a specific context. The user is asking if this caption describes active work or idle.
+
+So, the key here is to determine if the man is working or idle. The presence of a laptop and gloves suggests he's in the factory, which is a place of work. A laptop is a tool he's using, and gloves could be an activity like working. So, even though the caption is in Arabic, the main action is working in a factory. Therefore, it's an active work scenario. The answer should be "work".
+...done thinking.
+
+work
+2025-12-05 13:06:37,511 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to determine if the caption describes active work or idle work. The caption given is: "there is a computer monitor sitting on a desk with a mouse."
+
+First, I need to think about the context. The key elements here are a computer monitor and a mouse. Normally, when someone mentions a computer, it's usually in use, right? Like a person using it, maybe in a work environment. But the caption says it's sitting on a desk with a mouse. Wait, sitting there? That doesn't sound like it's being used. If the monitor is on a desk, maybe it's just a static display, not actively being used. But sometimes people use computers in different ways. Like, maybe they're just looking at it, or maybe they're taking a break. But the word "sitting" suggests it's in place, not moving. So the main point here is the computer being on the desk, not in motion. So the answer should be idle, right? Because it's not moving, just being there. I think that's it. No other factors to consider here. The caption is about the presence of the computer, not its activity.
+...done thinking.
+
+idle
+2025-12-05 13:06:47,016 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to determine if the caption describes active work or idle. The caption is "arafed worker working on a computer in a factory." First, I need to figure out what "arafed" refers to. Arafed is a type of wood, right? So the caption is about a worker using an arafed (wood) tool in a factory.
+
+Now, the key here is to identify if the action is active or idle. Since the worker is "working on a computer in a factory," that's clearly a productive activity. There's no mention of being idle or resting. The word "working" directly indicates active work. Therefore, the correct response should be "work."
+...done thinking.
+
+work
+2025-12-05 13:07:17,430 INFO Ollama decoded output: Thinking...
+Okay, let me try to figure this out. The user wants to know if the caption describes active work or idle. The caption is "Arafed worker in a factory working on a computer screen." First, I need to break down the words. "Arafed" probably means "worker" or "worker in the factory." Then "working on a computer screen." So, the main action here is working on a computer. 
+
+Now, the question is whether this is active work or idle. Active work would mean someone working actively, like in a job. Idle would be when someone is not actively doing something. Since the caption mentions the worker is doing something, it's definitely active. There's no mention of being idle, so the answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:07:35,529 INFO Ollama decoded output: Thinking...
+Okay, let me try to figure this out. The user wants to know if the caption describes active work or idle. The caption is "Arafed man in a blue shirt working on two computer monitors." 
+
+First, I need to break down the words. "Arafed" probably means "a man" or "a man in a blue shirt." Then "working" indicates activity. The next part is "on two computer monitors," which clearly shows he's doing something. So putting it all together, it's about someone actively working on computers. 
+
+I should check if there's any ambiguity. Maybe "Arafed" could be a typo or a specific term, but in context, the main point is about work. The word "working" directly points to active work. So the answer should be "work."
+...done thinking.
+
+work
+2025-12-05 13:07:52,468 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The caption is "Arafed worker in a factory working on a piece of equipment."
+
+First, I need to parse the words. The key words here are "worker," "factory," "working," and "equipment." The presence of "working" immediately suggests that the worker is actively doing something. "Factory" is a setting, but it's part of the context, not the main action. "Arafed" might be a typo or a specific term, but I think it's a correct spelling. 
+
+So, "working on a piece of equipment" clearly indicates that the worker is engaged in a productive activity. Active work implies being in motion, doing something, which matches the description. Idle would mean not doing anything, but here the worker is actively involved. Therefore, the correct response should be "work."
+...done thinking.
+
+work
+2025-12-05 13:08:10,500 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The caption is "Arafed man in a factory with a machine and a box." First, I need to parse the words. The man is in a factory, which is a place of work. There's a machine and a box, which are common elements in factories. So, the key here is to identify if the man is actively engaged in a job or just idle. Since the context mentions a factory, it's a place of work, so the answer should be work. I don't see any words like "idle" here. The caption clearly points to a workplace setting.
+...done thinking.
+
+work
+2025-12-05 13:08:29,377 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The caption is "Arafed man standing in a factory with a lot of machines." First, I need to parse the words. "Arafed" probably refers to a man, so maybe he's a male figure. "Standing in a factory" suggests he's present in a workplace setting. "With a lot of machines" points to machinery and production. 
+
+Now, considering the context, being in a factory implies being actively involved in production, so that's work. "Idle" would mean not doing anything, but here he's there, so it's not idle. So the answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:08:44,121 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The caption is "Arafed man in a factory with a laptop and a phone." First, I need to parse the words. The main subject is a man in a factory. Factories are places of work, so that's definitely about work. Then there's a laptop and a phone, which are tools used in the factory. So, the presence of these items indicates he's actively engaged in his job. Therefore, it's about work. The response should be "work."
+...done thinking.
+
+work
+2025-12-05 13:09:04,026 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to determine if the caption describes active work or idle. The caption is "Arafed man in a blue shirt holding a bag of plastic." Hmm.
+
+First, I need to figure out if the man is doing something active or idle. The key here is the action described. The caption says he's holding a bag of plastic. That sounds like he's carrying something, which is a physical activity. So, he's moving and using his hands, which makes me think of work. Words like "holding," "carrying," "working," or "busy" would indicate that. But wait, "idle" usually means not active, like just sitting or lying. So in this case, the man is actively doing something, so it's work. The response should be either "work" or "idle". Let me double-check. Yes, the action is clearly active. So the answer should be "work".
+...done thinking.
+
+work
+2025-12-05 13:09:21,145 INFO Ollama decoded output: Thinking...
+Okay, let's see. The caption says, "Arafed man in a blue shirt is looking at a computer screen." First, I need to figure out if this is describing active work or idle. 
+
+So, the man is looking at a computer screen. Usually, looking at a computer screen implies being engaged in a computer-related activity, which is definitely work. Active work usually involves doing something actively, like coding, working on a project, or using technology. Idle would mean he's not actively doing anything, maybe resting or not using it. 
+
+Wait, but the term "arafed" is a name, so maybe there's a cultural reference. But regardless, the key action here is looking at the computer. So even if it's a name, the action is active. Therefore, it's work. The answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:09:37,951 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to determine if the caption describes active work or idle. The caption is: "Arafed man standing in a factory with a lot of electronics."
+
+First, I need to understand the context. The word "rafed" is a name, so maybe it's a person's name. The man is standing in a factory, which is a place of work. There's a lot of electronics, which suggests there's a lot of machinery or products being made. So, the man is present in a workplace setting, which is definitely associated with work. The key words here are "factory" and "electronics," both indicating active participation in a productive environment. Therefore, the caption is describing an active work scenario. The response should be "work" or "idle." So the answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:09:56,555 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The caption is "Arafed man in a blue shirt and protective mask working on a machine."
+
+First, I need to parse the words. The key elements here are "working" and "machine." The term "working" directly indicates that the man is engaged in a task. "Machine" is a common object associated with work. So, the main action here is work. There's no mention of being idle, like "sleeping" or "idle hands." Therefore, the correct response should be "work."
+...done thinking.
+
+work
+2025-12-05 13:10:11,950 INFO Ollama decoded output: Thinking...
+Okay, let me try to figure this out. The user wants to know if the caption describes active work or idle. The caption is "Arafed man in a factory working on a computer monitor." First, I need to break down the words. The key elements here are "factory" and "computer monitor." 
+
+So, the man is in a factory, which is a place of work. Then he's working on a computer monitor. That sounds like he's actively engaged in a task. The word "working" directly indicates that he's doing something, not just idle. There's no mention of him being idle, like sleeping or resting. Therefore, it's clear that the caption is about him being actively involved in his job. 
+
+I should make sure there's no other possible interpretation. Maybe he's in a different location, but the context says a factory, which is a place of work. Plus, the specific action of working on the monitor adds clarity. So the answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:10:28,907 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to determine if the caption describes active work or idle. The caption is: "Arafed man in a factory looking at a monitor and a cell phone."
+
+First, I need to parse the key elements. The main subject is a man in a factory. Factories are places of work, so that's a strong indicator. The man is looking at a monitor and a cell phone. Monitors and cell phones are common in factories, especially if someone is in the office or at work. It's not just idle, because working at a factory would involve such activities. The term "idle" usually refers to someone not actively doing something, like sleeping or resting. Since the man is actively engaged in the work environment with monitors and phones, it's definitely active. So the answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:10:45,720 INFO Ollama decoded output: Thinking...
+Okay, let's see. The caption is "Arafed man standing in a factory with a lot of machines". The user wants to know if this describes active work or idle.
+
+First, I need to break down the words. "Arafed" is probably a transliteration or a name, so it's not a person's name. Then "man" is the subject. "Standing in a factory" sounds like he's working there. "With a lot of machines" suggests there are machines, which are part of a factory setting. So the man is actively involved in the factory, doing something. 
+
+Work implies active participation, while idle would mean he's not doing anything. So the answer should be work. I don't see any other words that indicate he's idle, just the presence of machines and the factory. Yep, that makes sense.
+...done thinking.
+
+work
+2025-12-05 13:11:01,399 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The caption is "Arafed man in a blue shirt and mask standing in a factory." 
+
+First, I need to figure out what "rafed" refers to. Wait, "rafed" might be a typo or a specific term. In some contexts, "rafed" could stand for "raff" or "raf" as in "raf" meaning to get something done. But in the context of a caption, maybe it's part of a larger term. However, the main part of the caption is about a man in a blue shirt and mask standing in a factory. 
+
+The key here is to focus on the actions mentioned. The man is "standing in a factory," which clearly indicates movement and activity. There's no mention of him working, resting, or being idle. So, even though "rafed" could imply he's getting something done, the main action is that he's physically present in the factory, which is an active state. 
+
+Therefore, the correct response should be "work" because the caption highlights active involvement in the factory setting.
+...done thinking.
+
+work
+2025-12-05 13:11:10,043 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to figure out if the caption describes active work or idle. The caption is "Arafed man standing in a factory with a lot of electronics."
+
+First, I need to understand the context. The man is described as standing in a factory, which is a place of work. There's mention of electronics, which are products or components used in factories. So, the key elements here are work-related activities. The word "factory" points to an industrial setting, and the man is present there. 
+
+Now, the question is whether this caption is about being active or idle. Since the man is in a workplace and has electronics, it's clearly about work. There's no indication of being idle, like resting or not engaged. So, the correct answer should be "work."
+...done thinking.
+
+work
+2025-12-05 13:11:15,843 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The caption is "Arafed man working in a factory with a lot of electronics."
+
+First, I need to break down the words. "Arafed" probably refers to the man, maybe his name. "Working" clearly indicates that he's engaged in work. "Factory" and "electronics" are all parts of a job environment. So, the main action here is working. There's no mention of being idle or resting, so the answer should be work.
+...done thinking.
+
+work
+2025-12-05 13:11:21,935 INFO Ollama decoded output: Thinking...
+Okay, so I need to figure out if the caption describes active work or idle. The context is "workers in a factory working on a computer screen." Let me break this down.
+
+First, the caption mentions "workers" and "a factory," which are all places where people work. Then there's "working on a computer screen." That clearly indicates they are engaged in a specific activity: programming or something similar. The key here is the action of working. So, the workers are actively doing something, not idle. 
+
+I don't think there's any mention of them being idle, like "sleeping" or "waiting." So the answer should be "work" because they are actively engaged in the task. Let me double-check if there's any other possible interpretation. Maybe if they were just resting, but no, "working" directly relates to activity. Yep, I'm pretty confident it's work.
+...done thinking.
+
+work
+2025-12-05 13:11:27,664 INFO Ollama decoded output: Thinking...
+Okay, let's see. The caption says, "Arafed worker in a factory cutting a piece of green apple." The key here is to figure out if it's describing an active or idle situation.
+
+First, "arafed" is probably a typo for "arafid," which I think is the Indonesian word for "worker." So the caption is about a worker in a factory doing something. The action here is cutting an apple, which is a task. Typically, if someone is doing a physical task, that's considered active. Even if it's a machine doing it, like an apple cutter, it's still active. So the worker is actively involved in the work. Therefore, the answer should be "work."
+...done thinking.
+
+work
+2025-12-05 13:11:34,486 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to determine if the caption describes active work or idle. The caption is "Arafed worker in a factory checking a box with a face mask." First, I need to break down the words. The key elements here are "worker," "factory," "checking a box," and "face mask." 
+
+Now, "worker" usually implies someone actively doing something, right? Like a person in a job. "Factory" is a place where workers work, so that's part of the context. "Checking a box" sounds like they're working on something, maybe preparing for something. "Face mask" could indicate they're wearing a protective gear, which also shows they're in a job-related scenario. 
+
+Putting this together, all the words point to someone in a factory doing a specific job. There's no mention of being idle or resting. So, even though they're wearing a mask, the main action is working. Therefore, the caption is about active work.
+...done thinking.
+
+work
+2025-12-05 13:11:42,289 INFO Ollama decoded output: Thinking...
+Okay, so the user wants me to determine if the caption describes active work or idle. The caption is "Arafed worker in a factory working on a laptop computer." Let me break this down.
+
+First, the key words here are "worker," "factory," and "laptop." Arafed is a term I remember from some language, maybe related to a specific role or job. In a factory setting, workers are typically involved in production or tasks. A laptop computer is a device they're using, which suggests they're actively engaged in work. There's no mention of being idle, like resting or taking a break. So, the focus is on the ongoing activity of the worker. Therefore, the correct response should be "work."
+...done thinking.
+
+work
