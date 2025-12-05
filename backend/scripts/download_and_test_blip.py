@@ -29,3 +29,5 @@ except Exception as e:
 # python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3-Omni-30B-A3B-Instruct')"
 # python -c "from huggingface_hub import snapshot_download; snapshot_download('omlab/VLM-R1-Qwen2.5VL-3B-OVD-0321')"
 # python -c "from huggingface_hub import snapshot_download; snapshot_download('microsoft/Florence-2-base-ft')"
+# python -c "from huggingface_hub import snapshot_download; snapshot_download('openflamingo/OpenFlamingo-3B-vitl-mpt1b')"
+# python -c "from huggingface_hub import snapshot_download; snapshot_download('OpenGVLab/InternVL3-38B')"

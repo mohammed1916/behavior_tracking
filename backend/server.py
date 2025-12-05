@@ -11,6 +11,8 @@ from fastapi import Query
 import json
 import logging
 import subprocess
+from transformers import pipeline
+import torch
 
 # configure logging so INFO/DEBUG messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -42,16 +44,11 @@ def get_local_captioner():
     global _local_captioner
     if _local_captioner is not None:
         return _local_captioner
-    try:
-        from transformers import pipeline
-        import torch
-    except Exception:
-        _local_captioner = None
-        return None
 
     device = 0 if torch.cuda.is_available() else -1
     try:
-        _local_captioner = pipeline("image-to-text", model="Salesforce/blip-image-captioning-large", device=device, local_files_only=True)
+        # _local_captioner = pipeline("image-to-text", model="Salesforce/blip-image-captioning-large", device=device, local_files_only=True)
+        _local_captioner = pipeline("image-to-text", model="Salesforce/blip-image-captioning-large", device=device)
         logging.info('Loaded default local captioner Salesforce/blip-image-captioning-large')
     except Exception:
         _local_captioner = None
@@ -61,20 +58,22 @@ def get_local_captioner():
 def get_captioner_for_model(model_id: str):
     """Return a captioner pipeline for `model_id`.
     Tries local cache first (`local_files_only=True`), then falls back to downloading the model.
+    Special handling for OpenFlamingo models.
     """
     global _captioner_cache
     if not model_id:
         return get_local_captioner()
 
     if model_id in _captioner_cache:
-        return _captioner_cache[model_id]
+        # For OpenFlamingo models, retry if None cached (might have been fixed)
+        if ('openflamingo' in model_id.lower() or 'flamingo' in model_id.lower()) and _captioner_cache[model_id] is None:
+            logging.info(f'Retrying previously failed OpenFlamingo model: {model_id}')
+            del _captioner_cache[model_id]  # Clear the None cache
+        else:
+            return _captioner_cache[model_id]
 
-    try:
-        from transformers import pipeline
-        import torch
-    except Exception:
-        _captioner_cache[model_id] = None
-        return None
+    # OpenFlamingo support removed: fall through to normal pipeline loading
+    # (Previously there was special-case OpenFlamingo handling here.)
 
     # Choose device: prefer GPU if available and it has sufficient free memory,
     # otherwise fall back to CPU to avoid CUDA OOM during model load.
@@ -105,62 +104,74 @@ def get_captioner_for_model(model_id: str):
             if e.get('id') == model_id:
                 task = e.get('task', task)
                 break
+ 
 
-    # Try local-only load first
-    try:
-        p = pipeline(task, model=model_id, device=device, local_files_only=True)
-        _captioner_cache[model_id] = p
-        logging.info('Loaded captioner for model %s (task=%s) from local cache on device=%s', model_id, task, device)
-        return p
-    except Exception as ex_local:
-        logging.info('Local-only load failed for %s: %s', model_id, ex_local)
-        # If this looks like a CUDA OOM / CUDA error, try falling back to CPU to avoid OOM
-        ex_text = str(ex_local).lower()
-        tried_cpu_fallback = False
-        try:
-            if 'out of memory' in ex_text or 'cuda' in ex_text or 'cudart' in ex_text:
-                logging.info('Detected CUDA-related error while loading %s, attempting CPU fallback...', model_id)
-                try:
-                    # free some GPU memory if possible
-                    try:
-                        import torch as _torch_for_cleanup
-                        if _torch_for_cleanup.cuda.is_available():
-                            _torch_for_cleanup.cuda.empty_cache()
-                    except Exception:
-                        pass
-                    p = pipeline(task, model=model_id, device=-1, local_files_only=True)
-                    _captioner_cache[model_id] = p
-                    logging.info('Loaded captioner for model %s on CPU (fallback)', model_id)
-                    return p
-                except Exception as ex_cpu:
-                    logging.info('CPU fallback failed for %s: %s', model_id, ex_cpu)
-                tried_cpu_fallback = True
-        except Exception:
-            tried_cpu_fallback = False
+    # # Try local-only load first
+    # try:
+        # p = pipeline(task, model=model_id, device=device, local_files_only=True)
+    p = pipeline(task, model=model_id, device=device)
+    _captioner_cache[model_id] = p
+    logging.info('Loaded captioner for model %s (task=%s) from local cache on device=%s', model_id, task, device)
+    return p
+    # except Exception as ex_local:
+    #     logging.info('Local-only load failed for %s: %s', model_id, ex_local)
+    #     # If this looks like a CUDA OOM / CUDA error, try falling back to CPU to avoid OOM
+    #     ex_text = str(ex_local).lower()
+    #     tried_cpu_fallback = False
+    #     try:
+    #         if 'out of memory' in ex_text or 'cuda' in ex_text or 'cudart' in ex_text:
+    #             logging.info('Detected CUDA-related error while loading %s, attempting CPU fallback...', model_id)
+    #             try:
+    #                 p = pipeline(task, model=model_id, device=-1, local_files_only=True)
+    #                 _captioner_cache[model_id] = p
+    #                 logging.info('Loaded captioner for model %s (task=%s) from local cache on CPU', model_id, task)
+    #                 return p
+    #             except Exception as ex_cpu:
+    #                 logging.info('CPU fallback also failed for %s: %s', model_id, ex_cpu)
+    #             tried_cpu_fallback = True
+    #     except Exception:
+    #         tried_cpu_fallback = False
 
-        # Attempt a fallback download (may be slow). If the earlier failure was CUDA-related
-        # and we haven't yet tried CPU, try downloading then falling back to CPU on failure.
-        try:
-            logging.info('Attempting to download model %s (task=%s)...', model_id, task)
-            p = pipeline(task, model=model_id, device=device)
-            _captioner_cache[model_id] = p
-            logging.info('Downloaded and loaded captioner for model %s (task=%s)', model_id, task)
-            return p
-        except Exception as ex_fetch:
-            logging.info('Failed to download/load captioner for %s on device=%s: %s', model_id, device, ex_fetch)
-            # If download/load failed and we haven't yet tried CPU, try CPU download/load (may still OOM but often works)
-            if not tried_cpu_fallback:
-                try:
-                    logging.info('Attempting to download/load %s on CPU...', model_id)
-                    p = pipeline(task, model=model_id, device=-1)
-                    _captioner_cache[model_id] = p
-                    logging.info('Downloaded and loaded captioner for %s on CPU', model_id)
-                    return p
-                except Exception as ex_cpu_fetch:
-                    logging.info('Failed to download/load captioner for %s on CPU: %s', model_id, ex_cpu_fetch)
+    #     # Attempt a fallback download (may be slow). If the earlier failure was CUDA-related
+    #     # and we haven't yet tried CPU, try downloading then falling back to CPU on failure.
+    #     try:
+    #         logging.info('Attempting to download model %s (task=%s)...', model_id, task)
+    #         p = pipeline(task, model=model_id, device=device)
+    #         _captioner_cache[model_id] = p
+    #         logging.info('Downloaded and loaded captioner for model %s (task=%s)', model_id, task)
+    #         return p
+    #     except Exception as ex_fetch:
+    #         logging.info('Failed to download/load captioner for %s on device=%s: %s', model_id, device, ex_fetch)
+    #         # If download/load failed and we haven't yet tried CPU, try CPU download/load (may still OOM but often works)
+    #         if not tried_cpu_fallback:
+    #             try:
+    #                 logging.info('Attempting to download/load %s on CPU...', model_id)
+    #                 p = pipeline(task, model=model_id, device=-1)
+    #                 _captioner_cache[model_id] = p
+    #                 logging.info('Downloaded and loaded captioner for %s on CPU', model_id)
+    #                 return p
+    #             except Exception as ex_cpu_fetch:
+    #                 logging.info('Failed to download/load captioner for %s on CPU: %s', model_id, ex_cpu_fetch)
 
-            _captioner_cache[model_id] = None
-            return None
+    #         _captioner_cache[model_id] = None
+    #         return None
+
+
+
+
+
+   
+
+
+def _get_flamingo_captioner(model_id: str):
+    """OpenFlamingo support removed.
+
+    This server no longer includes special-case OpenFlamingo loading logic.
+    Keep a small stub so any legacy callers get a clear message.
+    """
+    logging.info('OpenFlamingo support removed from server; use BLIP or other HF models')
+    _captioner_cache[model_id] = None
+    return None
 
 
 # Lazy loader for a local text LLM 
@@ -171,7 +182,8 @@ def get_local_text_llm():
         return _local_text_llm
 
     if shutil.which('ollama'):
-        ollama_model = os.environ.get('OLLAMA_MODEL', 'strat')
+        # ollama_model = os.environ.get('OLLAMA_MODEL', 'strat') 
+        ollama_model = 'qwen3:0.6b'
         class OllamaWrapper:
             def __init__(self, model_id):
                 self.model_id = model_id
@@ -187,8 +199,11 @@ def get_local_text_llm():
                     out_bytes = p.stdout or b''
                     try:
                         out = out_bytes.decode('utf-8', errors='replace').strip()
+                        logging.info('Ollama decoded output: %s', out)
                     except Exception:
+                        logging.info('Ollama output decoding failed, using raw bytes string')
                         out = str(out_bytes)
+                        logging.info('Ollama raw output string: %s', out)   
                     return [{'generated_text': out}]
                 except Exception as e:
                     logging.info('Ollama run failed: %s', e)
@@ -224,6 +239,7 @@ def _normalize_caption_output(captioner, out):
     """Normalize various pipeline outputs into a text string.
     Some models/pipelines may return dicts containing token ids (e.g. 'input_ids').
     Try to decode those using the pipeline's tokenizer when possible.
+    Handles OpenFlamingo wrapper outputs as well.
     """
     try:
         first = None
@@ -254,6 +270,13 @@ def _normalize_caption_output(captioner, out):
                     ids_list = None
 
                 if ids_list and hasattr(captioner, 'tokenizer'):
+                    try:
+                        return captioner.tokenizer.decode(ids_list, skip_special_tokens=True)
+                    except Exception:
+                        pass
+
+                # Handle OpenFlamingo processor decoding
+                if ids_list and hasattr(captioner, 'tokenizer') and hasattr(captioner.tokenizer, 'decode'):
                     try:
                         return captioner.tokenizer.decode(ids_list, skip_special_tokens=True)
                     except Exception:
@@ -914,6 +937,92 @@ async def vlm_local_models():
         })
 
     return {"available": False, "models": models_out, "probed": False}
+
+
+@app.post("/backend/caption")
+async def caption_image(request: dict):
+    """Caption an image using the specified VLM model.
+    
+    Expects JSON:
+    {
+        "image": "base64_encoded_image_data",
+        "model": "model_id_string"
+    }
+    
+    Returns:
+    {
+        "caption": "generated caption text",
+        "model": "model_id_used"
+    }
+    """
+    import base64
+    from PIL import Image
+    import io
+    
+    try:
+        image_data = request.get("image")
+        model_id = request.get("model")
+        
+        if not image_data:
+            raise HTTPException(status_code=400, detail="No image data provided")
+        
+        if not model_id:
+            raise HTTPException(status_code=400, detail="No model specified")
+        
+        # Decode base64 image
+        try:
+            # Handle data URL format (data:image/png;base64,...)
+            if image_data.startswith('data:'):
+                image_data = image_data.split(',')[1]
+            
+            image_bytes = base64.b64decode(image_data)
+            image = Image.open(io.BytesIO(image_bytes))
+            
+            # Convert to RGB if needed and ensure minimum size
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Ensure minimum size for BLIP (resize very small images)
+            if image.size[0] < 224 or image.size[1] < 224:
+                image = image.resize((224, 224), Image.Resampling.LANCZOS)
+                
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
+        
+        # Get the appropriate captioner
+        captioner = get_captioner_for_model(model_id)
+        
+        if captioner is None:
+            raise HTTPException(status_code=500, detail=f"Model {model_id} is not available")
+        
+        # Generate caption
+        try:
+            result = captioner(image)
+            
+            # Extract caption text from result
+            if isinstance(result, list) and len(result) > 0:
+                if isinstance(result[0], dict) and 'generated_text' in result[0]:
+                    caption_text = result[0]['generated_text']
+                else:
+                    caption_text = str(result[0])
+            else:
+                caption_text = str(result)
+            
+            return {
+                "caption": caption_text,
+                "model": model_id,
+                "status": "success"
+            }
+            
+        except Exception as e:
+            logging.error(f"Error during caption generation with {model_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Caption generation failed: {str(e)}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error in caption endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post('/backend/load_vlm_model')

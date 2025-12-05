@@ -316,3 +316,221 @@ Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
 2025-12-04 14:51:04,481 INFO Saved VLM upload to vlm_uploads\60fc47ea-c820-4f59-aace-8b029ea78eea_assembly_idle.mp4
 2025-12-04 14:51:04,752 INFO GPU available but free memory (0 bytes) < 2147483648 bytes; preferring CPU to avoid OOM
 2025-12-04 14:51:09,974 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-04 15:22:55,392 INFO Local-only load failed for openflamingo/OpenFlamingo-3B-vitl-mpt1b: We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'.
+2025-12-04 15:23:01,948 ERROR Failed to download OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: Unrecognized processing class in openflamingo/OpenFlamingo-3B-vitl-mpt1b. Can't instantiate a processor, a tokenizer, an image processor or a feature extractor for this model. Make sure the repository contains the files of at least one of those processing classes.
+2025-12-04 15:37:37,027 INFO Local-only load failed for openflamingo/OpenFlamingo-3B-vitl-mpt1b: We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'.
+2025-12-04 15:37:42,691 ERROR Failed to download OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: Unrecognized processing class in openflamingo/OpenFlamingo-3B-vitl-mpt1b. Can't instantiate a processor, a tokenizer, an image processor or a feature extractor for this model. Make sure the repository contains the files of at least one of those processing classes.
+2025-12-04 15:40:42,436 INFO Local-only load failed for openflamingo/OpenFlamingo-3B-vitl-mpt1b: We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'.
+2025-12-04 15:40:48,785 ERROR Failed to download OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: Unrecognized processing class in openflamingo/OpenFlamingo-3B-vitl-mpt1b. Can't instantiate a processor, a tokenizer, an image processor or a feature extractor for this model. Make sure the repository contains the files of at least one of those processing classes.
+2025-12-04 15:47:14,989 INFO Local-only load failed for openflamingo/OpenFlamingo-3B-vitl-mpt1b: We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'.
+2025-12-04 15:47:21,263 ERROR Failed to download OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: Unrecognized processing class in openflamingo/OpenFlamingo-3B-vitl-mpt1b. Can't instantiate a processor, a tokenizer, an image processor or a feature extractor for this model. Make sure the repository contains the files of at least one of those processing classes.
+2025-12-04 15:53:56,137 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 15:53:56,138 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 15:56:00,072 INFO Instantiating model architecture: CLIP
+2025-12-04 15:56:07,269 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 15:56:16,978 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 15:56:16,994 INFO Model ViT-L-14 creation process complete.
+2025-12-04 15:56:22,798 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: The repository anas-awadalla/mpt-1b-redpajama-200b contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b .
+ You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b.
+Please pass the argument `trust_remote_code=True` to allow custom code to be run.
+2025-12-04 16:00:30,842 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 16:00:30,842 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 16:00:31,204 INFO Instantiating model architecture: CLIP
+2025-12-04 16:00:33,179 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 16:00:35,209 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 16:00:35,209 INFO Model ViT-L-14 creation process complete.
+2025-12-04 16:00:36,118 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: The repository anas-awadalla/mpt-1b-redpajama-200b contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b .
+ You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b.
+Please pass the argument `trust_remote_code=True` to allow custom code to be run.
+2025-12-04 16:01:40,865 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 16:01:40,865 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 16:01:41,215 INFO Instantiating model architecture: CLIP
+2025-12-04 16:01:43,138 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 16:01:45,045 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 16:01:45,045 INFO Model ViT-L-14 creation process complete.
+2025-12-04 16:01:45,922 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: The repository anas-awadalla/mpt-1b-redpajama-200b contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b .
+ You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b.
+Please pass the argument `trust_remote_code=True` to allow custom code to be run.
+2025-12-04 16:02:46,809 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 16:02:46,809 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 16:02:47,072 INFO Instantiating model architecture: CLIP
+2025-12-04 16:02:48,975 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 16:02:51,068 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 16:02:51,074 INFO Model ViT-L-14 creation process complete.
+2025-12-04 16:02:51,994 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: The repository anas-awadalla/mpt-1b-redpajama-200b contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b .
+ You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b.
+Please pass the argument `trust_remote_code=True` to allow custom code to be run.
+2025-12-04 16:05:27,751 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 16:05:27,751 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 16:05:28,025 INFO Instantiating model architecture: CLIP
+2025-12-04 16:05:29,875 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 16:05:31,923 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 16:05:31,939 INFO Model ViT-L-14 creation process complete.
+2025-12-04 16:14:21,903 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: We require the attribute name for the nn.ModuleList in the decoder storing the transformer block layers. Please supply this string manually.
+2025-12-04 16:23:25,177 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 16:23:25,177 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 16:23:25,413 INFO Instantiating model architecture: CLIP
+2025-12-04 16:23:27,309 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 16:23:30,631 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 16:23:30,647 INFO Model ViT-L-14 creation process complete.
+2025-12-04 17:23:53,797 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b using official pattern
+2025-12-04 17:23:53,797 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 17:23:53,797 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 17:23:54,247 INFO Instantiating model architecture: CLIP
+2025-12-04 17:23:56,443 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 17:23:59,422 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 17:23:59,456 INFO Model ViT-L-14 creation process complete.
+2025-12-04 17:24:00,476 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: The repository anas-awadalla/mpt-1b-redpajama-200b contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b .
+ You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b.
+Please pass the argument `trust_remote_code=True` to allow custom code to be run.
+2025-12-04 17:24:00,476 ERROR OpenFlamingo compatibility issue: create_model_and_transforms does not pass trust_remote_code=True to underlying transformers calls
+2025-12-04 17:24:00,476 ERROR This is a known limitation of the OpenFlamingo library when using MPT models
+2025-12-04 17:28:42,373 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-04 17:28:42,373 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-04 17:28:46,606 INFO Downloaded and loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text)
+2025-12-04 17:28:54,204 INFO Saved VLM upload to vlm_uploads\2e65e00b-bceb-4057-9eaf-d41137d6730e_assembly_idle.mp4
+2025-12-04 17:38:45,829 ERROR Error during caption generation with Salesforce/blip-image-captioning-large: mean must have 1 elements if it is an iterable, got 3
+2025-12-04 17:43:54,266 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-04 17:43:54,270 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-04 17:43:59,678 INFO Downloaded and loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text)
+2025-12-04 17:44:05,833 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b using official pattern
+2025-12-04 17:44:05,833 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 17:44:05,833 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 17:44:06,065 INFO Instantiating model architecture: CLIP
+2025-12-04 17:44:08,733 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 17:44:12,541 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 17:44:12,545 INFO Model ViT-L-14 creation process complete.
+2025-12-04 17:44:13,623 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: The repository anas-awadalla/mpt-1b-redpajama-200b contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b .
+ You can inspect the repository content at https://hf.co/anas-awadalla/mpt-1b-redpajama-200b.
+Please pass the argument `trust_remote_code=True` to allow custom code to be run.
+2025-12-04 17:44:13,637 ERROR OpenFlamingo compatibility issue: create_model_and_transforms does not pass trust_remote_code=True to underlying transformers calls
+2025-12-04 17:44:13,638 ERROR This is a known limitation of the OpenFlamingo library when using MPT models
+2025-12-04 17:49:03,658 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b using official pattern
+2025-12-04 17:49:03,660 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 17:49:03,660 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 17:49:04,045 INFO Instantiating model architecture: CLIP
+2025-12-04 17:49:07,761 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 17:49:25,812 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with monkey-patching workaround
+2025-12-04 17:49:25,812 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 17:49:25,812 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 17:49:26,098 INFO Instantiating model architecture: CLIP
+2025-12-04 17:49:28,083 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-04 17:49:30,591 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-04 17:49:30,591 INFO Model ViT-L-14 creation process complete.
+2025-12-04 17:49:36,649 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: We require the attribute name for the nn.ModuleList in the decoder storing the transformer block layers. Please supply this string manually.
+2025-12-04 17:49:36,649 ERROR OpenFlamingo unknown error: We require the attribute name for the nn.ModuleList in the decoder storing the transformer block layers. Please supply this string manually.
+2025-12-04 17:50:31,436 INFO Saved VLM upload to vlm_uploads\701cf00e-b0e3-41b6-8551-9bda15f47b0a_assembly_idle.mp4
+2025-12-04 17:50:46,641 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with monkey-patching workaround
+2025-12-04 17:50:46,642 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-04 17:50:46,642 INFO Loaded built-in ViT-L-14 model config.
+2025-12-04 17:50:46,978 INFO Instantiating model architecture: CLIP
+2025-12-04 17:50:49,122 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-04 17:50:49,133 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-04 17:50:49,584 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: Cannot copy out of meta tensor; no data! Please use torch.nn.Module.to_empty() instead of torch.nn.Module.to() when moving module from meta to a different device.
+2025-12-04 17:50:49,587 ERROR OpenFlamingo unknown error: Cannot copy out of meta tensor; no data! Please use torch.nn.Module.to_empty() instead of torch.nn.Module.to() when moving module from meta to a different device.
+2025-12-04 17:50:52,077 INFO Saved VLM upload to vlm_uploads\4ff99486-2d15-4f85-a37e-7d4263dce030_assembly_idle.mp4
+2025-12-04 17:50:55,452 INFO Downloaded and loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text)
+2025-12-04 17:50:57,486 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-04 17:50:57,486 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-04 17:51:02,362 INFO Downloaded and loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text)
+2025-12-04 17:51:11,378 INFO Saved VLM upload to vlm_uploads\e4531582-e4f2-4865-b4b5-f4e5f1360777_assembly_idle.mp4
+2025-12-05 09:42:33,068 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-05 09:42:33,068 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-05 09:42:36,440 INFO Downloaded and loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text)
+2025-12-05 09:58:16,602 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-05 09:58:16,605 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-05 09:58:19,484 INFO Downloaded and loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text)
+2025-12-05 09:58:26,967 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with comprehensive monkey-patching
+2025-12-05 09:58:26,967 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-05 09:58:26,967 INFO Loaded built-in ViT-L-14 model config.
+2025-12-05 09:58:27,226 INFO Instantiating model architecture: CLIP
+2025-12-05 09:58:29,359 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-05 09:58:33,626 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-05 09:58:33,626 INFO Model ViT-L-14 creation process complete.
+2025-12-05 09:58:39,038 ERROR OpenFlamingo compatibility issue: MosaicGPT model has embedding method compatibility issues
+2025-12-05 10:32:33,508 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with comprehensive monkey-patching
+2025-12-05 10:32:33,511 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-05 10:32:33,511 INFO Loaded built-in ViT-L-14 model config.
+2025-12-05 10:32:33,883 INFO Instantiating model architecture: CLIP
+2025-12-05 10:32:35,910 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-05 10:32:37,694 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-05 10:32:37,694 INFO Model ViT-L-14 creation process complete.
+2025-12-05 10:32:38,548 ERROR Failed to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b: dictionary changed size during iteration
+2025-12-05 10:32:38,548 ERROR OpenFlamingo unknown error: dictionary changed size during iteration
+2025-12-05 10:33:15,710 INFO Local-only load failed for force_cache_clear_dummy_model: force_cache_clear_dummy_model is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
+2025-12-05 10:33:15,710 INFO Attempting to download model force_cache_clear_dummy_model (task=image-to-text)...
+2025-12-05 10:33:15,957 INFO Failed to download/load captioner for force_cache_clear_dummy_model on device=0: force_cache_clear_dummy_model is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
+2025-12-05 10:33:15,957 INFO Attempting to download/load force_cache_clear_dummy_model on CPU...
+2025-12-05 10:33:16,185 INFO Failed to download/load captioner for force_cache_clear_dummy_model on CPU: force_cache_clear_dummy_model is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
+2025-12-05 10:33:44,790 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with comprehensive monkey-patching
+2025-12-05 10:33:44,790 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-05 10:33:44,794 INFO Loaded built-in ViT-L-14 model config.
+2025-12-05 10:33:45,123 INFO Instantiating model architecture: CLIP
+2025-12-05 10:33:46,990 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-05 10:33:49,251 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-05 10:33:49,251 INFO Model ViT-L-14 creation process complete.
+2025-12-05 10:34:11,261 INFO JAX version 0.7.1 available.
+2025-12-05 10:34:23,008 ERROR OpenFlamingo compatibility issue: MosaicGPT model has embedding method compatibility issues
+2025-12-05 10:35:31,844 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with comprehensive monkey-patching
+2025-12-05 10:35:31,844 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-05 10:35:31,844 INFO Loaded built-in ViT-L-14 model config.
+2025-12-05 10:35:32,636 INFO Instantiating model architecture: CLIP
+2025-12-05 10:35:34,781 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-05 10:35:43,942 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-05 10:35:43,942 INFO Model ViT-L-14 creation process complete.
+2025-12-05 10:36:07,999 INFO JAX version 0.7.1 available.
+2025-12-05 10:36:21,508 ERROR OpenFlamingo compatibility issue: MosaicGPT model has embedding method compatibility issues
+2025-12-05 10:37:52,702 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with comprehensive monkey-patching
+2025-12-05 10:37:52,702 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-05 10:37:52,702 INFO Loaded built-in ViT-L-14 model config.
+2025-12-05 10:37:53,078 INFO Instantiating model architecture: CLIP
+2025-12-05 10:37:55,035 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-05 10:37:56,912 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-05 10:37:56,912 INFO Model ViT-L-14 creation process complete.
+2025-12-05 10:38:04,641 INFO JAX version 0.7.1 available.
+2025-12-05 10:38:14,471 ERROR OpenFlamingo compatibility issue: MosaicGPT model has embedding method compatibility issues
+2025-12-05 10:39:22,418 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with comprehensive monkey-patching
+2025-12-05 10:39:22,418 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-05 10:39:22,418 INFO Loaded built-in ViT-L-14 model config.
+2025-12-05 10:39:22,791 INFO Instantiating model architecture: CLIP
+2025-12-05 10:39:24,758 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-05 10:39:26,512 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-05 10:39:26,513 INFO Model ViT-L-14 creation process complete.
+2025-12-05 10:39:33,682 INFO JAX version 0.7.1 available.
+2025-12-05 10:39:40,628 ERROR OpenFlamingo compatibility issue: MosaicGPT model has embedding method compatibility issues
+2025-12-05 10:45:33,806 INFO Attempting to load OpenFlamingo model openflamingo/OpenFlamingo-3B-vitl-mpt1b with comprehensive monkey-patching
+2025-12-05 10:45:33,806 INFO Parsing model identifier. Schema: None, Identifier: ViT-L-14
+2025-12-05 10:45:33,806 INFO Loaded built-in ViT-L-14 model config.
+2025-12-05 10:45:34,185 INFO Instantiating model architecture: CLIP
+2025-12-05 10:45:36,427 INFO Loading full pretrained weights from: C:\Users\BBBS-AI-01\d\models\hub\models--timm--vit_large_patch14_clip_224.openai\snapshots\18d0535469bb561bf468d76c1d73aa35156c922b\open_clip_model.safetensors
+2025-12-05 10:45:39,602 INFO Final image preprocessing configuration set: {'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0}
+2025-12-05 10:45:39,605 INFO Model ViT-L-14 creation process complete.
+2025-12-05 10:45:50,034 INFO JAX version 0.7.1 available.
+2025-12-05 10:45:57,264 ERROR OpenFlamingo compatibility issue: MosaicGPT model has embedding method compatibility issues
+2025-12-05 10:46:04,559 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-05 10:46:04,560 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-05 10:46:08,751 INFO Downloaded and loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text)
+2025-12-05 12:28:25,278 INFO Saved VLM upload to vlm_uploads\8bab45e5-77f4-4111-8df0-941ccb667301_assembly_idle.mp4
+2025-12-05 12:28:52,276 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-05 12:28:52,278 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-05 13:00:10,004 INFO Saved VLM upload to vlm_uploads\6f79afa3-a8dc-4eea-8867-a167af5265c3_assembly_idle.mp4
+2025-12-05 13:00:24,311 INFO Local-only load failed for Salesforce/blip-image-captioning-large: ImageToTextPipeline._sanitize_parameters() got an unexpected keyword argument 'local_files_only'
+2025-12-05 13:00:24,311 INFO Attempting to download model Salesforce/blip-image-captioning-large (task=image-to-text)...
+2025-12-05 13:00:27,729 INFO Downloaded and loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text)
+2025-12-05 13:00:40,074 INFO Using Ollama CLI model qwen3:0.6b for text LLM
+2025-12-05 13:00:48,656 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants to know if the caption describes active work or idle. The context is a close-up of a person holding a remote control in a factory.
+
+First, I need to think about the action here. The person is holding a remote control. Remote controls are typically used to control devices like televisions, computers, or other electronics. In a factory, they might be working on machinery or machinery parts. So holding a remote control suggests that the person is engaged in an activity related to technology or machinery.
+
+Now, the question is whether this is active work or idle. Active work usually means someone is doing something productive, like manufacturing or working on a project. Idle would mean they're not actively doing anything, maybe resting or unoccupied. Since the person is holding a remote control, which is a tool used for controlling equipment, it's clear they are actively involved in the work. Therefore, the correct response should be "work".
+...done thinking.
+
+work
