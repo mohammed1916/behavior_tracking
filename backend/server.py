@@ -551,6 +551,10 @@ def init_db():
         created_at TEXT
     )
     ''')
+    # try:
+    #     cur.execute('ALTER TABLE analyses ADD COLUMN subtask_id TEXT;')
+    # except sqlite3.OperationalError:
+    #     pass  # Column already exists
     cur.execute('''
     CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
