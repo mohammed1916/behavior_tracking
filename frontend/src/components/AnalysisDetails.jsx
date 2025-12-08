@@ -33,6 +33,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
       {error && <div style={{ color: 'red' }}>{error}</div>}
       {analysis && (
         <div style={{ marginTop: 8 }}>
+          {analysis.error && <div style={{ color: 'red', marginBottom: 8 }}>Error: {analysis.error}</div>}
           <div><strong>Filename:</strong> {analysis.filename}</div>
           <div><strong>Model:</strong> {analysis.model}</div>
           <div><strong>Created:</strong> {analysis.created_at}</div>

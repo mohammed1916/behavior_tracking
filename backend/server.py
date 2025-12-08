@@ -264,32 +264,33 @@ def _normalize_caption_output(captioner, out):
         else:
             first = out
 
-        if isinstance(first, dict):
+        try:
             # common keys
             for k in ('generated_text', 'caption', 'text'):
-                if k in first and first.get(k):
+                if hasattr(first, 'get') and first.get(k):
                     return first.get(k)
 
             # If token ids are present, try to decode via tokenizer
-            if 'input_ids' in first:
-                ids = first.get('input_ids')
-                try:
-                    # handle tensors or nested lists
-                    if hasattr(ids, 'tolist'):
-                        ids_list = ids.tolist()
-                    else:
-                        ids_list = list(ids)
-                    # flatten if necessary
-                    if isinstance(ids_list, (list,)) and len(ids_list) > 0 and isinstance(ids_list[0], (list,)):
-                        ids_list = ids_list[0]
-                except Exception:
-                    ids_list = None
-
-                if ids_list and hasattr(captioner, 'tokenizer'):
+            if hasattr(first, '__contains__') and 'input_ids' in first:
+                ids = first.get('input_ids') if hasattr(first, 'get') else None
+                if ids is not None:
                     try:
-                        return captioner.tokenizer.decode(ids_list, skip_special_tokens=True)
+                        # handle tensors or nested lists
+                        if hasattr(ids, 'tolist'):
+                            ids_list = ids.tolist()
+                        else:
+                            ids_list = list(ids)
+                        # flatten if necessary
+                        if isinstance(ids_list, (list,)) and len(ids_list) > 0 and isinstance(ids_list[0], (list,)):
+                            ids_list = ids_list[0]
                     except Exception:
-                        pass
+                        ids_list = None
+
+                    if ids_list and hasattr(captioner, 'tokenizer'):
+                        try:
+                            return captioner.tokenizer.decode(ids_list, skip_special_tokens=True)
+                        except Exception:
+                            pass
 
                 # Handle OpenFlamingo processor decoding
                 if ids_list and hasattr(captioner, 'tokenizer') and hasattr(captioner.tokenizer, 'decode'):
@@ -299,13 +300,11 @@ def _normalize_caption_output(captioner, out):
                         pass
 
             return str(first)
-
-        return str(first)
-    except Exception:
-        try:
-            return str(out)
         except Exception:
-            return ''
+            return str(first)
+    except Exception:
+        logging.exception("Error normalizing caption output")
+        return "Error normalizing caption output"
 
 
 def _ask_duration_llm(task_text: str):
@@ -318,13 +317,10 @@ def _ask_duration_llm(task_text: str):
         prompt = DURATION_PROMPT_TEMPLATE.format(task=task_text)
         out = text_llm(prompt, max_new_tokens=32)
         out_text = None
-        if isinstance(out, list) and len(out) > 0:
-            first = out[0]
-            if isinstance(first, dict):
-                out_text = first.get('generated_text') or first.get('text') or str(first)
-            else:
-                out_text = str(first)
-        else:
+        try:
+            first = out[0] if isinstance(out, list) and len(out) > 0 else out
+            out_text = first.get('generated_text') or first.get('text') or str(first)
+        except (AttributeError, IndexError, TypeError):
             out_text = str(out)
         if not out_text:
             return None
@@ -334,7 +330,8 @@ def _ask_duration_llm(task_text: str):
         if m:
             return int(m.group(1))
     except Exception:
-        pass
+        logging.exception("Error in duration estimation LLM")
+        return None
     return None
 
 def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None, prompt: str = '', use_llm: bool = False):
@@ -710,27 +707,25 @@ async def download_video(filename: str):
         return FileResponse(file_path, media_type="video/mp4", filename=filename, headers={"Accept-Ranges": "bytes"})
     raise HTTPException(status_code=404, detail="File not found")
 
-# @app.get("/backend/stream_pose")
-# async def stream_pose():
-#     """Stream webcam frames with only pose/hand landmarks."""
-#     def gen_frames():
-#         cap = cv2.VideoCapture(0)
-#         tracker = BehaviorTracker()
-#         while True:
-#             ret, frame = cap.read()
-#             if not ret:
-#                 break
-#             # Mirror frame for selfie view so landmarks match user's expectation
-#             frame = cv2.flip(frame, 1)
-#             processed_frame, _, _ = tracker.process_frame(frame)
-#             ret, buffer = cv2.imencode('.jpg', processed_frame)
-#             if not ret:
-#                 continue
-#             frame_bytes = buffer.tobytes()
-#             yield (b'--frame\r\n'
-#                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-#         cap.release()
-#     return StreamingResponse(gen_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
+@app.get("/backend/stream_pose")
+async def stream_pose():
+    """Stream raw webcam frames without tracking overlays."""
+    def gen_frames():
+        cap = cv2.VideoCapture(0)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # Mirror frame for selfie view
+            frame = cv2.flip(frame, 1)
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if not ret:
+                continue
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        cap.release()
+    return StreamingResponse(gen_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
 
 
 @app.post("/backend/vlm")
@@ -772,16 +767,16 @@ async def vlm_endpoint(
                 if ret and frame is not None:
                     avg_color_per_row = frame.mean(axis=0).mean(axis=0)
                     avg_color = [float(avg_color_per_row[2]), float(avg_color_per_row[1]), float(avg_color_per_row[0])]
-                    analysis.update({
+                    analysis = {**analysis, **{
                         "width": width,
                         "height": height,
                         "fps": float(fps),
                         "frame_count": int(frame_count),
                         "duration_sec": float(duration),
                         "first_frame_avg_color_bgr": avg_color,
-                    })
+                    }}
                 else:
-                    analysis.update({"warning": "could not read first frame"})
+                    analysis = {**analysis, **{"warning": "could not read first frame"}}
                 cap.release()
         except Exception as e:
             analysis.update({"error": str(e)})
@@ -795,22 +790,27 @@ async def vlm_endpoint(
         try:
             proc = process_video_samples(save_path, captioner=captioner, max_samples=30, stream_callback=None, prompt=prompt, use_llm=use_llm)
             # merge proc results into analysis
-            if isinstance(proc, dict):
-                # if video_info present, expose fields at top-level for backward compat
-                vi = proc.get('video_info') or {}
-                analysis.update(vi)
-                if 'samples' in proc:
-                    analysis['samples'] = proc.get('samples')
-                if 'idle_frames' in proc:
-                    analysis['idle_frames'] = proc.get('idle_frames')
-                if 'work_frames' in proc:
-                    analysis['work_frames'] = proc.get('work_frames')
+            # if video_info present, expose fields at top-level for backward compat
+            vi = proc.get('video_info') or {}
+            try:
+                analysis = {**analysis, **vi}
+            except TypeError:
+                analysis["error"] = "Failed to merge video_info: not a dict-like object"
+            if 'samples' in proc:
+                analysis['samples'] = proc.get('samples', [])
+            if 'idle_frames' in proc:
+                analysis['idle_frames'] = proc.get('idle_frames', [])
+            if 'work_frames' in proc:
+                analysis['work_frames'] = proc.get('work_frames', [])
                 # If an assignment is provided, compare expected vs actual work time
                 if assignment_id:
                     try:
                         assign = ASSIGNMENTS.get(assignment_id)
                         if assign is not None:
-                            fps_local = vi.get('fps') or 30.0
+                            try:
+                                fps_local = vi.get('fps', 30.0) if hasattr(vi, 'get') else 30.0
+                            except AttributeError:
+                                fps_local = 30.0
                             work_frames = proc.get('work_frames') or []
                             actual_work_time = len(work_frames) / (fps_local if fps_local > 0 else 30.0)
                             expected = assign.get('expected_duration_sec')
@@ -830,7 +830,7 @@ async def vlm_endpoint(
                     analysis['stored_analysis_id'] = aid
                 except Exception:
                     logging.exception('Failed to save analysis to DB')
-            analysis["video_url"] = video_url
+            analysis["video_url"] = video_url or ""
             return {"message": "VLM (video) local response", "analysis": analysis}
         except Exception as e:
             logging.exception('Local VLM processing failed')
@@ -1048,16 +1048,16 @@ async def vlm_local(
         if ret and frame is not None:
             avg_color_per_row = frame.mean(axis=0).mean(axis=0)
             avg_color = [float(avg_color_per_row[2]), float(avg_color_per_row[1]), float(avg_color_per_row[0])]
-            analysis.update({
+            analysis = {**analysis, **{
                 "width": width,
                 "height": height,
                 "fps": float(fps),
                 "frame_count": int(frame_count),
                 "duration_sec": float(duration),
                 "first_frame_avg_color_bgr": avg_color,
-            })
+            }}
         else:
-            analysis.update({"warning": "could not read mid frame"})
+            analysis = {**analysis, **{"warning": "could not read mid frame"}}
 
         cap.release()
     except Exception as e:
