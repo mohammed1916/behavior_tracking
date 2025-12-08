@@ -301,7 +301,7 @@ function App() {
 
               <div className="dotted-hr"/>
 
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 10, justifyContent: 'center', display: 'flex' }}>
                 {activeTab === 'upload' ? (
                   <FileUpload accept="video/*" onFileSelect={(f) => setVlmVideo(f)} initialFile={vlmVideo} label="Select a video for analysis" />
                 ) : (
