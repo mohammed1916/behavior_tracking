@@ -22,7 +22,6 @@ function App() {
   const [vlmResult, setVlmResult] = useState(null);
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
-  const [vlmUseLocal, setVlmUseLocal] = useState(true);
   const [vlmUseLLM, setVlmUseLLM] = useState(false);
   const [showStoredPanel, setShowStoredPanel] = useState(false);
   const [viewAnalysisId, setViewAnalysisId] = useState(null);
@@ -99,85 +98,71 @@ function App() {
     setVlmResult(null);
 
     try {
-      if (vlmUseLocal) {
-        // upload first
-        const fd = new FormData();
-        if (vlmVideo) fd.append('video', vlmVideo);
-        const up = await fetch('http://localhost:8001/backend/upload_vlm', { method: 'POST', body: fd });
-        if (!up.ok) throw new Error('Upload failed');
-        const upj = await up.json();
-        const filename = upj.filename;
+      // upload first
+      const fd = new FormData();
+      if (vlmVideo) fd.append('video', vlmVideo);
+      const up = await fetch('http://localhost:8001/backend/upload_vlm', { method: 'POST', body: fd });
+      if (!up.ok) throw new Error('Upload failed');
+      const upj = await up.json();
+      const filename = upj.filename;
 
-        const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}`;
-        if (vlmStream) { try { vlmStream.close(); } catch {} }
-        const es = new EventSource(url);
-        setVlmStream(es);
+      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}`;
+      if (vlmStream) { try { vlmStream.close(); } catch {} }
+      const es = new EventSource(url);
+      setVlmStream(es);
 
-        const analysis = { model: vlmModel, prompt: vlmPrompt, samples: [], idle_frames: [], work_frames: [], fps: 30 };
-        setVlmResult({ message: 'streaming', analysis });
+      const analysis = { model: vlmModel, prompt: vlmPrompt, samples: [], idle_frames: [], work_frames: [], fps: 30 };
+      setVlmResult({ message: 'streaming', analysis });
 
-        es.onmessage = (ev) => {
-          try {
-            const data = JSON.parse(ev.data);
-            if (!data) return;
-            if (data.stage === 'video_info') {
-              analysis.fps = data.fps || analysis.fps;
-              analysis.video_info = data;
-              setVlmResult({ message: 'streaming', analysis: { ...analysis } });
-            } else if (data.stage === 'sample') {
-              const sample = { frame_index: data.frame_index, time_sec: data.time_sec, caption: data.caption, label: data.label };
-              analysis.samples.push(sample);
-              if (data.llm_output) {
-                analysis.samples[analysis.samples.length - 1].llm_output = data.llm_output;
-              }
-              if (data.label === 'idle') analysis.idle_frames.push(data.frame_index);
-              if (data.label === 'work') analysis.work_frames.push(data.frame_index);
-              setVlmResult({ message: 'streaming', analysis: { ...analysis } });
-            } else if (data.stage === 'sample_error') {
-              analysis.samples.push({ frame_index: data.frame_index, error: data.error });
-              setVlmResult({ message: 'streaming', analysis: { ...analysis } });
-            } else if (data.stage === 'finished') {
-              analysis.video_url = data.video_url;
-              setVlmResult({ message: 'done', analysis: { ...analysis } });
-              setVlmLoading(false);
-              try { es.close(); } catch {}
-              setVlmStream(null);
-              // If server saved analysis and returned stored id, surface link
-              if (data.stored_analysis_id) {
-                setViewAnalysisId(data.stored_analysis_id);
-                setShowStoredPanel(true);
-              }
-            } else if (data.stage === 'error') {
-              analysis.error = data.message;
-              setVlmResult({ message: 'error', analysis: { ...analysis } });
-              setVlmLoading(false);
-              try { es.close(); } catch {}
-              setVlmStream(null);
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if (!data) return;
+          if (data.stage === 'video_info') {
+            analysis.fps = data.fps || analysis.fps;
+            analysis.video_info = data;
+            setVlmResult({ message: 'streaming', analysis: { ...analysis } });
+          } else if (data.stage === 'sample') {
+            const sample = { frame_index: data.frame_index, time_sec: data.time_sec, caption: data.caption, label: data.label };
+            analysis.samples.push(sample);
+            if (data.llm_output) {
+              analysis.samples[analysis.samples.length - 1].llm_output = data.llm_output;
             }
-          } catch (e) {
-            console.error('parse sse', e);
+            if (data.label === 'idle') analysis.idle_frames.push(data.frame_index);
+            if (data.label === 'work') analysis.work_frames.push(data.frame_index);
+            setVlmResult({ message: 'streaming', analysis: { ...analysis } });
+          } else if (data.stage === 'sample_error') {
+            analysis.samples.push({ frame_index: data.frame_index, error: data.error });
+            setVlmResult({ message: 'streaming', analysis: { ...analysis } });
+          } else if (data.stage === 'finished') {
+            analysis.video_url = data.video_url;
+            setVlmResult({ message: 'done', analysis: { ...analysis } });
+            setVlmLoading(false);
+            try { es.close(); } catch {}
+            setVlmStream(null);
+            // If server saved analysis and returned stored id, surface link
+            if (data.stored_analysis_id) {
+              setViewAnalysisId(data.stored_analysis_id);
+              setShowStoredPanel(true);
+            }
+          } else if (data.stage === 'error') {
+            analysis.error = data.message;
+            setVlmResult({ message: 'error', analysis: { ...analysis } });
+            setVlmLoading(false);
+            try { es.close(); } catch {}
+            setVlmStream(null);
           }
-        };
+        } catch (e) {
+          console.error('parse sse', e);
+        }
+      };
 
-        es.onerror = (err) => {
-          console.warn('SSE error', err);
-          setVlmLoading(false);
-          try { es.close(); } catch {}
-          setVlmStream(null);
-        };
-      } else {
-        const formData = new FormData();
-        formData.append('model', vlmModel);
-        formData.append('prompt', vlmPrompt);
-        if (vlmVideo) formData.append('video', vlmVideo);
-        formData.append('use_llm', vlmUseLLM ? 'true' : 'false');
-
-        const endpoint = 'http://localhost:8001/backend/vlm';
-        const resp = await fetch(endpoint, { method: 'POST', body: formData });
-        if (!resp.ok) throw new Error(await resp.text());
-        const data = await resp.json();
-        setVlmResult(data);
-      }
+      es.onerror = (err) => {
+        console.warn('SSE error', err);
+        setVlmLoading(false);
+        try { es.close(); } catch {}
+        setVlmStream(null);
+      };
     } catch (err) {
       console.error('VLM request failed', err);
       setVlmResult({ error: err.message || String(err) });
@@ -204,9 +189,8 @@ function App() {
     }
   };
 
-  // Fetch local models when user switches to local VLM
+  // Fetch local models
   const fetchLocalModels = async () => {
-    if (!vlmUseLocal) return setVlmAvailableModels([]);
     try {
       const resp = await fetch('http://localhost:8001/backend/vlm_local_models');
       if (!resp.ok) return setVlmAvailableModels([]);
@@ -221,7 +205,7 @@ function App() {
 
   useEffect(() => {
     fetchLocalModels();
-  }, [vlmUseLocal]);
+  }, []);
 
   const loadModel = async () => {
     if (!vlmModel) return alert('Select a model first');
@@ -298,18 +282,10 @@ function App() {
           <div className="vlm-section">
             <label>Model:
               <select value={vlmModel} onChange={(e) => setVlmModel(e.target.value)}>
-                {vlmUseLocal ? (
-                  vlmAvailableModels.length > 0 ? (
-                    vlmAvailableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)
-                  ) : (
-                    <option value="">(no local models available)</option>
-                  )
+                {vlmAvailableModels.length > 0 ? (
+                  vlmAvailableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)
                 ) : (
-                  <>
-                    <option value="gpt-4o-vlm">gpt-4o-vlm (remote placeholder)</option>
-                    <option value="gpt-5-vlm">gpt-5-vlm (remote placeholder)</option>
-                    <option value="openai-vision">openai-vision (remote placeholder)</option>
-                  </>
+                  <option value="">(no local models available)</option>
                 )}
               </select>
               <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
@@ -339,19 +315,11 @@ function App() {
             </div>
 
             <label style={{ display: 'block', marginTop: 8 }}>
-              <input type="checkbox" checked={vlmUseLocal} onChange={(e) => setVlmUseLocal(e.target.checked)} /> Use local VLM
-              <button type="button" onClick={fetchLocalModels} style={{ marginLeft: 8 }}>Refresh</button>
-            </label>
-            <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
               <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
             </label>
             <div style={{ marginTop: 6 }}>
-              {vlmUseLocal ? (
-                <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${selectedVlmModelName}` : 'No local VLM models detected on the server.'}</small>
-              ) : (
-                <small style={{ color: '#666' }}>Remote model identifiers (placeholders for cloud VLMs).</small>
-              )}
+              <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${selectedVlmModelName}` : 'No local VLM models detected on the server.'}</small>
             </div>
 
             <div style={{ marginTop: 8 }}>
