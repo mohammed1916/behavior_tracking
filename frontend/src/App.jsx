@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import StoredAnalyses from './components/StoredAnalyses';
 import AnalysisDetails from './components/AnalysisDetails';
 import FileUpload from './components/FileUpload';
 import LiveView from './components/LiveView';
 import Tasks from './components/Tasks';
+import Subtasks from './components/Subtasks';
 
 function App() {
   // const [file, setFile] = useState(null);
@@ -88,7 +89,11 @@ function App() {
 
   const [activeView, setActiveView] = useState('vlm');
   const [activeTab, setActiveTab] = useState('upload');
-  const [selectedTasks, setSelectedTasks] = useState([]);
+  const [selectedSubtasks, setSelectedSubtasks] = useState([]);
+
+  const onSubtaskSelect = useCallback((subtasks) => {
+    setSelectedSubtasks(subtasks);
+  }, []);
 
   const handleVlmSubmit = async () => {
     if (!vlmPrompt && !vlmVideo) {
@@ -108,7 +113,7 @@ function App() {
       const upj = await up.json();
       const filename = upj.filename;
 
-      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${selectedTasks.length > 0 ? `&assignment_ids=${encodeURIComponent(JSON.stringify(selectedTasks))}` : ''}`;
+      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${selectedSubtasks.length > 0 ? `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}` : ''}`;
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
       setVlmStream(es);
@@ -261,7 +266,8 @@ function App() {
       <nav className="navbar">
         <button className={activeView === 'vlm' ? 'active' : ''} onClick={() => setActiveView('vlm')}>VLM</button>
         <button className={activeView === 'stored' ? 'active' : ''} onClick={() => setActiveView('stored')}>Stored Analyses</button>
-        <button className={activeView === 'assignments' ? 'active' : ''} onClick={() => setActiveView('assignments')}>Assignments</button>
+        <button className={activeView === 'tasks' ? 'active' : ''} onClick={() => setActiveView('tasks')}>Tasks</button>
+        <button className={activeView === 'subtasks' ? 'active' : ''} onClick={() => setActiveView('subtasks')}>Subtasks</button>
       </nav>
 
       <div className="content">
@@ -304,10 +310,10 @@ function App() {
               </div>
             </div>
 
-            {selectedTasks.length > 0 && (
-              <div style={{ marginTop: 8, padding: 8, backgroundColor: 'var(--surface)', borderRadius: 4 }}>
-                <strong>Selected Tasks:</strong> {selectedTasks.map(t => `${t.id} (${t.completed ? 'Completed' : 'Pending'})`).join(', ')}
-                <button onClick={() => setSelectedTasks([])} style={{ marginLeft: 8 }}>Clear</button>
+            {selectedSubtasks.length > 0 && (
+              <div style={{ marginTop: 10, padding: 10, backgroundColor: '#f0f9ff', borderRadius: 4 }}>
+                <strong>Selected Subtasks:</strong> {selectedSubtasks.map(t => `${t.id} (${t.completed ? 'Completed' : 'Pending'})`).join(', ')}
+                <button onClick={() => setSelectedSubtasks([])} style={{ marginLeft: 8 }}>Clear</button>
               </div>
             )}
 
@@ -415,8 +421,12 @@ function App() {
           </div>
         )}
 
-        {activeView === 'assignments' && (
-          <Tasks onTaskSelect={(tasks) => setSelectedTasks(tasks)} />
+        {activeView === 'tasks' && (
+          <Tasks />
+        )}
+
+        {activeView === 'subtasks' && (
+          <Subtasks onSubtaskSelect={onSubtaskSelect} />
         )}
       </div>
     </div>

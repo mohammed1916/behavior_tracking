@@ -547,18 +547,36 @@ def init_db():
         width INTEGER,
         height INTEGER,
         duration REAL,
-        assignment_id TEXT,
+        subtask_id TEXT,
         created_at TEXT
     )
     ''')
     cur.execute('''
-    CREATE TABLE IF NOT EXISTS assignments (
+    CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
-        task_text TEXT NOT NULL,
-        expected_duration_sec INTEGER,
+        name TEXT NOT NULL,
         created_at TEXT
     )
     ''')
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS subtasks (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        subtask_info TEXT,
+        duration_sec INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'not_completed',
+        created_at TEXT,
+        FOREIGN KEY (task_id) REFERENCES tasks(id)
+    )
+    ''')
+    try:
+        cur.execute('ALTER TABLE subtasks ADD COLUMN status TEXT NOT NULL DEFAULT \'not_completed\';')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        cur.execute('ALTER TABLE subtasks ADD COLUMN subtask_info TEXT;')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     cur.execute('''
     CREATE TABLE IF NOT EXISTS samples (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -575,12 +593,12 @@ def init_db():
     conn.close()
     _db_initialized = True
 
-def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_info, samples, assignment_id=None):
+def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_info, samples, subtask_id=None):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     created = datetime.utcnow().isoformat() + 'Z'
-    cur.execute('''INSERT OR REPLACE INTO analyses (id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, assignment_id, created_at)
+    cur.execute('''INSERT OR REPLACE INTO analyses (id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
         analysis_id, filename, model, prompt, video_url,
         video_info.get('fps') if video_info else None,
@@ -588,7 +606,7 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
         video_info.get('width') if video_info else None,
         video_info.get('height') if video_info else None,
         video_info.get('duration') if video_info else None,
-        assignment_id,
+        subtask_id,
         created
     ))
 
@@ -611,7 +629,7 @@ def list_analyses_from_db(limit=100):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, assignment_id, created_at FROM analyses ORDER BY created_at DESC LIMIT ?', (limit,))
+    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at FROM analyses ORDER BY created_at DESC LIMIT ?', (limit,))
     rows = cur.fetchall()
     conn.close()
     out = []
@@ -619,7 +637,7 @@ def list_analyses_from_db(limit=100):
         out.append({
             'id': r[0], 'filename': r[1], 'model': r[2], 'prompt': r[3], 'video_url': r[4],
             'fps': r[5], 'frame_count': r[6], 'width': r[7], 'height': r[8], 'duration': r[9],
-            'assignment_id': r[10], 'created_at': r[11]
+            'subtask_id': r[10], 'created_at': r[11]
         })
     return out
 
@@ -627,7 +645,7 @@ def get_analysis_from_db(aid):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, assignment_id, created_at FROM analyses WHERE id=?', (aid,))
+    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at FROM analyses WHERE id=?', (aid,))
     r = cur.fetchone()
     if not r:
         conn.close()
@@ -635,7 +653,7 @@ def get_analysis_from_db(aid):
     analysis = {
         'id': r[0], 'filename': r[1], 'model': r[2], 'prompt': r[3], 'video_url': r[4],
         'fps': r[5], 'frame_count': r[6], 'width': r[7], 'height': r[8], 'duration': r[9],
-        'assignment_id': r[10], 'created_at': r[11]
+        'subtask_id': r[10], 'created_at': r[11]
     }
     cur.execute('SELECT frame_index, time_sec, caption, label, llm_output FROM samples WHERE analysis_id=? ORDER BY frame_index ASC', (aid,))
     rows = cur.fetchall()
@@ -664,40 +682,86 @@ def delete_analysis_from_db(aid):
     conn.commit()
     conn.close()
 
-def save_assignment_to_db(assignment_id, task_text, expected_duration_sec):
+def save_task_to_db(task_id, name):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     created = datetime.utcnow().isoformat() + 'Z'
-    cur.execute('''INSERT OR REPLACE INTO assignments (id, task_text, expected_duration_sec, created_at)
-                   VALUES (?, ?, ?, ?)''', (
-        assignment_id, task_text, expected_duration_sec, created
+    cur.execute('''INSERT OR REPLACE INTO tasks (id, name, created_at)
+                   VALUES (?, ?, ?)''', (
+        task_id, name, created
     ))
     conn.commit()
     conn.close()
 
-def list_assignments_from_db():
+def list_tasks_from_db():
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, task_text, expected_duration_sec, created_at FROM assignments ORDER BY created_at DESC')
+    cur.execute('SELECT id, name, created_at FROM tasks ORDER BY created_at DESC')
     rows = cur.fetchall()
     conn.close()
     return [{
-        'id': r[0], 'task_text': r[1], 'expected_duration_sec': r[2], 'created_at': r[3]
+        'id': r[0], 'name': r[1], 'created_at': r[2]
     } for r in rows]
 
-def get_assignment_from_db(assignment_id):
+def get_task_from_db(task_id):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, task_text, expected_duration_sec, created_at FROM assignments WHERE id=?', (assignment_id,))
+    cur.execute('SELECT id, name, created_at FROM tasks WHERE id=?', (task_id,))
     r = cur.fetchone()
     conn.close()
     if not r:
         return None
     return {
-        'id': r[0], 'task_text': r[1], 'expected_duration_sec': r[2], 'created_at': r[3]
+        'id': r[0], 'name': r[1], 'created_at': r[2]
+    }
+
+def save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, status='not_completed'):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    created = datetime.utcnow().isoformat() + 'Z'
+    cur.execute('''INSERT OR REPLACE INTO subtasks (id, task_id, subtask_info, duration_sec, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)''', (
+        subtask_id, task_id, subtask_info, duration_sec, status, created
+    ))
+    conn.commit()
+    conn.close()
+
+def list_subtasks_from_db():
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.status, s.created_at
+        FROM subtasks s
+        JOIN tasks t ON s.task_id = t.id
+        ORDER BY s.created_at DESC
+    ''')
+    rows = cur.fetchall()
+    conn.close()
+    return [{
+        'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'status': r[4], 'created_at': r[5]
+    } for r in rows]
+
+def get_subtask_from_db(subtask_id):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.status, s.created_at
+        FROM subtasks s
+        JOIN tasks t ON s.task_id = t.id
+        WHERE s.id=?
+    ''', (subtask_id,))
+    r = cur.fetchone()
+    conn.close()
+    if not r:
+        return None
+    return {
+        'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'status': r[4], 'created_at': r[5]
     }
 
 # @app.post("/backend/analyze_video")
@@ -802,7 +866,7 @@ async def vlm_endpoint(
     prompt: str = Form(''),
     video: UploadFile = File(None),
     use_llm: bool = Form(False),
-    assignment_id: str = Form(None),
+    subtask_id: str = Form(None),
 ):
     """VLM endpoint stub for videos: saves optional video and returns basic analysis.
     Placeholder — extend to call a real VLM when available.
@@ -870,10 +934,10 @@ async def vlm_endpoint(
                 analysis['idle_frames'] = proc.get('idle_frames', [])
             if 'work_frames' in proc:
                 analysis['work_frames'] = proc.get('work_frames', [])
-                # If an assignment is provided, compare expected vs actual work time
-                if assignment_id:
+                # If a subtask is provided, compare expected vs actual work time
+                if subtask_id:
                     try:
-                        assign = get_assignment_from_db(assignment_id)
+                        assign = get_subtask_from_db(subtask_id)
                         if assign is not None:
                             try:
                                 fps_local = vi.get('fps', 30.0) if hasattr(vi, 'get') else 30.0
@@ -882,8 +946,8 @@ async def vlm_endpoint(
                             work_frames = proc.get('work_frames') or []
                             actual_work_time = len(work_frames) / (fps_local if fps_local > 0 else 30.0)
                             expected = assign.get('expected_duration_sec')
-                            analysis['assignment'] = {
-                                'id': assignment_id,
+                            analysis['subtask'] = {
+                                'id': subtask_id,
                                 'task': assign.get('task_text'),
                                 'expected_duration_sec': expected,
                                 'actual_work_time_sec': actual_work_time,
@@ -894,7 +958,7 @@ async def vlm_endpoint(
                 # Persist final analysis to SQLite DB (samples + meta)
                 try:
                     aid = str(uuid.uuid4())
-                    save_analysis_to_db(aid, filename, model, prompt, video_url, vi, proc.get('samples'), assignment_id=assignment_id)
+                    save_analysis_to_db(aid, filename, model, prompt, video_url, vi, proc.get('samples'), subtask_id=subtask_id)
                     analysis['stored_analysis_id'] = aid
                 except Exception:
                     logging.exception('Failed to save analysis to DB')
@@ -935,7 +999,7 @@ def _sse_event(data: dict, event: Optional[str] = None) -> bytes:
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), assignment_id: str = Query(None)):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None)):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -971,7 +1035,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
 
             # Open second capture for seeking samples
             cap2 = cv2.VideoCapture(file_path)
-            # Track cumulative work frames when assignment monitoring is requested
+            # Track cumulative work frames when subtask monitoring is requested
             cumulative_work_frames = 0
             # Collect final samples to allow storing into DB at the end
             collected_samples = []
@@ -1024,25 +1088,25 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
 
                     time_sec = fi / (fps if fps > 0 else 30.0)
 
-                    # If monitoring an assignment, compute cumulative work time and emit a flag event when exceeded
-                    assignment_overrun = None
-                    if assignment_id and label == 'work':
+                    # If monitoring a subtask, compute cumulative work time and emit a flag event when exceeded
+                    subtask_overrun = None
+                    if subtask_id and label == 'work':
                         cumulative_work_frames += 1
                         try:
-                            assign = get_assignment_from_db(assignment_id)
+                            assign = get_subtask_from_db(subtask_id)
                             if assign is not None and assign.get('expected_duration_sec') is not None:
                                 expected = assign.get('expected_duration_sec')
                                 actual_work_time = cumulative_work_frames / (fps if fps > 0 else 30.0)
                                 if actual_work_time > expected:
-                                    assignment_overrun = True
+                                    subtask_overrun = True
                                 else:
-                                    assignment_overrun = False
+                                    subtask_overrun = False
                         except Exception:
-                            assignment_overrun = None
+                            subtask_overrun = None
 
                     payload = {"stage": "sample", "frame_index": fi, "time_sec": time_sec, "caption": caption, "label": label, "llm_output": cls_text}
-                    if assignment_overrun is not None:
-                        payload['assignment_overrun'] = assignment_overrun
+                    if subtask_overrun is not None:
+                        payload['subtask_overrun'] = subtask_overrun
 
                     # collect
                     collected_samples.append({
@@ -1062,7 +1126,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             try:
                 vid_info = {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height, 'duration': duration}
                 aid = str(uuid.uuid4())
-                save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, assignment_id=assignment_id)
+                save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id)
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid})
             except Exception:
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})
@@ -1078,7 +1142,7 @@ async def vlm_local(
     prompt: str = Form(''),
     video: UploadFile = File(None),
     use_llm: bool = Form(False),
-    assignment_id: str = Form(None),
+    subtask_id: str = Form(None),
 ):
     """Run a local lightweight VLM-like captioner on a representative frame.
     This uses a BLIP image->text pipeline (Salesforce/blip-image-captioning-large) if installed.
@@ -1406,36 +1470,97 @@ async def llm_length_check(text: str = Form(...), max_context: int = Form(2048))
     }
 
 
-@app.post('/backend/assign_task')
-async def assign_task(task_text: str = Form(...), expected_duration_sec: int = Form(None), use_llm_for_duration: bool = Form(False)):
-    """Create an assignment with optional expected duration. If duration is not
-    supplied and use_llm_for_duration is True, attempt to ask the local LLM for a suggested duration.
-    Returns an assignment id and the stored data.
-    """
-    if not task_text or not isinstance(task_text, str):
-        raise HTTPException(status_code=400, detail='task_text required')
-
-    suggested = expected_duration_sec
-    if suggested is None and use_llm_for_duration:
-        suggested = _ask_duration_llm(task_text)
-
-    aid = str(uuid.uuid4())
-    save_assignment_to_db(aid, task_text, suggested)
-
-    return {'assignment_id': aid, 'task_text': task_text, 'expected_duration_sec': suggested}
+@app.get('/backend/subtask/{subtask_id}')
+async def get_subtask(subtask_id: str):
+    s = get_subtask_from_db(subtask_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail='subtask not found')
+    return s
 
 
-@app.get('/backend/assignment/{assignment_id}')
-async def get_assignment(assignment_id: str):
-    a = get_assignment_from_db(assignment_id)
-    if a is None:
-        raise HTTPException(status_code=404, detail='assignment not found')
-    return a
+@app.get('/backend/subtasks')
+async def list_subtasks():
+    return list_subtasks_from_db()
 
 
-@app.get('/backend/assignments')
-async def list_assignments():
-    return list_assignments_from_db()
+@app.post('/backend/subtasks')
+async def create_subtask(
+    task_id: str = Form(...),
+    subtask_info: str = Form(''),
+    duration_sec: int = Form(...),
+):
+    subtask_id = str(uuid.uuid4())
+    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec)
+    return {"subtask_id": subtask_id}
+
+
+@app.put('/backend/subtasks/{subtask_id}')
+async def update_subtask(subtask_id: str, subtask_info: str = Form(...), duration_sec: int = Form(...), status: str = Form('not_completed')):
+    s = get_subtask_from_db(subtask_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail='subtask not found')
+    # Get task_id from existing
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('SELECT task_id FROM subtasks WHERE id=?', (subtask_id,))
+    r = cur.fetchone()
+    conn.close()
+    if not r:
+        raise HTTPException(status_code=404, detail='subtask not found')
+    task_id = r[0]
+    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, status)
+    return {'message': 'updated'}
+
+
+@app.delete('/backend/subtasks/{subtask_id}')
+async def delete_subtask(subtask_id: str):
+    s = get_subtask_from_db(subtask_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail='subtask not found')
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('DELETE FROM subtasks WHERE id=?', (subtask_id,))
+    conn.commit()
+    conn.close()
+    return {'message': 'deleted'}
+
+
+@app.post('/backend/tasks')
+async def create_task(name: str = Form(...)):
+    tid = str(uuid.uuid4())
+    save_task_to_db(tid, name)
+    return {'task_id': tid, 'name': name}
+
+
+@app.get('/backend/tasks')
+async def list_tasks():
+    return list_tasks_from_db()
+
+
+@app.put('/backend/tasks/{task_id}')
+async def update_task_endpoint(task_id: str, name: str = Form(...)):
+    t = get_task_from_db(task_id)
+    if not t:
+        raise HTTPException(status_code=404, detail='task not found')
+    save_task_to_db(task_id, name)
+    return {'message': 'updated'}
+
+
+@app.delete('/backend/tasks/{task_id}')
+async def delete_task_endpoint(task_id: str):
+    t = get_task_from_db(task_id)
+    if not t:
+        raise HTTPException(status_code=404, detail='task not found')
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('DELETE FROM subtasks WHERE task_id=?', (task_id,))
+    cur.execute('DELETE FROM tasks WHERE id=?', (task_id,))
+    conn.commit()
+    conn.close()
+    return {'message': 'deleted'}
 
 
 @app.get('/backend/analyses')
