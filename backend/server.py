@@ -48,6 +48,14 @@ DURATION_PROMPT_TEMPLATE = (
     "Task: {task}\n"
 )
 
+# Prompt for task completion evaluation
+TASK_COMPLETION_PROMPT_TEMPLATE = (
+    "You are a task completion evaluator. Based on the captions from video analysis, determine if the specified task has been completed.\n"
+    "Respond with exactly one word: either 'yes' or 'no'.\n"
+    "Do NOT add any punctuation, explanation, quotes, or extra text — only the single word.\n\n"
+    "Task: {task}\nCaptions: {captions}\n"
+)
+
 # In-memory assignments store (id -> dict)
 ASSIGNMENTS = {}
 
@@ -990,29 +998,58 @@ async def vlm_endpoint(
                         subtask = get_subtask_from_db(subtask_id)
                         if subtask:
                             expected_duration = subtask['duration_sec']
+                            task_description = subtask['subtask_info']
                             # Calculate actual work time from work_frames (time span from first to last work frame)
                             work_frames = proc.get('work_frames') or []
+                            samples = proc.get('samples', [])
+                            work_captions = [s['caption'] for s in samples if s.get('label') == 'work' and s.get('caption')]
                             if work_frames:
                                 min_frame = min(work_frames)
                                 max_frame = max(work_frames)
                                 fps = analysis.get('fps', 30.0)
                                 actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
-                                logging.info(f'Timing comparison: subtask_id={subtask_id}, expected={expected_duration}, actual={actual_work_time}')
-                                if actual_work_time <= expected_duration:
-                                    completed_in_time_increment = 1
-                                    completed_with_delay_increment = 0
+                                # Check if task is completed using LLM
+                                task_completed = False
+                                if work_captions and text_llm is not None:
+                                    try:
+                                        completion_prompt = TASK_COMPLETION_PROMPT_TEMPLATE.format(task=task_description, captions=' | '.join(work_captions))
+                                        llm_raw = text_llm(completion_prompt, max_new_tokens=8)
+                                        out_text = None
+                                        if isinstance(llm_raw, list) and len(llm_raw) > 0:
+                                            first = llm_raw[0]
+                                            if isinstance(first, dict):
+                                                out_text = first.get('generated_text') or first.get('text') or str(first)
+                                            else:
+                                                out_text = str(first)
+                                        else:
+                                            out_text = str(llm_raw)
+                                        task_completed = 'yes' in out_text.lower()
+                                        logging.info(f'Task completion check: {task_description}, completed={task_completed}, llm_output={out_text}')
+                                    except Exception as e:
+                                        logging.exception('Task completion LLM failed')
+                                        task_completed = False
                                 else:
-                                    completed_in_time_increment = 0
-                                    completed_with_delay_increment = 1
-                                # Update counts in database
-                                update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
-                                logging.info(f'Updated subtask {subtask_id}: in_time={completed_in_time_increment}, delay={completed_with_delay_increment}')
+                                    # Fallback: assume completed if work detected
+                                    task_completed = True
+                                if task_completed:
+                                    if actual_work_time <= expected_duration:
+                                        completed_in_time_increment = 1
+                                        completed_with_delay_increment = 0
+                                    else:
+                                        completed_in_time_increment = 0
+                                        completed_with_delay_increment = 1
+                                    # Update counts in database
+                                    update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
+                                    logging.info(f'Updated subtask {subtask_id}: in_time={completed_in_time_increment}, delay={completed_with_delay_increment}')
+                                else:
+                                    logging.info(f'Task not completed for subtask {subtask_id}, no update')
                                 # Add to analysis for response
                                 analysis['timing_comparison'] = {
                                     'expected_duration_sec': expected_duration,
                                     'actual_work_time_sec': actual_work_time,
-                                    'completed_in_time': completed_in_time_increment > 0,
-                                    'completed_with_delay': completed_with_delay_increment > 0
+                                    'task_completed': task_completed,
+                                    'completed_in_time': completed_in_time_increment if task_completed else False,
+                                    'completed_with_delay': completed_with_delay_increment if task_completed else False
                                 }
                     except Exception as e:
                         logging.exception('Error in timing comparison')
