@@ -318,12 +318,16 @@ function App() {
             <label>Prompt:
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
             </label>
+            
+            <br/>
 
-            <div style={{ marginTop: 8 }}>
-              <div className="tabs" style={{ display: 'flex', gap: 8 }}>
+            <div style={{ marginTop: 8, border: '1px dotted var(--accent)', padding: '8px', paddingTop: 16 }}>
+              <div className="tabs" style={{ display: 'flex', gap: 8, justifyContent: 'center'}}>
                 <button className={`tab ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>Upload</button>
                 <button className={`tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>Live</button>
               </div>
+
+              <div className="dotted-hr"/>
 
               <div style={{ marginTop: 10 }}>
                 {activeTab === 'upload' ? (

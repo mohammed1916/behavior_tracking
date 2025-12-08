@@ -18,7 +18,7 @@ export default function LiveView() {
     <div className="panel">
       <h4>Live View</h4>
       <div style={{ marginTop: 8 }}>
-        <div style={{ color: 'var(--muted)', marginBottom: 8 }}>A realtime preview (placeholder). Connect to your camera or server stream here.</div>
+        <div style={{ color: 'var(--muted)', marginBottom: 8 }}> Connect to Webcam or server stream here.</div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <button onClick={running ? stopLive : startLive}>{running ? 'Stop' : 'Start'} Live</button>
           <div style={{ color: 'var(--muted)' }}>{running ? 'Running...' : 'Stopped'}</div>
