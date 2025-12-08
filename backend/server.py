@@ -5,7 +5,6 @@ import shutil
 import os
 import cv2
 import uuid
-from tracker import BehaviorTracker
 from typing import Optional, Callable
 from fastapi import Query
 import json
