@@ -86,7 +86,7 @@ body{
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   padding: 16px;
-  width: 100%;
+  /* width: 100%; */
   box-shadow: var(--panel-shadow);
 }
 
@@ -153,3 +153,8 @@ video {
   box-shadow: 0 4px 6px rgba(0,0,0,0.08);
 }
 
+.dotted-hr {
+  border-top: 1px dotted var(--accent-strong);
+  width: 50%;
+  margin: 20px auto;
+}
