@@ -632,9 +632,18 @@ def get_analysis_from_db(aid):
     cur.execute('SELECT frame_index, time_sec, caption, label, llm_output FROM samples WHERE analysis_id=? ORDER BY frame_index ASC', (aid,))
     rows = cur.fetchall()
     samples = []
+    idle_frames = []
+    work_frames = []
     for s in rows:
-        samples.append({'frame_index': s[0], 'time_sec': s[1], 'caption': s[2], 'label': s[3], 'llm_output': s[4]})
+        sample = {'frame_index': s[0], 'time_sec': s[1], 'caption': s[2], 'label': s[3], 'llm_output': s[4]}
+        samples.append(sample)
+        if s[3] == 'idle':
+            idle_frames.append(s[0])
+        elif s[3] == 'work':
+            work_frames.append(s[0])
     analysis['samples'] = samples
+    analysis['idle_frames'] = idle_frames
+    analysis['work_frames'] = work_frames
     conn.close()
     return analysis
 

@@ -773,3 +773,260 @@ First, the key words here are "worker," "factory," and "laptop." Arafed is a ter
 ...done thinking.
 
 work
+2025-12-05 17:23:31,495 INFO Saved VLM upload to vlm_uploads\4418e2a3-a1c4-45d3-9f2d-accb9c227491_assembly_idle.mp4
+2025-12-05 17:23:33,996 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-05 17:23:51,547 INFO Using Ollama CLI model qwen3:0.6b for text LLM
+2025-12-05 17:23:55,927 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "a close up of a person holding a remote control in a factory". They want me to classify it as either "work" or "idle". 
+
+First, I need to analyze the context. The caption mentions a person in a factory with a remote control. Remote controls are typically associated with technology, work environments, or even some activities in a workplace. However, the key here is the setting. A remote control is part of a computer or home electronics device, which is more related to work or technology rather than idle time.
+
+Idle time usually refers to being unoccupied or not actively engaged, like sitting in a room or not doing anything. The person holding a remote control in a factory sounds like they're engaged in an activity related to technology, which is part of work. So the correct classification here is "work". 
+
+I should make sure I'm not missing any other possibilities. Maybe if the person was idle, but the context clearly points to work. No other words or explanations are needed here. The answer has to be exactly one word, so "work" is the correct choice.
+...done thinking.
+
+work
+2025-12-05 17:24:11,080 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed man working on a computer with a small machine". The task is to classify this as either "work" or "idle". 
+
+First, I need to analyze the content. The caption mentions a man working on a computer and having a small machine. That sounds like he's actively engaged in a task. Work typically refers to someone doing something productive, like working on a computer, which fits the context. The other option, idle, would mean he's not actively doing anything, which doesn't match the description. So the correct classification should be "work". 
+
+I should make sure there's no other factors. The man's actions are clear, so there's no ambiguity. No mention of being idle, so the answer is definitely work.
+...done thinking.
+
+work
+2025-12-05 17:24:23,425 INFO Ollama decoded output: Thinking...
+Okay, let me try to figure this out. The user provided a caption: "arafed man working on a motorcycle in a factory". The task is to classify this as either "work" or "idle". 
+
+First, I need to analyze the content. The caption mentions a man working on a motorcycle, which implies he's actively engaged in some activity. The location is a factory, so it's not just idle. "Working" clearly indicates that he's doing something productive. There's no mention of being idle, like sleeping or resting. So the key word here is "working". The user wants a single word, so I have to choose "work" instead of "idle". I should make sure not to add any extra text or explanations, just the word.
+...done thinking.
+
+work
+2025-12-05 17:24:39,588 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed image of a man working on a computer motherboard". They want me to classify it as either "work" or "idle".
+
+First, I need to analyze the caption. The main subject is a man working on a computer motherboard. The key action here is "working". The term "computer motherboard" suggests active involvement in the task. 
+
+Now, considering the options, "work" directly refers to being engaged in a productive activity, which matches the description. "Idle" would mean not doing anything, which doesn't fit here. There's no mention of being passive or inactive, so "work" is the correct classification. I should just respond with "work" without any additional text.
+...done thinking.
+
+work
+2025-12-05 17:24:54,553 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "there is a man working on a computer that is on a table." And I need to classify it as either "work" or "idle." 
+
+First, I should analyze the content. The caption mentions a man working on a computer. The key action here is working. The computer is on a table, which suggests it's in a workspace or a location where someone is actively engaged. So the main activity is working. 
+
+Now, the classification is straightforward. The word "work" directly relates to the action described. Even though there's a mention of the computer being on a table, the primary focus is on the man's work activity. There's no indication of being idle here. So the correct classification is "work." 
+
+I should make sure there's no ambiguity. The context doesn't mention anything about being idle, so "work" is the right choice. No need to add any extra text or explanation. Just the single word.
+...done thinking.
+
+work
+2025-12-05 17:24:59,671 INFO Ollama decoded output: Thinking...
+Okay, let me try to figure this out. The user provided a caption: "there is a man that is working on a computer in a factory." And they want me to respond with either "work" or "idle".
+
+First, I need to determine if the context is indicating that the man is working or idle. The caption mentions "working on a computer in a factory." That clearly points to the man being actively engaged in work. There's no mention of him being idle or distracted. So the main action here is work. The other word, "idle," doesn't fit because idle would mean not doing anything, which contradicts the context. Therefore, the correct response should be "work."
+...done thinking.
+
+work
+2025-12-05 17:25:05,491 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "Arafed man in a factory with a machine in the background." The task is to classify the caption with either "work" or "idle." 
+
+First, I need to determine if the caption is about work or idle. The term "rafed" is a slang for a man in a factory, which is common in the context of work environments. Arafed is often associated with workers, so this seems like a description of a factory worker. 
+
+The caption mentions a man in a factory and a machine, which are typical elements of a workplace setting. There's no mention of being idle, like a person at home or a student. Therefore, the correct classification should be "work." 
+
+I should make sure there's no other possible interpretation. The word "machine" is part of the factory, so that's consistent with work. No other elements would fit the idle category. So, the answer is definitely "work."
+...done thinking.
+
+work
+2025-12-05 17:25:11,233 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed man in a factory with a laptop and a pair of gloves." They want me to classify it as either "work" or "idle." 
+
+First, I need to analyze the context. The caption mentions a man in a factory, a laptop, and gloves. These elements are all related to work environments, specifically manufacturing or industrial settings. The presence of a laptop and gloves suggests he's working on a task, possibly in a factory. 
+
+Now, considering the word "work," it directly relates to the context of labor or employment. The other option, "idle," would imply a person not engaged in any activity, which doesn't fit the scenario here. There's no mention of being idle or not working, so the correct classification is clearly "work." 
+
+I should make sure not to add any extra text or explanations, just the word. No punctuation or other elements are allowed. So the final answer is "work."
+...done thinking.
+
+work
+2025-12-05 17:25:16,703 INFO Ollama decoded output: Thinking...
+Okay, let me see. The user provided a caption: "there is a computer monitor sitting on a desk with a mouse." They want me to respond with either "work" or "idle" as the classifier.
+
+First, I need to analyze the context. The caption mentions a computer monitor, mouse, and desk. These elements are all related to technology. The word "monitor" and "mouse" are part of a computer setup. 
+
+Now, considering the context, the main idea here is about a computer setup. The term "work" typically refers to activities or tasks, while "idle" relates to being inactive. Since the caption describes a physical setup of a computer, it's not about being idle or working. 
+
+I should make sure there's no ambiguity. The presence of a monitor and mouse doesn't imply being idle; instead, it shows an active state. Therefore, the correct classifier is "work."
+...done thinking.
+
+work
+2025-12-05 17:25:22,275 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed worker working on a computer in a factory." The task is to classify this as either "work" or "idle". 
+
+First, I need to understand the context. The caption mentions a worker, a computer, and a factory. Typically, a worker is someone engaged in work-related tasks. The word "worker" directly relates to work. Even though there's a computer and factory, those are part of the work environment. So the main element here is the worker performing work. 
+
+I should check if there's any indication that the person is idle. The caption doesn't mention anything about being idle or resting. All actions are in the context of work. Therefore, the correct classification is "work". I need to make sure not to add any other text or explanation, just the word. Yep, that's it.
+...done thinking.
+
+work
+2025-12-05 17:25:27,648 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to classify the caption as either "work" or "idle". The caption is "arafed worker in a factory working on a computer screen". 
+
+First, I need to figure out if the caption is about work or idle. The key words here are "worker", "factory", "computer screen". All these elements point to a job-related scenario, like a worker in a factory. There's no mention of being idle, so it's definitely about work. 
+
+I should make sure there's no other context I'm missing. The user specified to use exactly one word, so no need to add anything else. Just the word "work". Alright, that's it.
+...done thinking.
+
+work
+2025-12-05 17:25:32,917 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed man in a blue shirt working on two computer monitors". The task is to classify this as either "work" or "idle". 
+
+First, I need to analyze the content. The caption mentions a man working on computers, which immediately suggests activity. There's no mention of being idle, like sleeping or resting. The key word here is "working", so it's clearly related to work. 
+
+I should check if there's any ambiguity. The caption could be a picture, but the main focus is on the man's actions. Since the main action is work, the correct classification should be "work". I can't add any extra text or explanation here.
+...done thinking.
+
+work
+2025-12-05 17:25:38,242 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed worker in a factory working on a piece of equipment". They want me to respond with either "work" or "idle". But wait, the instruction says to be a strict classifier. So I need to decide exactly one word, not add any text. 
+
+First, the caption mentions a worker in a factory, working on equipment. That sounds like a job-related scenario. The word "work" directly relates to the worker's activity. "Idle" would imply being inactive, which doesn't fit here. So the correct classification is "work". I should make sure not to add any extra text or explanations, just the word. Yep, that's it.
+...done thinking.
+
+work
+2025-12-05 17:25:43,398 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed man in a factory with a machine and a box." I need to figure out if this is a work or idle scenario. The key here is to think about the context. The caption mentions a man in a factory, which is a typical workplace setting. Arafed is a type of man, so that's fitting for a work environment. There's also a machine and a box, which are common elements in factories. So, it's not about being idle, which would be something like a casual or free time situation. Therefore, the correct classification is "work."
+...done thinking.
+
+work
+2025-12-05 17:25:48,913 INFO Ollama decoded output: Thinking...
+Okay, let me see. The user provided a caption: "arafed man standing in a factory with a lot of machines." They want me to classify it as either "work" or "idle." 
+
+First, I need to analyze the caption. The key elements here are a man in a factory with machines. That's clearly related to industrial activity. The word "factory" and "machines" point to a workplace setting. If I were to classify this, it's about being in a place that's actively working. So the correct classification should be "work." 
+
+I don't see any mention of being idle or unrelated. The caption is focused on the environment of a factory, so the answer is definitely "work."
+...done thinking.
+
+work
+2025-12-05 17:25:54,268 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to classify the given caption into either "work" or "idle". The caption is "arafed man in a factory with a laptop and a phone". Hmm, first, I need to figure out what the caption is about.
+
+The caption mentions a man in a factory with a laptop and phone. That's a typical scenario, like a worker in an office or factory. So the main subject is a person working. The word "work" refers to being employed, while "idle" means not doing anything. Since the caption describes a person actively involved in a job, the correct classification should be "work". I don't need to add any other text or explanation, just the single word.
+...done thinking.
+
+work
+2025-12-05 17:25:59,909 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "Arafed man in a blue shirt holding a bag of plastic." And they want me to classify it as either "work" or "idle". 
+
+First, I need to figure out if this caption is related to work or idle. The caption mentions a man in a blue shirt and holding a bag of plastic. That sounds like a person in a work environment, maybe a job. However, the term "idle" usually refers to someone not actively engaged or not doing anything. But the caption describes someone actively doing something, so it's not idle. 
+
+So, the key here is the action described. The man is holding a bag, which indicates he's actively involved. Therefore, the correct classification is "work". I should make sure there's no other possible interpretation. The words don't suggest any idle elements, so the answer is definitely work.
+...done thinking.
+
+work
+2025-12-05 17:26:05,293 INFO Ollama decoded output: Thinking...
+Okay, the user provided a caption: "arafed man in a blue shirt is looking at a computer screen". I need to classify it as either "work" or "idle". Let me think. The caption mentions a man in a blue shirt and looking at a computer screen. Those are typical elements of a job or a workplace setting. The word "computer screen" suggests activity at a workplace. So the correct classification is "work". I should make sure not to add any extra text or explanations. Yep, just the word "work".
+...done thinking.
+
+work
+2025-12-05 17:26:11,208 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to classify the caption as either "work" or "idle". The caption says, "arafed man standing in a factory with a lot of electronics". Hmm, "arafed" probably refers to a specific person, maybe a person from a specific region or culture. The context mentions a factory with electronics, which are industrial equipment. So, the man is in a factory, which is an industrial setting. That sounds like a job or an employee. So, the correct classification should be "work". I don't see any mention of being idle or sleeping here. Yep, that's it.
+...done thinking.
+
+work
+2025-12-05 17:26:33,322 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "Arafed man in a blue shirt and protective mask working on a machine". The task is to classify the response as either "work" or "idle". 
+
+First, I need to understand the context. The caption mentions a man with a blue shirt, a mask, and working on a machine. It's clear that he's actively engaged in a task. So, the key here is the presence of "working" and "machine". 
+
+Since the caption directly states that he's working on a machine, it's a clear indication of an active state. The word "work" directly relates to the action described. There's no mention of being idle, so the correct classification is "work". I should make sure not to add any extra text or explanation, just the single word. Yep, that's it.
+...done thinking.
+
+work
+2025-12-05 17:26:54,672 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "Arafed man in a factory working on a computer monitor." And they want me to respond with either "work" or "idle". But wait, the instruction says to be a strict classifier, so exactly one word. 
+
+First, I need to analyze the caption. The key elements here are a man in a factory, working on a computer monitor. That's clearly showing activity. So, the main action is working. Even though there's a "man" and "monitor," the primary action is "working." So the correct classification should be "work." I shouldn't add any other text, just the word. Let me double-check to make sure there's no other context I'm missing. No, the caption is straightforward. So the answer must be "work."
+...done thinking.
+
+work
+2025-12-05 17:27:14,204 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption and wants me to classify it as either "work" or "idle". The caption says, "Arafed man in a factory looking at a monitor and a cell phone." 
+
+First, I need to figure out if this is a work caption or idle. The term "Arafed" might be a typo or a specific term. Wait, "Arafed" sounds like "Arafid" or "Arafid" in Arabic. Maybe the caption is in Arabic, but the user wrote it in English? Or maybe there's a mix-up. But regardless, the main thing is the context.
+
+The man is in a factory, looking at a monitor and a cell phone. That's a typical scene, like a worker in a workplace. So, it's about a person in a job setting, which is work. The other option is idle, meaning not occupied, but the caption describes someone actively engaged. So the correct classification is "work". No need to add anything else.
+...done thinking.
+
+work
+2025-12-05 17:27:35,007 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user wants me to classify the given caption as either "work" or "idle". The caption is "arafed man standing in a factory with a lot of machines". Hmm, first, I need to understand the context. The man is in a factory, with machines around him. So, is this a scene of work or idle?
+
+Work usually refers to activities done in a job, while idle would mean not doing anything. The caption mentions a man in a factory, which is a place where work is being done. Machines are part of the factory, so it's clearly a scenario where work is happening. There's no mention of being idle, so I can't just say idle. Therefore, the correct classification should be "work".
+...done thinking.
+
+work
+2025-12-05 17:27:56,067 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed man in a blue shirt and mask standing in a factory." They want me to classify it as either "work" or "idle." 
+
+First, I need to understand the context. The caption mentions a man in a blue shirt and mask, standing in a factory. That sounds like a scene from a movie or a fictional scenario. The key elements here are a man, a blue shirt, a mask, and a factory. These elements are common in movies or shows, so the caption is describing a scene from a story or a movie.
+
+Now, the user is asking for a strict classifier, so I have to choose between "work" or "idle." The term "idle" usually refers to someone who is not actively engaged or occupied, like a person at a desk. In contrast, "work" indicates being occupied with tasks. Since the caption describes a man in a factory, which is an activity, it's more likely to be associated with work rather than idle.
+
+I should make sure I'm not missing any context. The man is in a factory, so the activity is working. Therefore, the correct classification is "work."
+...done thinking.
+
+work
+2025-12-05 17:28:11,552 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed man standing in a factory with a lot of electronics". The task is to classify it as either "work" or "idle". The user wants a single lowercase word, no punctuation or explanation.
+
+First, I need to analyze the caption. The man is described as "arafed" which I think is a term from "The Arf" movie, a comedy. The context is a factory with electronics, which suggests a work environment. The words "factory" and "electronics" point to a job-related setting. So, the caption is about a person in a job, not idle. Therefore, the correct classification is "work". No need to add anything else.
+...done thinking.
+
+work
+2025-12-05 17:28:26,400 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed man working in a factory with a lot of electronics." They want me to classify the response as either "work" or "idle," and not add any extra text.
+
+First, I need to analyze the caption. The key elements here are "working in a factory" and "electronics." These are all positive actions and activities. The word "working" directly indicates that the man is actively engaged in work. There's no mention of being idle, like laziness or absence. So the main action is work. I should just output "work" without any additional text.
+...done thinking.
+
+work
+2025-12-05 17:28:37,471 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "workers in a factory working on a computer screen." They want me to act as a strict classifier and respond with either "work" or "idle". 
+
+First, I need to understand the context. The caption mentions workers, a factory, and a computer screen. All of these elements point to a scene of labor or productivity. The key here is the action of working. Even though it's a factory, the main action is working, so it's more about work than idle. 
+
+I should make sure there's no other context. No mention of being idle, just the activity. So the correct classification is "work". I need to stick to one word and not add any text. Double-check for any other possibilities, but I don't think there's anything else. So the answer is work.
+...done thinking.
+
+work
+2025-12-05 17:28:48,550 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "Arafed worker in a factory cutting a piece of green apple." And I need to classify it as either "work" or "idle". The instructions say to respond with exactly one lowercase word, no punctuation or explanation.
+
+First, I need to figure out if the caption is about a worker or someone idle. The caption mentions a worker in a factory, doing something, and there's a green apple. That's clearly a worker doing a job. So the main element is work. The apple is part of the action, so it's a work scenario. There's no mention of being idle, so the correct classification should be "work". I should make sure not to add anything else, just the word.
+...done thinking.
+
+work
+2025-12-05 17:29:00,813 INFO Ollama decoded output: Thinking...
+Okay, let's see. The user provided a caption: "arafed worker in a factory checking a box with a face mask." And they want me to classify it as either "work" or "idle". 
+
+First, I need to understand the context. The caption mentions a worker in a factory, doing something related to a box and a face mask. That sounds like a job scenario, right? A worker in a factory would be engaged in work. The face mask and the box suggest they're in a professional setting. So it's about a worker's activity. 
+
+Now, the user is asking for a strict classifier. They don't want any explanations or punctuation. So the answer has to be exactly one word: either "work" or "idle". Since the caption clearly describes a worker's actions, I'm pretty confident it's "work". No need to add anything else. Just confirm that the caption indicates a work-related scenario.
+...done thinking.
+
+work
+2025-12-05 17:29:13,906 INFO Ollama decoded output: Thinking...
+Okay, the user provided a caption: "arafed worker in a factory working on a laptop computer." They want me to classify it as either "work" or "idle". Let me think.
+
+First, the caption mentions "worker," "factory," and "laptop." These all seem to be related to work. The key here is the presence of a worker in a work environment. The word "working" directly indicates that the person is actively engaged in a job. There's no mention of being idle, like sleeping or resting. So, the main action here is work. Therefore, the correct classification should be "work". I don't see any other words or context that would suggest being idle here. So, the answer is definitely "work".
+...done thinking.
+
+work
+2025-12-08 11:31:00,880 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-08 11:40:25,346 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-08 11:41:23,083 INFO Saved VLM upload to vlm_uploads\a427cd16-1ace-4721-a1ec-f4c5c329be82_assembly_idle.mp4
+2025-12-08 11:58:01,659 INFO Saved VLM upload to vlm_uploads\cfa9d11a-9d59-4f76-b511-a2a0f943bf89_assembly_idle.mp4

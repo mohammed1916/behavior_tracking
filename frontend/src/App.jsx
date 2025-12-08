@@ -361,7 +361,7 @@ function App() {
                                             <div style={{ fontSize: 12, color: '#444' }}>{captions.length ? captions.join(' | ') : ''}</div>
                                           </div>
                                           <div>
-                                            <button onClick={() => playRange(r.startTime, r.endTime)}>Jump</button>
+                                            <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
                                           </div>
                                         </div>
                                       )
@@ -387,7 +387,7 @@ function App() {
                                           <div style={{ fontSize: 12, color: '#444' }}>{captions.length ? captions.join(' | ') : ''}</div>
                                         </div>
                                         <div>
-                                          <button onClick={() => playRange(r.startTime, r.endTime)}>Jump</button>
+                                          <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
                                         </div>
                                       </div>
                                     )
