@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 
 export default function FileUpload({ accept = 'video/*', onFileSelect, initialFile = null, label = 'Select file' }) {
   const [dragOver, setDragOver] = useState(false);
+  const [dropSuccess, setDropSuccess] = useState(false);
+  const [isClicked, setIsClicked] = useState(false);
   const [file, setFile] = useState(initialFile);
   const inputRef = useRef(null);
 
@@ -21,16 +23,21 @@ export default function FileUpload({ accept = 'video/*', onFileSelect, initialFi
     e.preventDefault();
     setDragOver(false);
     handleFiles(e.dataTransfer.files);
+    // Trigger success animation
+    setDropSuccess(true);
+    setTimeout(() => setDropSuccess(false), 600); // Match animation duration
   };
 
   const openFileDialog = () => {
+    setIsClicked(true);
+    setTimeout(() => setIsClicked(false), 150);
     if (inputRef.current) inputRef.current.click();
   };
 
   return (
     <div>
       <div
-        className={`upload-section ${dragOver ? 'drag-over' : ''}`}
+        className={`upload-section ${dragOver ? 'drag-over' : ''} ${dropSuccess ? 'drop-success' : ''} ${isClicked ? 'clicked' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}

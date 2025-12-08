@@ -320,7 +320,8 @@ function App() {
             <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
               <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
-            </label>
+            </label>     
+                
             <div style={{ marginTop: 6 }}>
               <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${selectedVlmModelName}` : 'No local VLM models detected on the server.'}</small>
             </div>
