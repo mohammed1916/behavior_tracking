@@ -751,6 +751,24 @@ def list_subtasks_from_db():
         'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'completed_in_time': r[4], 'completed_with_delay': r[5], 'created_at': r[6]
     } for r in rows]
 
+def get_subtask_from_db(subtask_id):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.completed_in_time, s.completed_with_delay, s.created_at
+        FROM subtasks s
+        JOIN tasks t ON s.task_id = t.id
+        WHERE s.id = ?
+    ''', (subtask_id,))
+    r = cur.fetchone()
+    conn.close()
+    if not r:
+        return None
+    return {
+        'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'completed_in_time': r[4], 'completed_with_delay': r[5], 'created_at': r[6]
+    }
+
 def update_subtask_counts(subtask_id, completed_in_time_increment=0, completed_with_delay_increment=0):
     init_db()
     conn = sqlite3.connect(DB_PATH)
@@ -863,6 +881,7 @@ async def vlm_endpoint(
     video: UploadFile = File(None),
     use_llm: bool = Form(False),
     subtask_id: str = Form(None),
+    compare_timings: bool = Form(False),
 ):
     """VLM endpoint stub for videos: saves optional video and returns basic analysis.
     Placeholder — extend to call a real VLM when available.
@@ -930,27 +949,37 @@ async def vlm_endpoint(
                 analysis['idle_frames'] = proc.get('idle_frames', [])
             if 'work_frames' in proc:
                 analysis['work_frames'] = proc.get('work_frames', [])
-                # If a subtask is provided, compare expected vs actual work time
-                if subtask_id:
+                # If compare_timings is enabled and subtask_id is provided, compare expected vs actual work time and update counts
+                if compare_timings and subtask_id:
                     try:
-                        assign = get_subtask_from_db(subtask_id)
-                        if assign is not None:
-                            try:
-                                fps_local = vi.get('fps', 30.0) if hasattr(vi, 'get') else 30.0
-                            except AttributeError:
-                                fps_local = 30.0
+                        subtask = get_subtask_from_db(subtask_id)
+                        if subtask:
+                            expected_duration = subtask['duration_sec']
+                            # Calculate actual work time from work_frames (time span from first to last work frame)
                             work_frames = proc.get('work_frames') or []
-                            actual_work_time = len(work_frames) / (fps_local if fps_local > 0 else 30.0)
-                            expected = assign.get('expected_duration_sec')
-                            analysis['subtask'] = {
-                                'id': subtask_id,
-                                'task': assign.get('task_text'),
-                                'expected_duration_sec': expected,
-                                'actual_work_time_sec': actual_work_time,
-                                'overrun': (expected is not None and actual_work_time > expected)
-                            }
-                    except Exception:
-                        pass
+                            if work_frames:
+                                min_frame = min(work_frames)
+                                max_frame = max(work_frames)
+                                fps = analysis.get('fps', 30.0)
+                                actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
+                                if actual_work_time <= expected_duration:
+                                    completed_in_time_increment = 1
+                                    completed_with_delay_increment = 0
+                                else:
+                                    completed_in_time_increment = 0
+                                    completed_with_delay_increment = 1
+                                # Update counts in database
+                                update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
+                                # Add to analysis for response
+                                analysis['timing_comparison'] = {
+                                    'expected_duration_sec': expected_duration,
+                                    'actual_work_time_sec': actual_work_time,
+                                    'completed_in_time': completed_in_time_increment > 0,
+                                    'completed_with_delay': completed_with_delay_increment > 0
+                                }
+                    except Exception as e:
+                        logging.exception('Error in timing comparison')
+                        analysis['timing_comparison_error'] = str(e)
                 # Persist final analysis to SQLite DB (samples + meta)
                 try:
                     aid = str(uuid.uuid4())
@@ -1008,7 +1037,7 @@ def _sse_event(data: dict, event: Optional[str] = None) -> bytes:
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None)):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False)):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -1136,17 +1165,25 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 vid_info = {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height, 'duration': duration}
                 aid = str(uuid.uuid4())
                 save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id)
-                # Update subtask counts if subtask_id provided
-                if subtask_id:
+                # Update subtask counts if compare_timings is enabled and subtask_id provided
+                if compare_timings and subtask_id:
                     try:
-                        assign = get_subtask_from_db(subtask_id)
-                        if assign is not None:
-                            expected = assign.get('duration_sec')
-                            actual_work_time = cumulative_work_frames / (fps if fps > 0 else 30.0)
-                            if expected is not None and actual_work_time <= expected:
-                                update_subtask_counts(subtask_id, completed_in_time_increment=1)
-                            else:
-                                update_subtask_counts(subtask_id, completed_with_delay_increment=1)
+                        subtask = get_subtask_from_db(subtask_id)
+                        if subtask:
+                            expected_duration = subtask['duration_sec']
+                            # Calculate actual work time from collected_work (time span from first to last work frame)
+                            if collected_work:
+                                min_frame = min(collected_work)
+                                max_frame = max(collected_work)
+                                actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
+                                if actual_work_time <= expected_duration:
+                                    completed_in_time_increment = 1
+                                    completed_with_delay_increment = 0
+                                else:
+                                    completed_in_time_increment = 0
+                                    completed_with_delay_increment = 1
+                                # Update counts in database
+                                update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
                     except Exception:
                         logging.exception('Failed to update subtask counts')
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid})
@@ -1165,6 +1202,7 @@ async def vlm_local(
     video: UploadFile = File(None),
     use_llm: bool = Form(False),
     subtask_id: str = Form(None),
+    compare_timings: bool = Form(False),
 ):
     """Run a local lightweight VLM-like captioner on a representative frame.
     This uses a BLIP image->text pipeline (Salesforce/blip-image-captioning-large) if installed.
@@ -1293,6 +1331,36 @@ async def vlm_local(
         analysis["samples"] = samples
         analysis["idle_frames"] = idle_frames
         analysis["work_frames"] = work_frames
+
+        # If compare_timings is enabled and subtask_id is provided, compare expected vs actual work time and update counts
+        if compare_timings and subtask_id:
+            try:
+                subtask = get_subtask_from_db(subtask_id)
+                if subtask:
+                    expected_duration = subtask['duration_sec']
+                    # Calculate actual work time from work_frames (time span from first to last work frame)
+                    if work_frames:
+                        min_frame = min(work_frames)
+                        max_frame = max(work_frames)
+                        actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
+                        if actual_work_time <= expected_duration:
+                            completed_in_time_increment = 1
+                            completed_with_delay_increment = 0
+                        else:
+                            completed_in_time_increment = 0
+                            completed_with_delay_increment = 1
+                        # Update counts in database
+                        update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
+                        # Add to analysis for response
+                        analysis['timing_comparison'] = {
+                            'expected_duration_sec': expected_duration,
+                            'actual_work_time_sec': actual_work_time,
+                            'completed_in_time': completed_in_time_increment > 0,
+                            'completed_with_delay': completed_with_delay_increment > 0
+                        }
+            except Exception as e:
+                logging.exception('Error in timing comparison')
+                analysis['timing_comparison_error'] = str(e)
 
     except Exception as e:
         analysis.update({"caption_error": str(e)})
