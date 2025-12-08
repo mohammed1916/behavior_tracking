@@ -1,5 +1,5 @@
 import cv2
-from tracker import BehaviorTracker
+from backend.traking.tracker import BehaviorTracker
 
 def main():
     cap = cv2.VideoCapture(0)
