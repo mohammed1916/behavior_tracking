@@ -568,17 +568,18 @@ def init_db():
         task_id TEXT NOT NULL,
         subtask_info TEXT,
         duration_sec INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT 'not_completed',
+        completed_in_time INTEGER DEFAULT 0,
+        completed_with_delay INTEGER DEFAULT 0,
         created_at TEXT,
         FOREIGN KEY (task_id) REFERENCES tasks(id)
     )
     ''')
     try:
-        cur.execute('ALTER TABLE subtasks ADD COLUMN status TEXT NOT NULL DEFAULT \'not_completed\';')
+        cur.execute('ALTER TABLE subtasks ADD COLUMN completed_in_time INTEGER DEFAULT 0;')
     except sqlite3.OperationalError:
         pass  # Column already exists
     try:
-        cur.execute('ALTER TABLE subtasks ADD COLUMN subtask_info TEXT;')
+        cur.execute('ALTER TABLE subtasks ADD COLUMN completed_with_delay INTEGER DEFAULT 0;')
     except sqlite3.OperationalError:
         pass  # Column already exists
     cur.execute('''
@@ -722,14 +723,14 @@ def get_task_from_db(task_id):
         'id': r[0], 'name': r[1], 'created_at': r[2]
     }
 
-def save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, status='not_completed'):
+def save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time=0, completed_with_delay=0):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     created = datetime.utcnow().isoformat() + 'Z'
-    cur.execute('''INSERT OR REPLACE INTO subtasks (id, task_id, subtask_info, duration_sec, status, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)''', (
-        subtask_id, task_id, subtask_info, duration_sec, status, created
+    cur.execute('''INSERT OR REPLACE INTO subtasks (id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)''', (
+        subtask_id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created
     ))
     conn.commit()
     conn.close()
@@ -739,7 +740,7 @@ def list_subtasks_from_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute('''
-        SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.status, s.created_at
+        SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.completed_in_time, s.completed_with_delay, s.created_at
         FROM subtasks s
         JOIN tasks t ON s.task_id = t.id
         ORDER BY s.created_at DESC
@@ -747,26 +748,17 @@ def list_subtasks_from_db():
     rows = cur.fetchall()
     conn.close()
     return [{
-        'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'status': r[4], 'created_at': r[5]
+        'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'completed_in_time': r[4], 'completed_with_delay': r[5], 'created_at': r[6]
     } for r in rows]
 
-def get_subtask_from_db(subtask_id):
+def update_subtask_counts(subtask_id, completed_in_time_increment=0, completed_with_delay_increment=0):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('''
-        SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.status, s.created_at
-        FROM subtasks s
-        JOIN tasks t ON s.task_id = t.id
-        WHERE s.id=?
-    ''', (subtask_id,))
-    r = cur.fetchone()
+    cur.execute('UPDATE subtasks SET completed_in_time = completed_in_time + ?, completed_with_delay = completed_with_delay + ? WHERE id = ?',
+                (completed_in_time_increment, completed_with_delay_increment, subtask_id))
+    conn.commit()
     conn.close()
-    if not r:
-        return None
-    return {
-        'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'status': r[4], 'created_at': r[5]
-    }
 
 # @app.post("/backend/analyze_video")
 # async def analyze_video(file: UploadFile = File(...)):
@@ -964,6 +956,19 @@ async def vlm_endpoint(
                     aid = str(uuid.uuid4())
                     save_analysis_to_db(aid, filename, model, prompt, video_url, vi, proc.get('samples'), subtask_id=subtask_id)
                     analysis['stored_analysis_id'] = aid
+                    # Update subtask counts if subtask_id provided
+                    if subtask_id:
+                        try:
+                            assign = get_subtask_from_db(subtask_id)
+                            if assign is not None:
+                                expected = assign.get('duration_sec')
+                                actual_work_time = len(proc.get('work_frames') or []) / (fps if fps > 0 else 30.0)
+                                if expected is not None and actual_work_time <= expected:
+                                    update_subtask_counts(subtask_id, completed_in_time_increment=1)
+                                else:
+                                    update_subtask_counts(subtask_id, completed_with_delay_increment=1)
+                        except Exception:
+                            logging.exception('Failed to update subtask counts')
                 except Exception:
                     logging.exception('Failed to save analysis to DB')
             analysis["video_url"] = video_url or ""
@@ -1131,6 +1136,19 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 vid_info = {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height, 'duration': duration}
                 aid = str(uuid.uuid4())
                 save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id)
+                # Update subtask counts if subtask_id provided
+                if subtask_id:
+                    try:
+                        assign = get_subtask_from_db(subtask_id)
+                        if assign is not None:
+                            expected = assign.get('duration_sec')
+                            actual_work_time = cumulative_work_frames / (fps if fps > 0 else 30.0)
+                            if expected is not None and actual_work_time <= expected:
+                                update_subtask_counts(subtask_id, completed_in_time_increment=1)
+                            else:
+                                update_subtask_counts(subtask_id, completed_with_delay_increment=1)
+                    except Exception:
+                        logging.exception('Failed to update subtask counts')
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid})
             except Exception:
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})
@@ -1499,7 +1517,7 @@ async def create_subtask(
 
 
 @app.put('/backend/subtasks/{subtask_id}')
-async def update_subtask(subtask_id: str, subtask_info: str = Form(...), duration_sec: int = Form(...), status: str = Form('not_completed')):
+async def update_subtask(subtask_id: str, subtask_info: str = Form(...), duration_sec: int = Form(...), completed_in_time: int = Form(None), completed_with_delay: int = Form(None)):
     s = get_subtask_from_db(subtask_id)
     if s is None:
         raise HTTPException(status_code=404, detail='subtask not found')
@@ -1513,7 +1531,7 @@ async def update_subtask(subtask_id: str, subtask_info: str = Form(...), duratio
     if not r:
         raise HTTPException(status_code=404, detail='subtask not found')
     task_id = r[0]
-    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, status)
+    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time or s['completed_in_time'], completed_with_delay or s['completed_with_delay'])
     return {'message': 'updated'}
 
 

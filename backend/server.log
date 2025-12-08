@@ -1030,3 +1030,5 @@ work
 2025-12-08 11:40:25,346 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
 2025-12-08 11:41:23,083 INFO Saved VLM upload to vlm_uploads\a427cd16-1ace-4721-a1ec-f4c5c329be82_assembly_idle.mp4
 2025-12-08 11:58:01,659 INFO Saved VLM upload to vlm_uploads\cfa9d11a-9d59-4f76-b511-a2a0f943bf89_assembly_idle.mp4
+2025-12-08 13:57:27,969 INFO Saved VLM upload to vlm_uploads\9c66bc5e-1a24-4165-a74f-a0025f0b42c7_assembly_idle.mp4
+2025-12-08 13:57:30,796 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1

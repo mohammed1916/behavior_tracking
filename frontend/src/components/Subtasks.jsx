@@ -60,12 +60,11 @@ function Subtasks({ onSubtaskSelect }) {
     }
   };
 
-  const updateSubtask = async (id, info, duration, status) => {
+  const updateSubtask = async (id, info, duration) => {
     try {
       const form = new FormData();
       form.append('subtask_info', info);
       form.append('duration_sec', duration);
-      form.append('status', status);
       const resp = await fetch(`http://localhost:8001/backend/subtasks/${id}`, { method: 'PUT', body: form });
       if (!resp.ok) throw new Error(await resp.text());
       fetchSubtasks();
@@ -90,19 +89,13 @@ function Subtasks({ onSubtaskSelect }) {
     setSubtasks(subtasks.map(a => a.id === id ? { ...a, selected } : a));
   };
 
-  const handleStatus = (id, status) => {
-    const subtask = subtasks.find(a => a.id === id);
-    setSubtasks(subtasks.map(a => a.id === id ? { ...a, status } : a));
-    updateSubtask(id, subtask.subtask_info, subtask.duration_sec, status);
-  };
-
   useEffect(() => {
     fetchSubtasks();
     fetchTasks();
   }, []);
 
   useEffect(() => {
-    onSubtaskSelect(subtasks.filter(a => a.selected).map(a => ({ id: a.id, completed: a.status !== 'not_completed' })));
+    onSubtaskSelect(subtasks.filter(a => a.selected).map(a => ({ id: a.id, completed: (a.completed_in_time + a.completed_with_delay) > 0 })));
   }, [subtasks, onSubtaskSelect]);
 
   return (
@@ -157,32 +150,22 @@ function Subtasks({ onSubtaskSelect }) {
         {loading ? <p>Loading subtasks...</p> : subtasks.length === 0 ? <p>No subtasks created yet. Create your first subtask above.</p> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--card-bg)', borderRadius: 6, overflow: 'hidden' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'var(--accent-ghost)' }}>
-                  <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Select</th>
-                  <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Status</th>
-                  <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Task</th>
-                  <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Subtask Info</th>
-                  <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Duration (s)</th>
-                  <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--accent-ghost)' }}>
+                    <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Select</th>
+                    <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Task</th>
+                    <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Subtask Info</th>
+                    <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Duration (s)</th>
+                    <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Completed In Time</th>
+                    <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Completed With Delay</th>
+                    <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
               <tbody>
                 {subtasks.map((a, index) => (
                   <tr key={a.id} style={{ backgroundColor: index % 2 === 0 ? 'var(--surface)' : 'var(--card-bg)' }}>
                     <td style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>
                       <input type="checkbox" checked={a.selected} onChange={(e) => handleSelect(a.id, e.target.checked)} />
-                    </td>
-                    <td style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>
-                      <select 
-                        value={a.status} 
-                        onChange={(e) => handleStatus(a.id, e.target.value)} 
-                        style={{ padding: 4, border: '1px solid var(--panel-border)', borderRadius: 4, backgroundColor: 'var(--surface)', color: 'var(--text)' }}
-                      >
-                        <option value="not_completed">Not Completed</option>
-                        <option value="completed_in_time">Completed in Time</option>
-                        <option value="completed_with_delay">Completed with Delay</option>
-                      </select>
                     </td>
                     <td style={{ border: '1px solid var(--panel-border)', padding: 12 }}>
                       {a.task_name}
@@ -212,10 +195,16 @@ function Subtasks({ onSubtaskSelect }) {
                       )}
                     </td>
                     <td style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>
+                      {a.completed_in_time}
+                    </td>
+                    <td style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>
+                      {a.completed_with_delay}
+                    </td>
+                    <td style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>
                       {editing === a.id ? (
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                           <button 
-                            onClick={() => updateSubtask(a.id, editInfo, editDuration, a.status)} 
+                            onClick={() => updateSubtask(a.id, editInfo, editDuration)} 
                             style={{ padding: 6, backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                           >
                             Save
