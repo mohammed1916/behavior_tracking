@@ -552,6 +552,14 @@ def init_db():
     )
     ''')
     cur.execute('''
+    CREATE TABLE IF NOT EXISTS assignments (
+        id TEXT PRIMARY KEY,
+        task_text TEXT NOT NULL,
+        expected_duration_sec INTEGER,
+        created_at TEXT
+    )
+    ''')
+    cur.execute('''
     CREATE TABLE IF NOT EXISTS samples (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         analysis_id TEXT,
@@ -655,6 +663,42 @@ def delete_analysis_from_db(aid):
     cur.execute('DELETE FROM analyses WHERE id=?', (aid,))
     conn.commit()
     conn.close()
+
+def save_assignment_to_db(assignment_id, task_text, expected_duration_sec):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    created = datetime.utcnow().isoformat() + 'Z'
+    cur.execute('''INSERT OR REPLACE INTO assignments (id, task_text, expected_duration_sec, created_at)
+                   VALUES (?, ?, ?, ?)''', (
+        assignment_id, task_text, expected_duration_sec, created
+    ))
+    conn.commit()
+    conn.close()
+
+def list_assignments_from_db():
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('SELECT id, task_text, expected_duration_sec, created_at FROM assignments ORDER BY created_at DESC')
+    rows = cur.fetchall()
+    conn.close()
+    return [{
+        'id': r[0], 'task_text': r[1], 'expected_duration_sec': r[2], 'created_at': r[3]
+    } for r in rows]
+
+def get_assignment_from_db(assignment_id):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('SELECT id, task_text, expected_duration_sec, created_at FROM assignments WHERE id=?', (assignment_id,))
+    r = cur.fetchone()
+    conn.close()
+    if not r:
+        return None
+    return {
+        'id': r[0], 'task_text': r[1], 'expected_duration_sec': r[2], 'created_at': r[3]
+    }
 
 # @app.post("/backend/analyze_video")
 # async def analyze_video(file: UploadFile = File(...)):
@@ -829,7 +873,7 @@ async def vlm_endpoint(
                 # If an assignment is provided, compare expected vs actual work time
                 if assignment_id:
                     try:
-                        assign = ASSIGNMENTS.get(assignment_id)
+                        assign = get_assignment_from_db(assignment_id)
                         if assign is not None:
                             try:
                                 fps_local = vi.get('fps', 30.0) if hasattr(vi, 'get') else 30.0
@@ -985,7 +1029,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     if assignment_id and label == 'work':
                         cumulative_work_frames += 1
                         try:
-                            assign = ASSIGNMENTS.get(assignment_id)
+                            assign = get_assignment_from_db(assignment_id)
                             if assign is not None and assign.get('expected_duration_sec') is not None:
                                 expected = assign.get('expected_duration_sec')
                                 actual_work_time = cumulative_work_frames / (fps if fps > 0 else 30.0)
@@ -1363,34 +1407,35 @@ async def llm_length_check(text: str = Form(...), max_context: int = Form(2048))
 
 
 @app.post('/backend/assign_task')
-async def assign_task(task_text: str = Form(...), expected_duration_sec: int = Form(None)):
+async def assign_task(task_text: str = Form(...), expected_duration_sec: int = Form(None), use_llm_for_duration: bool = Form(False)):
     """Create an assignment with optional expected duration. If duration is not
-    supplied, attempt to ask the local LLM for a suggested duration in seconds.
+    supplied and use_llm_for_duration is True, attempt to ask the local LLM for a suggested duration.
     Returns an assignment id and the stored data.
     """
     if not task_text or not isinstance(task_text, str):
         raise HTTPException(status_code=400, detail='task_text required')
 
     suggested = expected_duration_sec
-    if suggested is None:
+    if suggested is None and use_llm_for_duration:
         suggested = _ask_duration_llm(task_text)
 
     aid = str(uuid.uuid4())
-    ASSIGNMENTS[aid] = {
-        'id': aid,
-        'task_text': task_text,
-        'expected_duration_sec': suggested,
-    }
+    save_assignment_to_db(aid, task_text, suggested)
 
     return {'assignment_id': aid, 'task_text': task_text, 'expected_duration_sec': suggested}
 
 
 @app.get('/backend/assignment/{assignment_id}')
 async def get_assignment(assignment_id: str):
-    a = ASSIGNMENTS.get(assignment_id)
+    a = get_assignment_from_db(assignment_id)
     if a is None:
         raise HTTPException(status_code=404, detail='assignment not found')
     return a
+
+
+@app.get('/backend/assignments')
+async def list_assignments():
+    return list_assignments_from_db()
 
 
 @app.get('/backend/analyses')

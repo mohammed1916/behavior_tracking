@@ -42,7 +42,6 @@ body{
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
-  text-align: center;
 }
 
 .App {
@@ -50,6 +49,40 @@ body{
   flex-direction: column;
   align-items: center;
   gap: 20px;
+}
+
+.navbar {
+  display: flex;
+  gap: 10px;
+  background: var(--surface);
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: var(--panel-shadow);
+  border: 1px solid var(--panel-border);
+}
+
+.navbar button {
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.navbar button.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent-strong);
+}
+
+.navbar button:hover {
+  filter: brightness(0.98);
+}
+
+.content {
+  width: 100%;
+  max-width: 1100px;
 }
 
 .upload-section {

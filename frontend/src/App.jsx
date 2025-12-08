@@ -4,6 +4,7 @@ import StoredAnalyses from './components/StoredAnalyses';
 import AnalysisDetails from './components/AnalysisDetails';
 import FileUpload from './components/FileUpload';
 import LiveView from './components/LiveView';
+import Tasks from './components/Tasks';
 
 function App() {
   // const [file, setFile] = useState(null);
@@ -23,7 +24,6 @@ function App() {
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
   const [vlmUseLLM, setVlmUseLLM] = useState(false);
-  const [showStoredPanel, setShowStoredPanel] = useState(false);
   const [viewAnalysisId, setViewAnalysisId] = useState(null);
   // LLM length check state
   const [llmText, setLlmText] = useState('');
@@ -86,7 +86,9 @@ function App() {
     setVlmResult(null);
   };
 
+  const [activeView, setActiveView] = useState('vlm');
   const [activeTab, setActiveTab] = useState('upload');
+  const [selectedTasks, setSelectedTasks] = useState([]);
 
   const handleVlmSubmit = async () => {
     if (!vlmPrompt && !vlmVideo) {
@@ -106,7 +108,7 @@ function App() {
       const upj = await up.json();
       const filename = upj.filename;
 
-      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}`;
+      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${selectedTasks.length > 0 ? `&assignment_ids=${encodeURIComponent(JSON.stringify(selectedTasks))}` : ''}`;
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
       setVlmStream(es);
@@ -143,7 +145,7 @@ function App() {
             // If server saved analysis and returned stored id, surface link
             if (data.stored_analysis_id) {
               setViewAnalysisId(data.stored_analysis_id);
-              setShowStoredPanel(true);
+              setActiveView('stored');
             }
           } else if (data.stage === 'error') {
             analysis.error = data.message;
@@ -256,30 +258,16 @@ function App() {
     <div className="App">
       <h1>Behavior Tracking Analysis</h1>
 
-      <div className="controls">
-        <div className="panel left">
-          <div style={{ marginBottom: 12 }}>
-            <button onClick={() => setShowStoredPanel(s => !s)} style={{ marginRight: 8 }}>{showStoredPanel ? 'Hide' : 'Stored Analyses'}</button>
-          </div>
-        </div>
+      <nav className="navbar">
+        <button className={activeView === 'vlm' ? 'active' : ''} onClick={() => setActiveView('vlm')}>VLM</button>
+        <button className={activeView === 'stored' ? 'active' : ''} onClick={() => setActiveView('stored')}>Stored Analyses</button>
+        <button className={activeView === 'assignments' ? 'active' : ''} onClick={() => setActiveView('assignments')}>Assignments</button>
+      </nav>
 
-        {/* Render stored analyses panel independently so it shows even when no VLM result is present */}
-        {showStoredPanel && (
-          <div style={{ marginTop: 12, width: '100%' }}>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <StoredAnalyses onView={(id) => { setViewAnalysisId(id); setShowStoredPanel(true); }} />
-              </div>
-              <div style={{ width: 520 }}>
-                <AnalysisDetails analysisId={viewAnalysisId} onClose={() => setViewAnalysisId(null)} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="panel right">
-          <h3>VLM (Video)</h3>
+      <div className="content">
+        {activeView === 'vlm' && (
           <div className="vlm-section">
+            <h3>VLM (Video)</h3>
             <label>Model:
               <select value={vlmModel} onChange={(e) => setVlmModel(e.target.value)}>
                 {vlmAvailableModels.length > 0 ? (
@@ -294,6 +282,8 @@ function App() {
             <label>Prompt:
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
             </label>
+            
+
             
             <br/>
 
@@ -313,6 +303,13 @@ function App() {
                 )}
               </div>
             </div>
+
+            {selectedTasks.length > 0 && (
+              <div style={{ marginTop: 8, padding: 8, backgroundColor: 'var(--surface)', borderRadius: 4 }}>
+                <strong>Selected Tasks:</strong> {selectedTasks.map(t => `${t.id} (${t.completed ? 'Completed' : 'Pending'})`).join(', ')}
+                <button onClick={() => setSelectedTasks([])} style={{ marginLeft: 8 }}>Clear</button>
+              </div>
+            )}
 
             <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
@@ -405,7 +402,22 @@ function App() {
               </div>
             )}
           </div>
-        </div>
+        )}
+
+        {activeView === 'stored' && (
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <StoredAnalyses onView={(id) => setViewAnalysisId(id)} />
+            </div>
+            <div style={{ width: 520 }}>
+              <AnalysisDetails analysisId={viewAnalysisId} onClose={() => setViewAnalysisId(null)} />
+            </div>
+          </div>
+        )}
+
+        {activeView === 'assignments' && (
+          <Tasks onTaskSelect={(tasks) => setSelectedTasks(tasks)} />
+        )}
       </div>
     </div>
   );
