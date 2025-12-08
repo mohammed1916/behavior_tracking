@@ -707,25 +707,41 @@ async def download_video(filename: str):
         return FileResponse(file_path, media_type="video/mp4", filename=filename, headers={"Accept-Ranges": "bytes"})
     raise HTTPException(status_code=404, detail="File not found")
 
+# Global flag to control webcam streaming
+_webcam_active = False
+
 @app.get("/backend/stream_pose")
 async def stream_pose():
     """Stream raw webcam frames without tracking overlays."""
+    global _webcam_active
+    _webcam_active = True
     def gen_frames():
+        global _webcam_active
         cap = cv2.VideoCapture(0)
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            # Mirror frame for selfie view
-            frame = cv2.flip(frame, 1)
-            ret, buffer = cv2.imencode('.jpg', frame)
-            if not ret:
-                continue
-            frame_bytes = buffer.tobytes()
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        cap.release()
+        try:
+            while _webcam_active:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                # Mirror frame for selfie view
+                frame = cv2.flip(frame, 1)
+                ret, buffer = cv2.imencode('.jpg', frame)
+                if not ret:
+                    continue
+                frame_bytes = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        finally:
+            cap.release()
+            _webcam_active = False
     return StreamingResponse(gen_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
+
+@app.post("/backend/stop_webcam")
+async def stop_webcam():
+    """Stop the webcam stream."""
+    global _webcam_active
+    _webcam_active = False
+    return {"message": "Webcam stopped"}
 
 
 @app.post("/backend/vlm")
