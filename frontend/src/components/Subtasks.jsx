@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-function Subtasks({ onSubtaskSelect }) {
+function Subtasks({ onSubtaskSelect, refreshTrigger }) {
   const [subtasks, setSubtasks] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [newSubtaskInfo, setNewSubtaskInfo] = useState('');
@@ -93,6 +93,12 @@ function Subtasks({ onSubtaskSelect }) {
     fetchSubtasks();
     fetchTasks();
   }, []);
+
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchSubtasks();
+    }
+  }, [refreshTrigger]);
 
   useEffect(() => {
     onSubtaskSelect(subtasks.filter(a => a.selected).map(a => ({ id: a.id, completed: (a.completed_in_time + a.completed_with_delay) > 0 })));

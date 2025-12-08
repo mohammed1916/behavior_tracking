@@ -90,6 +90,7 @@ function App() {
   const [activeView, setActiveView] = useState('vlm');
   const [activeTab, setActiveTab] = useState('upload');
   const [selectedSubtasks, setSelectedSubtasks] = useState([]);
+  const [subtasksRefreshTrigger, setSubtasksRefreshTrigger] = useState(0);
 
   const onSubtaskSelect = useCallback((subtasks) => {
     setSelectedSubtasks(subtasks);
@@ -113,7 +114,7 @@ function App() {
       const upj = await up.json();
       const filename = upj.filename;
 
-      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${selectedSubtasks.length > 0 ? `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}` : ''}`;
+      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${selectedSubtasks.length > 0 ? `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}&compare_timings=true` : ''}`;
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
       setVlmStream(es);
@@ -152,6 +153,8 @@ function App() {
               setViewAnalysisId(data.stored_analysis_id);
               setActiveView('stored');
             }
+            // Refresh subtasks in case counts were updated
+            setSubtasksRefreshTrigger(prev => prev + 1);
           } else if (data.stage === 'error') {
             analysis.error = data.message;
             setVlmResult({ message: 'error', analysis: { ...analysis } });
@@ -321,7 +324,7 @@ function App() {
               <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
               <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
             </label>     
-                
+
             <div style={{ marginTop: 6 }}>
               <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${selectedVlmModelName}` : 'No local VLM models detected on the server.'}</small>
             </div>
@@ -427,7 +430,7 @@ function App() {
         )}
 
         {activeView === 'subtasks' && (
-          <Subtasks onSubtaskSelect={onSubtaskSelect} />
+          <Subtasks onSubtaskSelect={onSubtaskSelect} refreshTrigger={subtasksRefreshTrigger} />
         )}
       </div>
     </div>

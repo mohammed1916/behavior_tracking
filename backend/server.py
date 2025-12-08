@@ -769,14 +769,43 @@ def get_subtask_from_db(subtask_id):
         'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'completed_in_time': r[4], 'completed_with_delay': r[5], 'created_at': r[6]
     }
 
-def update_subtask_counts(subtask_id, completed_in_time_increment=0, completed_with_delay_increment=0):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('UPDATE subtasks SET completed_in_time = completed_in_time + ?, completed_with_delay = completed_with_delay + ? WHERE id = ?',
-                (completed_in_time_increment, completed_with_delay_increment, subtask_id))
-    conn.commit()
-    conn.close()
+def compute_ranges(frames, samples, fps):
+    if not frames or frames.length == 0:
+        return []
+    sample_map = {}
+    for s in samples or []:
+        if s and 'frame_index' in s and 'time_sec' in s:
+            sample_map[s['frame_index']] = s['time_sec']
+    times = []
+    for f in frames:
+        time_val = sample_map.get(f, (f / fps) if fps else 0)
+        times.append({'frame': f, 'time': time_val})
+    times.sort(key=lambda x: x['time'])
+    dt_est = 1.0
+    if samples and len(samples) >= 2:
+        s0 = samples[0].get('time_sec', 0)
+        s1 = samples[1].get('time_sec', 0)
+        d = abs(s1 - s0)
+        if d > 0:
+            dt_est = d
+    max_gap = max(1.0, dt_est * 1.5)
+    ranges = []
+    if times:
+        cur = {'startFrame': times[0]['frame'], 'endFrame': times[0]['frame'], 'startTime': times[0]['time'], 'endTime': times[0]['time']}
+        for i in range(1, len(times)):
+            t = times[i]
+            if (t['time'] - cur['endTime']) <= max_gap:
+                cur['endFrame'] = t['frame']
+                cur['endTime'] = t['time']
+            else:
+                ranges.append(cur.copy())
+                cur = {'startFrame': t['frame'], 'endFrame': t['frame'], 'startTime': t['time'], 'endTime': t['time']}
+        ranges.append(cur)
+    # Add captions to ranges
+    for r in ranges:
+        captions = [s['caption'] for s in (samples or []) if 'time_sec' in s and r['startTime'] - 0.0001 <= s['time_sec'] <= r['endTime'] + 0.0001 and s.get('caption')]
+        r['captions'] = captions
+    return ranges
 
 # @app.post("/backend/analyze_video")
 # async def analyze_video(file: UploadFile = File(...)):
@@ -949,6 +978,12 @@ async def vlm_endpoint(
                 analysis['idle_frames'] = proc.get('idle_frames', [])
             if 'work_frames' in proc:
                 analysis['work_frames'] = proc.get('work_frames', [])
+                analysis['idle_frames'] = proc.get('idle_frames', [])
+                # Compute ranges for idle and work frames
+                fps = analysis.get('fps', 30.0)
+                samples = proc.get('samples', [])
+                analysis['idle_ranges'] = compute_ranges(analysis.get('idle_frames', []), samples, fps)
+                analysis['work_ranges'] = compute_ranges(analysis.get('work_frames', []), samples, fps)
                 # If compare_timings is enabled and subtask_id is provided, compare expected vs actual work time and update counts
                 if compare_timings and subtask_id:
                     try:
@@ -962,6 +997,7 @@ async def vlm_endpoint(
                                 max_frame = max(work_frames)
                                 fps = analysis.get('fps', 30.0)
                                 actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
+                                logging.info(f'Timing comparison: subtask_id={subtask_id}, expected={expected_duration}, actual={actual_work_time}')
                                 if actual_work_time <= expected_duration:
                                     completed_in_time_increment = 1
                                     completed_with_delay_increment = 0
@@ -970,6 +1006,7 @@ async def vlm_endpoint(
                                     completed_with_delay_increment = 1
                                 # Update counts in database
                                 update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
+                                logging.info(f'Updated subtask {subtask_id}: in_time={completed_in_time_increment}, delay={completed_with_delay_increment}')
                                 # Add to analysis for response
                                 analysis['timing_comparison'] = {
                                     'expected_duration_sec': expected_duration,
@@ -985,19 +1022,6 @@ async def vlm_endpoint(
                     aid = str(uuid.uuid4())
                     save_analysis_to_db(aid, filename, model, prompt, video_url, vi, proc.get('samples'), subtask_id=subtask_id)
                     analysis['stored_analysis_id'] = aid
-                    # Update subtask counts if subtask_id provided
-                    if subtask_id:
-                        try:
-                            assign = get_subtask_from_db(subtask_id)
-                            if assign is not None:
-                                expected = assign.get('duration_sec')
-                                actual_work_time = len(proc.get('work_frames') or []) / (fps if fps > 0 else 30.0)
-                                if expected is not None and actual_work_time <= expected:
-                                    update_subtask_counts(subtask_id, completed_in_time_increment=1)
-                                else:
-                                    update_subtask_counts(subtask_id, completed_with_delay_increment=1)
-                        except Exception:
-                            logging.exception('Failed to update subtask counts')
                 except Exception:
                     logging.exception('Failed to save analysis to DB')
             analysis["video_url"] = video_url or ""
@@ -1176,16 +1200,22 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                 min_frame = min(collected_work)
                                 max_frame = max(collected_work)
                                 actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
+                                logging.info(f'Subtask {subtask_id}: expected={expected_duration}s, actual={actual_work_time}s, work_frames={len(collected_work)}')
                                 if actual_work_time <= expected_duration:
                                     completed_in_time_increment = 1
                                     completed_with_delay_increment = 0
+                                    logging.info(f'Incrementing completed_in_time for subtask {subtask_id}')
                                 else:
                                     completed_in_time_increment = 0
                                     completed_with_delay_increment = 1
+                                    logging.info(f'Incrementing completed_with_delay for subtask {subtask_id}')
                                 # Update counts in database
                                 update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
-                    except Exception:
-                        logging.exception('Failed to update subtask counts')
+                                logging.info(f'Updated subtask {subtask_id} counts: +{completed_in_time_increment} in_time, +{completed_with_delay_increment} with_delay')
+                            else:
+                                logging.info(f'No work frames found for subtask {subtask_id}')
+                    except Exception as e:
+                        logging.exception(f'Failed to update subtask counts for {subtask_id}')
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid})
             except Exception:
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})

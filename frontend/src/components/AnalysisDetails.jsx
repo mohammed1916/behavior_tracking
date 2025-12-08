@@ -7,38 +7,6 @@ export default function AnalysisDetails({ analysisId, onClose }) {
   const videoRef = useRef(null);
   const pauseTimerRef = useRef(null);
 
-  function computeRanges(frames, samples, fps) {
-    if (!frames || frames.length === 0) return [];
-    const sampleMap = {};
-    (samples || []).forEach(s => { if (s && s.frame_index !== undefined) sampleMap[s.frame_index] = s.time_sec; });
-    const times = frames.map(f => ({ frame: f, time: sampleMap[f] !== undefined ? sampleMap[f] : (fps ? (f / fps) : 0) }));
-    times.sort((a, b) => a.time - b.time);
-    const dtEst = (() => {
-      if ((samples || []).length >= 2) {
-        const s0 = samples[0].time_sec || 0;
-        const s1 = samples[1].time_sec || 0;
-        const d = Math.abs(s1 - s0);
-        return d > 0 ? d : 1.0;
-      }
-      return 1.0;
-    })();
-    const maxGap = Math.max(1.0, dtEst * 1.5);
-    const ranges = [];
-    let cur = { startFrame: times[0].frame, endFrame: times[0].frame, startTime: times[0].time, endTime: times[0].time };
-    for (let i = 1; i < times.length; i++) {
-      const t = times[i];
-      if ((t.time - cur.endTime) <= maxGap) {
-        cur.endFrame = t.frame;
-        cur.endTime = t.time;
-      } else {
-        ranges.push({ ...cur });
-        cur = { startFrame: t.frame, endFrame: t.frame, startTime: t.time, endTime: t.time };
-      }
-    }
-    ranges.push({ ...cur });
-    return ranges;
-  }
-
   function playRange(startSec, endSec) {
     const v = videoRef.current;
     if (!v) return;
@@ -94,52 +62,38 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                   <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <strong>Idle Frames</strong>
-                        {analysis.idle_frames && analysis.idle_frames.length > 0 ? (
+                        {analysis.idle_ranges && analysis.idle_ranges.length > 0 ? (
                           <div className="captions-list">
-                            {(() => {
-                              const fps = analysis.fps || 30;
-                              const ranges = computeRanges(analysis.idle_frames, analysis.samples || [], fps);
-                              return ranges.slice(0,50).map((r, i) => {
-                                const captions = (analysis.samples || []).filter(s => s.time_sec >= r.startTime - 0.0001 && s.time_sec <= r.endTime + 0.0001).map(s => s.caption).filter(Boolean);
-                                return (
-                                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                    <div style={{ flex: 1 }}>
-                                      <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                      <div style={{ fontSize: 12, color: '#444' }}>{captions.length ? captions.join(' | ') : ''}</div>
-                                    </div>
-                                    <div>
-                                      <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
-                                    </div>
-                                  </div>
-                                )
-                              })
-                            })()}
+                            {analysis.idle_ranges.slice(0,50).map((r, i) => (
+                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <div style={{ flex: 1 }}>
+                                  <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
+                                  <div style={{ fontSize: 12, color: '#444' }}>{r.captions && r.captions.length ? r.captions.join(' | ') : ''}</div>
+                                </div>
+                                <div>
+                                  <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         ) : (<div style={{ color: '#666' }}>No idle frames detected.</div>)}
                     </div>
 
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <strong>Work Frames</strong>
-                      {analysis.work_frames && analysis.work_frames.length > 0 ? (
+                      {analysis.work_ranges && analysis.work_ranges.length > 0 ? (
                         <div className="captions-list">
-                          {(() => {
-                            const fps = analysis.fps || 30;
-                            const ranges = computeRanges(analysis.work_frames, analysis.samples || [], fps);
-                            return ranges.slice(0,50).map((r, i) => {
-                              const captions = (analysis.samples || []).filter(s => s.time_sec >= r.startTime - 0.0001 && s.time_sec <= r.endTime + 0.0001).map(s => s.caption).filter(Boolean);
-                              return (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                    <div style={{ fontSize: 12, color: '#444' }}>{captions.length ? captions.join(' | ') : ''}</div>
-                                  </div>
-                                  <div>
-                                    <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
-                                  </div>
-                                </div>
-                              )
-                            })
-                          })()}
+                          {analysis.work_ranges.slice(0,50).map((r, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ flex: 1 }}>
+                                <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
+                                <div style={{ fontSize: 12, color: '#444' }}>{r.captions && r.captions.length ? r.captions.join(' | ') : ''}</div>
+                              </div>
+                              <div>
+                                <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : (<div style={{ color: '#666' }}>No work frames detected.</div>)}
                     </div>
