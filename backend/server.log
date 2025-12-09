@@ -1655,3 +1655,91 @@ Okay, let's see. The user wants me to classify the caption "arafed worker in a f
 
 work
 2025-12-09 10:09:06,941 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 10:19:36,622 INFO Saved VLM upload to vlm_uploads\0c58b450-6c75-4a2b-8370-7510af8e7c74_assembly_idle.mp4
+2025-12-09 10:19:38,761 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-09 10:26:38,511 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 10:33:20,598 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 10:36:38,260 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 10:40:36,548 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-09 10:44:25,746 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 10:45:53,299 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 10:48:27,873 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 10:56:01,896 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-09 10:56:09,162 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 11:14:18,587 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-09 11:14:26,369 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 11:57:58,707 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 12:02:51,496 ERROR Error loading model gpt-4o-vlm
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_http.py", line 402, in hf_raise_for_status
+    response.raise_for_status()
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://huggingface.co/gpt-4o-vlm/resolve/main/config.json
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 114, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\file_download.py", line 1007, in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\file_download.py", line 1114, in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\file_download.py", line 1655, in _raise_on_head_call_error
+    raise head_call_error
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\file_download.py", line 1543, in _get_metadata_or_catch_error
+    metadata = get_hf_file_metadata(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 114, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\file_download.py", line 1460, in get_hf_file_metadata
+    r = _request_wrapper(
+        ^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\file_download.py", line 283, in _request_wrapper
+    response = _request_wrapper(
+               ^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\file_download.py", line 307, in _request_wrapper
+    hf_raise_for_status(response)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_http.py", line 452, in hf_raise_for_status
+    raise _format(RepositoryNotFoundError, message, response) from e
+huggingface_hub.errors.RepositoryNotFoundError: 401 Client Error. (Request ID: Root=1-6937c292-0d4b04be34f9c8b81160b614;98ba9320-7358-4b10-967b-d00d4205ce59)
+
+Repository Not Found for url: https://huggingface.co/gpt-4o-vlm/resolve/main/config.json.
+Please make sure you specified the correct `repo_id` and `repo_type`.
+If you are trying to access a private or gated repo, make sure you are authenticated. For more details, see https://huggingface.co/docs/huggingface_hub/authentication
+Invalid username or password.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\server.py", line 1252, in load_vlm_model
+    p = get_captioner_for_model(model)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\server.py", line 135, in get_captioner_for_model
+    p = pipeline(task, model=model_id, device=device)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\transformers\pipelines\__init__.py", line 883, in pipeline
+    resolved_config_file = cached_file(
+                           ^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\transformers\utils\hub.py", line 511, in cached_files
+    raise OSError(
+OSError: gpt-4o-vlm is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
+If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
+2025-12-09 12:03:12,130 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-09 12:03:25,132 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 12:14:36,636 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 13:06:08,413 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-09 13:06:18,343 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 13:19:10,094 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 13:19:31,301 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
+2025-12-09 13:47:11,986 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 14:38:26,644 INFO Loaded default local captioner Salesforce/blip-image-captioning-large

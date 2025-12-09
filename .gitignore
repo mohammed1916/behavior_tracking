@@ -7,3 +7,5 @@
 *jpg
 *.svg
 node_modules/
+*.pem
+.env
