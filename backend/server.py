@@ -14,6 +14,11 @@ from transformers import pipeline
 import torch
 import sqlite3
 import time
+from PIL import Image
+import numpy as np
+import re
+import base64
+import io
 
 # configure logging so INFO/DEBUG messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -360,7 +365,6 @@ def process_video_samples(file_path: str, captioner=None, max_samples: int = 30,
 
                 # caption
                 rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
-                from PIL import Image
                 pil = Image.fromarray(rgb)
                 try:
                     out = captioner(pil)
@@ -765,14 +769,10 @@ async def stream_pose():
                 ret, frame = cap.read()
                 if not ret:
                     break
-                # Mirror frame for selfie view
                 frame = cv2.flip(frame, 1)
                 
-                # Perform inference every 2 seconds
                 if time.time() - last_inference_time >= 2.0 and captioner is not None:
                     try:
-                        # Convert to RGB PIL image
-                        from PIL import Image
                         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                         out = captioner(img)
                         current_caption = _normalize_caption_output(captioner, out)
@@ -780,7 +780,6 @@ async def stream_pose():
                     except Exception as e:
                         current_caption = f"Error: {str(e)}"
                 
-                # Draw caption on frame
                 cv2.putText(frame, current_caption[:50], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
                 
                 ret, buffer = cv2.imencode('.jpg', frame)
@@ -879,8 +878,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         yield _sse_event({"stage": "sample_error", "frame_index": fi, "error": "read_failed"})
                         continue
                     # convert BGR->RGB PIL image
-                    from PIL import Image
-                    import numpy as np
+
                     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                     out = captioner(img)
                     caption = _normalize_caption_output(captioner, out)
@@ -903,7 +901,6 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                 else:
                                     cls_text = str(cls_out)
                                 if cls_text:
-                                    import re
                                     cleaned = re.sub(r'[^\w\s]', '', cls_text).strip()
                                     words = cleaned.split()
                                     if words:
@@ -1049,9 +1046,6 @@ async def caption_image(request: dict):
         "model": "model_id_used"
     }
     """
-    import base64
-    from PIL import Image
-    import io
     
     try:
         image_data = request.get("image")

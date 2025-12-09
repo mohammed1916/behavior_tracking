@@ -1654,3 +1654,4 @@ Okay, let's see. The user wants me to classify the caption "arafed worker in a f
 ...done thinking.
 
 work
+2025-12-09 10:09:06,941 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
