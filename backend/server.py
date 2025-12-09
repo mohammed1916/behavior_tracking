@@ -19,6 +19,7 @@ import numpy as np
 import re
 import base64
 import io
+from datetime import datetime
 
 # configure logging so INFO/DEBUG messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -270,178 +271,178 @@ def _normalize_caption_output(captioner, out):
 
 
 
-def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None, prompt: str = '', use_llm: bool = False):
-    """Process a video file: compute basic video_info and sample frames to caption.
+# def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None, prompt: str = '', use_llm: bool = False):
+#     """Process a video file: compute basic video_info and sample frames to caption.
 
-    Args:
-        file_path (str): Path to the video file.
-        captioner: Optional captioning model to use for frame captions.
-        max_samples (int): Maximum number of frames to sample and caption.
-        stream_callback (Optional[Callable]): If provided, called with event dicts for each stage/sample.
-        prompt (str): Optional prompt to guide the captioning or LLM, if applicable.
-        use_llm (bool): If True, use a language model (LLM) for captioning or analysis.
+#     Args:
+#         file_path (str): Path to the video file.
+#         captioner: Optional captioning model to use for frame captions.
+#         max_samples (int): Maximum number of frames to sample and caption.
+#         stream_callback (Optional[Callable]): If provided, called with event dicts for each stage/sample.
+#         prompt (str): Optional prompt to guide the captioning or LLM, if applicable.
+#         use_llm (bool): If True, use a language model (LLM) for captioning or analysis.
 
-    Returns:
-        dict: A dictionary with video_info, samples, idle_frames, work_frames.
-    """
-    result = {}
-    try:
-        cap = cv2.VideoCapture(file_path)
-        if not cap.isOpened():
-            msg = {"stage": "error", "message": "could not open video"}
-            if stream_callback:
-                stream_callback(msg)
-            else:
-                result.update({"error": "could not open video"})
-            return result
+#     Returns:
+#         dict: A dictionary with video_info, samples, idle_frames, work_frames.
+#     """
+#     result = {}
+#     try:
+#         cap = cv2.VideoCapture(file_path)
+#         if not cap.isOpened():
+#             msg = {"stage": "error", "message": "could not open video"}
+#             if stream_callback:
+#                 stream_callback(msg)
+#             else:
+#                 result.update({"error": "could not open video"})
+#             return result
 
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        fps = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-        duration = frame_count / (fps if fps > 0 else 30.0)
+#         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+#         fps = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
+#         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+#         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+#         duration = frame_count / (fps if fps > 0 else 30.0)
 
-        video_info = {"fps": fps, "frame_count": frame_count, "width": width, "height": height, "duration": duration}
-        if stream_callback:
-            stream_callback({"stage": "video_info", **video_info})
+#         video_info = {"fps": fps, "frame_count": frame_count, "width": width, "height": height, "duration": duration}
+#         if stream_callback:
+#             stream_callback({"stage": "video_info", **video_info})
 
-        total_frames = max(1, frame_count)
-        desired = min(max_samples, max(1, total_frames))
-        step = max(1, total_frames // desired) if total_frames > 0 else 1
+#         total_frames = max(1, frame_count)
+#         desired = min(max_samples, max(1, total_frames))
+#         step = max(1, total_frames // desired) if total_frames > 0 else 1
 
-        samples = []
-        work_frames = []
-        idle_frames = []
+#         samples = []
+#         work_frames = []
+#         idle_frames = []
 
-        work_keywords = [
-            'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
-            'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
-            'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
-        ]
+#         work_keywords = [
+#             'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
+#             'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
+#             'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
+#         ]
 
-        text_llm = None
-        if use_llm:
-            try:
-                text_llm = get_local_text_llm()
-                if text_llm is None:
-                    logging.info('LLM classification requested but no local text LLM available')
-            except Exception:
-                text_llm = None
+#         text_llm = None
+#         if use_llm:
+#             try:
+#                 text_llm = get_local_text_llm()
+#                 if text_llm is None:
+#                     logging.info('LLM classification requested but no local text LLM available')
+#             except Exception:
+#                 text_llm = None
 
-        if captioner is None:
-            captioner = get_local_captioner()
+#         if captioner is None:
+#             captioner = get_local_captioner()
 
-        if captioner is None:
-            msg = {"stage": "error", "message": "no local captioner available"}
-            if stream_callback:
-                stream_callback(msg)
-            else:
-                result.update({"local_captioner": "not available"})
-            cap.release()
-            return result
+#         if captioner is None:
+#             msg = {"stage": "error", "message": "no local captioner available"}
+#             if stream_callback:
+#                 stream_callback(msg)
+#             else:
+#                 result.update({"local_captioner": "not available"})
+#             cap.release()
+#             return result
 
-        cap2 = cv2.VideoCapture(file_path)
-        if not cap2.isOpened():
-            msg = {"stage": "error", "message": "could not open video for sampling"}
-            if stream_callback:
-                stream_callback(msg)
-            else:
-                result.update({"error": "could not open video for sampling"})
-            cap.release()
-            return result
+#         cap2 = cv2.VideoCapture(file_path)
+#         if not cap2.isOpened():
+#             msg = {"stage": "error", "message": "could not open video for sampling"}
+#             if stream_callback:
+#                 stream_callback(msg)
+#             else:
+#                 result.update({"error": "could not open video for sampling"})
+#             cap.release()
+#             return result
 
-        for idx in range(0, int(total_frames), step):
-            if len(samples) >= max_samples:
-                break
-            try:
-                cap2.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, f = cap2.read()
-                if not ret or f is None:
-                    if stream_callback:
-                        stream_callback({"stage": "sample_error", "frame_index": idx, "error": "read_failed"})
-                    else:
-                        samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": "read_failed"})
-                    continue
+#         for idx in range(0, int(total_frames), step):
+#             if len(samples) >= max_samples:
+#                 break
+#             try:
+#                 cap2.set(cv2.CAP_PROP_POS_FRAMES, idx)
+#                 ret, f = cap2.read()
+#                 if not ret or f is None:
+#                     if stream_callback:
+#                         stream_callback({"stage": "sample_error", "frame_index": idx, "error": "read_failed"})
+#                     else:
+#                         samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": "read_failed"})
+#                     continue
 
-                # caption
-                rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
-                pil = Image.fromarray(rgb)
-                try:
-                    out = captioner(pil)
-                except Exception as ex:
-                    if stream_callback:
-                        stream_callback({"stage": "sample_error", "frame_index": idx, "error": str(ex)})
-                    else:
-                        samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": str(ex)})
-                        idle_frames.append(idx)
-                    continue
+#                 # caption
+#                 rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
+#                 pil = Image.fromarray(rgb)
+#                 try:
+#                     out = captioner(pil)
+#                 except Exception as ex:
+#                     if stream_callback:
+#                         stream_callback({"stage": "sample_error", "frame_index": idx, "error": str(ex)})
+#                     else:
+#                         samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": str(ex)})
+#                         idle_frames.append(idx)
+#                     continue
 
-                text = _normalize_caption_output(captioner, out)
+#                 text = _normalize_caption_output(captioner, out)
 
-                # Decide label: prefer LLM-based classification if requested and available,
-                # otherwise fall back to simple keyword matching. Also capture LLM output
-                # into the sample so it appears in the returned `analysis`.
-                is_work = False
-                llm_output = None
-                if use_llm and text_llm is not None:
-                    try:
-                        cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=text)
-                        llm_raw = text_llm(cls_prompt, max_new_tokens=8)
-                        out_text = None
-                        if isinstance(llm_raw, list) and len(llm_raw) > 0:
-                            first = llm_raw[0]
-                            if isinstance(first, dict):
-                                out_text = first.get('generated_text') or first.get('text') or str(first)
-                            else:
-                                out_text = str(first)
-                        else:
-                            out_text = str(llm_raw)
+#                 # Decide label: prefer LLM-based classification if requested and available,
+#                 # otherwise fall back to simple keyword matching. Also capture LLM output
+#                 # into the sample so it appears in the returned `analysis`.
+#                 is_work = False
+#                 llm_output = None
+#                 if use_llm and text_llm is not None:
+#                     try:
+#                         cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=text)
+#                         llm_raw = text_llm(cls_prompt, max_new_tokens=8)
+#                         out_text = None
+#                         if isinstance(llm_raw, list) and len(llm_raw) > 0:
+#                             first = llm_raw[0]
+#                             if isinstance(first, dict):
+#                                 out_text = first.get('generated_text') or first.get('text') or str(first)
+#                             else:
+#                                 out_text = str(first)
+#                         else:
+#                             out_text = str(llm_raw)
 
-                        llm_output = out_text
+#                         llm_output = out_text
 
-                        if out_text:
-                            out_text_l = out_text.lower()
-                            if 'work' in out_text_l and 'idle' not in out_text_l:
-                                is_work = True
-                            elif 'idle' in out_text_l and 'work' not in out_text_l:
-                                is_work = False
-                            else:
-                                # ambiguous -> fallback to keyword
-                                is_work = any(k in (text or '').lower() for k in work_keywords)
-                    except Exception as e:
-                        logging.info('LLM classifier failed: %s', e)
-                        is_work = any(k in (text or '').lower() for k in work_keywords)
-                        llm_output = None
-                else:
-                    text_lower = (text or '').lower()
-                    is_work = any(k in text_lower for k in work_keywords)
+#                         if out_text:
+#                             out_text_l = out_text.lower()
+#                             if 'work' in out_text_l and 'idle' not in out_text_l:
+#                                 is_work = True
+#                             elif 'idle' in out_text_l and 'work' not in out_text_l:
+#                                 is_work = False
+#                             else:
+#                                 # ambiguous -> fallback to keyword
+#                                 is_work = any(k in (text or '').lower() for k in work_keywords)
+#                     except Exception as e:
+#                         logging.info('LLM classifier failed: %s', e)
+#                         is_work = any(k in (text or '').lower() for k in work_keywords)
+#                         llm_output = None
+#                 else:
+#                     text_lower = (text or '').lower()
+#                     is_work = any(k in text_lower for k in work_keywords)
 
-                sample = {"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": text, "label": "work" if is_work else "idle", "llm_output": llm_output}
-                if stream_callback:
-                    stream_callback({"stage": "sample", **sample})
-                else:
-                    samples.append(sample)
-                    if is_work:
-                        work_frames.append(idx)
-                    else:
-                        idle_frames.append(idx)
-            except Exception as e:
-                if stream_callback:
-                    stream_callback({"stage": "sample_error", "frame_index": idx, "error": str(e)})
-                else:
-                    samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": str(e)})
+#                 sample = {"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": text, "label": "work" if is_work else "idle", "llm_output": llm_output}
+#                 if stream_callback:
+#                     stream_callback({"stage": "sample", **sample})
+#                 else:
+#                     samples.append(sample)
+#                     if is_work:
+#                         work_frames.append(idx)
+#                     else:
+#                         idle_frames.append(idx)
+#             except Exception as e:
+#                 if stream_callback:
+#                     stream_callback({"stage": "sample_error", "frame_index": idx, "error": str(e)})
+#                 else:
+#                     samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": str(e)})
 
-        cap2.release()
-        cap.release()
+#         cap2.release()
+#         cap.release()
 
-        if not stream_callback:
-            result.update({"video_info": video_info, "samples": samples, "idle_frames": idle_frames, "work_frames": work_frames})
-        return result
-    except Exception as e:
-        if stream_callback:
-            stream_callback({"stage": "error", "message": str(e)})
-            return {}
-        return {"error": str(e)}
+#         if not stream_callback:
+#             result.update({"video_info": video_info, "samples": samples, "idle_frames": idle_frames, "work_frames": work_frames})
+#         return result
+#     except Exception as e:
+#         if stream_callback:
+#             stream_callback({"stage": "error", "message": str(e)})
+#             return {}
+#         return {"error": str(e)}
 
 app = FastAPI()
 
@@ -754,44 +755,152 @@ async def download_video(filename: str):
 _webcam_active = False
 
 @app.get("/backend/stream_pose")
-async def stream_pose():
-    """Stream webcam frames with BLIP captioning inference every 2 seconds."""
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False)):
+    """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
+    Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
+    """
     global _webcam_active
     _webcam_active = True
-    def gen_frames():
-        global _webcam_active
-        cap = cv2.VideoCapture(0)
-        captioner = get_local_captioner()
-        current_caption = "Initializing..."
-        last_inference_time = time.time()
+    def gen():
         try:
+            yield _sse_event({"stage": "started", "message": "live processing started"})
+            
+            cap = cv2.VideoCapture(0)
+            captioner = get_captioner_for_model(model) if model else get_local_captioner()
+            if captioner is None:
+                yield _sse_event({"stage": "error", "message": "no captioner available"})
+                return
+            
+            current_caption = "Initializing..."
+            last_inference_time = time.time()
+            frame_counter = 0
+            collected_samples = []
+            collected_idle = []
+            collected_work = []
+            cumulative_work_frames = 0
+            start_time = time.time()
+            
             while _webcam_active:
                 ret, frame = cap.read()
                 if not ret:
+                    yield _sse_event({"stage": "error", "message": "failed to read frame"})
                     break
                 frame = cv2.flip(frame, 1)
+                frame_counter += 1
+                elapsed_time = time.time() - start_time
                 
-                if time.time() - last_inference_time >= 2.0 and captioner is not None:
+                if time.time() - last_inference_time >= 2.0:
                     try:
                         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                         out = captioner(img)
-                        current_caption = _normalize_caption_output(captioner, out)
+                        caption = _normalize_caption_output(captioner, out)
+                        
+                        # Classification logic (same as vlm_local_stream)
+                        label = 'idle'
+                        cls_text = None
+                        if use_llm:
+                            text_llm = get_local_text_llm()
+                            if text_llm is not None:
+                                try:
+                                    cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=caption)
+                                    cls_out = text_llm(cls_prompt, max_new_tokens=8)
+                                    if isinstance(cls_out, list) and len(cls_out) > 0:
+                                        f0 = cls_out[0]
+                                        if isinstance(f0, dict):
+                                            cls_text = f0.get('generated_text') or f0.get('text') or str(f0)
+                                        else:
+                                            cls_text = str(f0)
+                                    else:
+                                        cls_text = str(cls_out)
+                                    if cls_text:
+                                        cleaned = re.sub(r'[^\w\s]', '', cls_text).strip()
+                                        words = cleaned.split()
+                                        if words:
+                                            last_word = words[-1].lower()
+                                            if last_word == 'work':
+                                                label = 'work'
+                                            elif last_word == 'idle':
+                                                label = 'idle'
+                                except Exception as e:
+                                    logging.info('SSE LLM classification failed: %s', e)
+                        if label == 'idle':
+                            lw = caption.lower() if isinstance(caption, str) else ''
+                            work_keywords = [
+                                'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
+                                'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
+                                'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
+                            ]
+                            if any(w in lw for w in work_keywords):
+                                label = 'work'
+                        
+                        # Subtask overrun check (same as vlm_local_stream)
+                        subtask_overrun = None
+                        if subtask_id and label == 'work':
+                            cumulative_work_frames += 1
+                            try:
+                                assign = get_subtask_from_db(subtask_id)
+                                if assign is not None and assign.get('duration_sec') is not None:
+                                    expected = assign.get('duration_sec')
+                                    actual_work_time = cumulative_work_frames / 30.0  # Assume 30 FPS for live stream
+                                    if actual_work_time > expected:
+                                        subtask_overrun = True
+                                    else:
+                                        subtask_overrun = False
+                            except Exception:
+                                subtask_overrun = None
+                        
+                        payload = {"stage": "sample", "frame_index": frame_counter, "time_sec": elapsed_time, "caption": caption, "label": label, "llm_output": cls_text}
+                        if subtask_overrun is not None:
+                            payload['subtask_overrun'] = subtask_overrun
+                        yield _sse_event(payload)
+                        
+                        # Collect for DB saving
+                        collected_samples.append({
+                            'frame_index': frame_counter, 'time_sec': elapsed_time, 'caption': caption, 'label': label, 'llm_output': cls_text
+                        })
+                        if label == 'work':
+                            collected_work.append(frame_counter)
+                        else:
+                            collected_idle.append(frame_counter)
+                        
                         last_inference_time = time.time()
                     except Exception as e:
-                        current_caption = f"Error: {str(e)}"
-                
-                cv2.putText(frame, current_caption[:50], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-                
-                ret, buffer = cv2.imencode('.jpg', frame)
-                if not ret:
-                    continue
-                frame_bytes = buffer.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        finally:
+                        yield _sse_event({"stage": "sample_error", "frame_index": frame_counter, "error": str(e)})
+            
             cap.release()
+            
+            # Save to DB at the end (similar to vlm_local_stream)
+            try:
+                vid_info = {'fps': 30.0, 'frame_count': frame_counter, 'width': 640, 'height': 480, 'duration': elapsed_time}  # Approximate for live stream
+                aid = str(uuid.uuid4())
+                save_analysis_to_db(aid, f"live_webcam_{aid}.mp4", model or 'default', prompt, None, vid_info, collected_samples, subtask_id=subtask_id)
+                
+                # Update subtask counts if compare_timings enabled
+                if compare_timings and subtask_id:
+                    try:
+                        subtask = get_subtask_from_db(subtask_id)
+                        if subtask and collected_work:
+                            expected_duration = subtask['duration_sec']
+                            min_frame = min(collected_work)
+                            max_frame = max(collected_work)
+                            actual_work_time = (max_frame - min_frame) / 30.0  # Assume 30 FPS
+                            if actual_work_time <= expected_duration:
+                                update_subtask_counts(subtask_id, 1, 0)
+                            else:
+                                update_subtask_counts(subtask_id, 0, 1)
+                    except Exception as e:
+                        logging.exception(f'Failed to update subtask counts for {subtask_id}')
+                
+                yield _sse_event({"stage": "finished", "message": "live processing complete", "stored_analysis_id": aid})
+            except Exception as e:
+                yield _sse_event({"stage": "finished", "message": "live processing complete"})
+        except Exception as e:
+            yield _sse_event({"stage": "error", "message": str(e)})
+        finally:
             _webcam_active = False
-    return StreamingResponse(gen_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
+    
+    return StreamingResponse(gen(), media_type='text/event-stream')
+
 
 @app.post("/backend/stop_webcam")
 async def stop_webcam():
@@ -913,7 +1022,12 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                 logging.info('SSE LLM classification failed: %s', e)
                     if label == 'idle':
                         lw = caption.lower() if isinstance(caption, str) else ''
-                        work_keywords = ['work', 'welding', 'screw', 'screwing', 'tool', 'using', 'assemble', 'hands', 'holding']
+                        # work_keywords = ['work', 'welding', 'screw', 'screwing', 'tool', 'using', 'assemble', 'hands', 'holding']
+                        work_keywords = [
+                            'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
+                            'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
+                            'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
+                        ]
                         if any(w in lw for w in work_keywords):
                             label = 'work'
 
@@ -1250,6 +1364,14 @@ async def delete_analysis(analysis_id: str):
         return {"deleted": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute('UPDATE subtasks SET completed_in_time = completed_in_time + ?, completed_with_delay = completed_with_delay + ? WHERE id = ?', (completed_in_time_increment, completed_with_delay_increment, subtask_id))
+    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
     import uvicorn
