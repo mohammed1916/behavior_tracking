@@ -4,16 +4,6 @@
       "id": "Salesforce/blip-image-captioning-large",
       "name": "BLIP - Salesforce/blip-image-captioning-large",
       "task": "image-to-text"
-    },
-    {
-      "id": "openflamingo/OpenFlamingo-3B-vitl-mpt1b",
-      "name": "OpenFlamingo 3B",
-      "task": "image-to-text"
-    },
-    {
-      "id": "openflamingo/OpenFlamingo-4B-vitl-rpj3b",
-      "name": "OpenFlamingo 4B",
-      "task": "image-to-text"
     }
   ]
 }
