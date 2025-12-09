@@ -9,3 +9,4 @@
 node_modules/
 *.pem
 .env
+backend/scripts/qwen_vlm_2b_activity_model/*
