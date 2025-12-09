@@ -13,7 +13,7 @@ import subprocess
 from transformers import pipeline
 import torch
 import sqlite3
-from datetime import datetime
+import time
 
 # configure logging so INFO/DEBUG messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -751,12 +751,15 @@ _webcam_active = False
 
 @app.get("/backend/stream_pose")
 async def stream_pose():
-    """Stream raw webcam frames without tracking overlays."""
+    """Stream webcam frames with BLIP captioning inference every 2 seconds."""
     global _webcam_active
     _webcam_active = True
     def gen_frames():
         global _webcam_active
         cap = cv2.VideoCapture(0)
+        captioner = get_local_captioner()
+        current_caption = "Initializing..."
+        last_inference_time = time.time()
         try:
             while _webcam_active:
                 ret, frame = cap.read()
@@ -764,6 +767,22 @@ async def stream_pose():
                     break
                 # Mirror frame for selfie view
                 frame = cv2.flip(frame, 1)
+                
+                # Perform inference every 2 seconds
+                if time.time() - last_inference_time >= 2.0 and captioner is not None:
+                    try:
+                        # Convert to RGB PIL image
+                        from PIL import Image
+                        img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                        out = captioner(img)
+                        current_caption = _normalize_caption_output(captioner, out)
+                        last_inference_time = time.time()
+                    except Exception as e:
+                        current_caption = f"Error: {str(e)}"
+                
+                # Draw caption on frame
+                cv2.putText(frame, current_caption[:50], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+                
                 ret, buffer = cv2.imencode('.jpg', frame)
                 if not ret:
                     continue

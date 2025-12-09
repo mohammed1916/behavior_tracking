@@ -10,7 +10,7 @@ import os
 import numpy as np
 from ultralytics import YOLO
 import mediapipe as mp
-from utils import calculate_distance, is_point_in_box, draw_info_panel, boxes_intersect
+from backend.scripts.utils import calculate_distance, is_point_in_box, draw_info_panel, boxes_intersect
 
 # Constants
 TASK_TIME_LIMIT = 15.0 # seconds
