@@ -20,6 +20,21 @@ import re
 import base64
 import io
 from datetime import datetime
+import threading
+
+
+app = FastAPI()
+
+# Event used to coordinate webcam streaming state across threads/requests
+app.state.webcam_event = threading.Event()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for dev
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # configure logging so INFO/DEBUG messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -135,22 +150,6 @@ def get_captioner_for_model(model_id: str):
     _captioner_cache[model_id] = p
     logging.info('Loaded captioner for model %s (task=%s) from local cache on device=%s', model_id, task, device)
     return p
-
-
-
-
-   
-
-
-def _get_flamingo_captioner(model_id: str):
-    """OpenFlamingo support removed.
-
-    This server no longer includes special-case OpenFlamingo loading logic.
-    Keep a small stub so any legacy callers get a clear message.
-    """
-    logging.info('OpenFlamingo support removed from server; use BLIP or other HF models')
-    _captioner_cache[model_id] = None
-    return None
 
 
 # Lazy loader for a local text LLM 
@@ -270,189 +269,6 @@ def _normalize_caption_output(captioner, out):
         return "Error normalizing caption output"
 
 
-
-# def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None, prompt: str = '', use_llm: bool = False):
-#     """Process a video file: compute basic video_info and sample frames to caption.
-
-#     Args:
-#         file_path (str): Path to the video file.
-#         captioner: Optional captioning model to use for frame captions.
-#         max_samples (int): Maximum number of frames to sample and caption.
-#         stream_callback (Optional[Callable]): If provided, called with event dicts for each stage/sample.
-#         prompt (str): Optional prompt to guide the captioning or LLM, if applicable.
-#         use_llm (bool): If True, use a language model (LLM) for captioning or analysis.
-
-#     Returns:
-#         dict: A dictionary with video_info, samples, idle_frames, work_frames.
-#     """
-#     result = {}
-#     try:
-#         cap = cv2.VideoCapture(file_path)
-#         if not cap.isOpened():
-#             msg = {"stage": "error", "message": "could not open video"}
-#             if stream_callback:
-#                 stream_callback(msg)
-#             else:
-#                 result.update({"error": "could not open video"})
-#             return result
-
-#         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-#         fps = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
-#         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-#         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-#         duration = frame_count / (fps if fps > 0 else 30.0)
-
-#         video_info = {"fps": fps, "frame_count": frame_count, "width": width, "height": height, "duration": duration}
-#         if stream_callback:
-#             stream_callback({"stage": "video_info", **video_info})
-
-#         total_frames = max(1, frame_count)
-#         desired = min(max_samples, max(1, total_frames))
-#         step = max(1, total_frames // desired) if total_frames > 0 else 1
-
-#         samples = []
-#         work_frames = []
-#         idle_frames = []
-
-#         work_keywords = [
-#             'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
-#             'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
-#             'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
-#         ]
-
-#         text_llm = None
-#         if use_llm:
-#             try:
-#                 text_llm = get_local_text_llm()
-#                 if text_llm is None:
-#                     logging.info('LLM classification requested but no local text LLM available')
-#             except Exception:
-#                 text_llm = None
-
-#         if captioner is None:
-#             captioner = get_local_captioner()
-
-#         if captioner is None:
-#             msg = {"stage": "error", "message": "no local captioner available"}
-#             if stream_callback:
-#                 stream_callback(msg)
-#             else:
-#                 result.update({"local_captioner": "not available"})
-#             cap.release()
-#             return result
-
-#         cap2 = cv2.VideoCapture(file_path)
-#         if not cap2.isOpened():
-#             msg = {"stage": "error", "message": "could not open video for sampling"}
-#             if stream_callback:
-#                 stream_callback(msg)
-#             else:
-#                 result.update({"error": "could not open video for sampling"})
-#             cap.release()
-#             return result
-
-#         for idx in range(0, int(total_frames), step):
-#             if len(samples) >= max_samples:
-#                 break
-#             try:
-#                 cap2.set(cv2.CAP_PROP_POS_FRAMES, idx)
-#                 ret, f = cap2.read()
-#                 if not ret or f is None:
-#                     if stream_callback:
-#                         stream_callback({"stage": "sample_error", "frame_index": idx, "error": "read_failed"})
-#                     else:
-#                         samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": "read_failed"})
-#                     continue
-
-#                 # caption
-#                 rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
-#                 pil = Image.fromarray(rgb)
-#                 try:
-#                     out = captioner(pil)
-#                 except Exception as ex:
-#                     if stream_callback:
-#                         stream_callback({"stage": "sample_error", "frame_index": idx, "error": str(ex)})
-#                     else:
-#                         samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": str(ex)})
-#                         idle_frames.append(idx)
-#                     continue
-
-#                 text = _normalize_caption_output(captioner, out)
-
-#                 # Decide label: prefer LLM-based classification if requested and available,
-#                 # otherwise fall back to simple keyword matching. Also capture LLM output
-#                 # into the sample so it appears in the returned `analysis`.
-#                 is_work = False
-#                 llm_output = None
-#                 if use_llm and text_llm is not None:
-#                     try:
-#                         cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=text)
-#                         llm_raw = text_llm(cls_prompt, max_new_tokens=8)
-#                         out_text = None
-#                         if isinstance(llm_raw, list) and len(llm_raw) > 0:
-#                             first = llm_raw[0]
-#                             if isinstance(first, dict):
-#                                 out_text = first.get('generated_text') or first.get('text') or str(first)
-#                             else:
-#                                 out_text = str(first)
-#                         else:
-#                             out_text = str(llm_raw)
-
-#                         llm_output = out_text
-
-#                         if out_text:
-#                             out_text_l = out_text.lower()
-#                             if 'work' in out_text_l and 'idle' not in out_text_l:
-#                                 is_work = True
-#                             elif 'idle' in out_text_l and 'work' not in out_text_l:
-#                                 is_work = False
-#                             else:
-#                                 # ambiguous -> fallback to keyword
-#                                 is_work = any(k in (text or '').lower() for k in work_keywords)
-#                     except Exception as e:
-#                         logging.info('LLM classifier failed: %s', e)
-#                         is_work = any(k in (text or '').lower() for k in work_keywords)
-#                         llm_output = None
-#                 else:
-#                     text_lower = (text or '').lower()
-#                     is_work = any(k in text_lower for k in work_keywords)
-
-#                 sample = {"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": text, "label": "work" if is_work else "idle", "llm_output": llm_output}
-#                 if stream_callback:
-#                     stream_callback({"stage": "sample", **sample})
-#                 else:
-#                     samples.append(sample)
-#                     if is_work:
-#                         work_frames.append(idx)
-#                     else:
-#                         idle_frames.append(idx)
-#             except Exception as e:
-#                 if stream_callback:
-#                     stream_callback({"stage": "sample_error", "frame_index": idx, "error": str(e)})
-#                 else:
-#                     samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "error": str(e)})
-
-#         cap2.release()
-#         cap.release()
-
-#         if not stream_callback:
-#             result.update({"video_info": video_info, "samples": samples, "idle_frames": idle_frames, "work_frames": work_frames})
-#         return result
-#     except Exception as e:
-#         if stream_callback:
-#             stream_callback({"stage": "error", "message": str(e)})
-#             return {}
-#         return {"error": str(e)}
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for dev
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 UPLOAD_DIR = "uploads"
 PROCESSED_DIR = "processed"
@@ -751,17 +567,17 @@ async def download_video(filename: str):
         return FileResponse(file_path, media_type="video/mp4", filename=filename, headers={"Accept-Ranges": "bytes"})
     raise HTTPException(status_code=404, detail="File not found")
 
-# Global flag to control webcam streaming
-_webcam_active = False
+# Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
 @app.get("/backend/stream_pose")
 async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False)):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
-    global _webcam_active
-    _webcam_active = True
+    # Mark the webcam as active via app.state event
+    app.state.webcam_event.set()
     def gen():
+        # Use the event on app.state instead of a module global
         try:
             yield _sse_event({"stage": "started", "message": "live processing started"})
             
@@ -780,7 +596,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             cumulative_work_frames = 0
             start_time = time.time()
             
-            while _webcam_active:
+            while app.state.webcam_event.is_set():
                 ret, frame = cap.read()
                 if not ret:
                     yield _sse_event({"stage": "error", "message": "failed to read frame"})
@@ -897,16 +713,27 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
         except Exception as e:
             yield _sse_event({"stage": "error", "message": str(e)})
         finally:
-            _webcam_active = False
-    
+            # Clear the event so other callers know streaming stopped
+            app.state.webcam_event.clear()
+    # # Add explicit CORS headers to resolve OpaqueResponseBlocking
+    # headers = {
+    #     "Access-Control-Allow-Origin": "*",
+    #     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    #     "Access-Control-Allow-Headers": "Content-Type",
+    #     "Cache-Control": "no-cache",
+    # }
     return StreamingResponse(gen(), media_type='text/event-stream')
+    # return StreamingResponse(gen(), media_type='text/event-stream', headers=headers)
 
 
 @app.post("/backend/stop_webcam")
 async def stop_webcam():
     """Stop the webcam stream."""
-    global _webcam_active
-    _webcam_active = False
+    # Clear the shared event to stop any running webcam stream
+    try:
+        app.state.webcam_event.clear()
+    except Exception:
+        pass
     return {"message": "Webcam stopped"}
 
 
@@ -1373,6 +1200,17 @@ def update_subtask_counts(subtask_id, completed_in_time_increment, completed_wit
     conn.commit()
     conn.close()
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+# if __name__ == "__main__":
+#     import uvicorn
+#     # Allow TLS by specifying env vars `SSL_CERTFILE` and `SSL_KEYFILE`,
+#     # or place `cert.pem` and `key.pem` next to this file.
+#     certfile = os.environ.get('SSL_CERTFILE') or os.path.join(os.path.dirname(__file__), 'cert.pem')
+#     keyfile = os.environ.get('SSL_KEYFILE') or os.path.join(os.path.dirname(__file__), 'key.pem')
+#     logging.info('SSL_CERTFILE=%s SSL_KEYFILE=%s', certfile, keyfile)
+
+#     # if os.path.exists(certfile) and os.path.exists(keyfile):
+#     logging.info('Starting server with TLS using cert=%s key=%s', certfile, keyfile)
+#     uvicorn.run(app, host="0.0.0.0", port=8001, ssl_certfile=certfile, ssl_keyfile=keyfile)
+    # else:
+    #     logging.warning('SSL cert/key not found; starting without TLS. To enable HTTPS set SSL_CERTFILE and SSL_KEYFILE env vars or place cert.pem/key.pem next to server.py')
+    #     uvicorn.run(app, host="0.0.0.0", port=8001)
