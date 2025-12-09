@@ -668,6 +668,14 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         payload = {"stage": "sample", "frame_index": frame_counter, "time_sec": elapsed_time, "caption": caption, "label": label, "llm_output": cls_text}
                         if subtask_overrun is not None:
                             payload['subtask_overrun'] = subtask_overrun
+                        # Encode current frame as JPEG and include as base64 to allow clients to render a live image.
+                        try:
+                            ret_jpg, buf = cv2.imencode('.jpg', frame)
+                            if ret_jpg and buf is not None:
+                                b64 = base64.b64encode(buf.tobytes()).decode('ascii')
+                                payload['image'] = b64
+                        except Exception as e:
+                            logging.debug('Failed to encode frame for SSE image: %s', e)
                         yield _sse_event(payload)
                         
                         # Collect for DB saving
