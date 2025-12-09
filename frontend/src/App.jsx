@@ -180,25 +180,6 @@ function App() {
     }
   };
 
-  const handleLlmCheck = async () => {
-    if (!llmText || llmText.trim().length === 0) return alert('Enter text to check');
-    setLlmLoading(true);
-    setLlmResult(null);
-    try {
-      const form = new FormData();
-      form.append('text', llmText);
-      form.append('max_context', String(llmMaxContext));
-      const resp = await fetch('http://localhost:8001/backend/llm_length_check', { method: 'POST', body: form });
-      if (!resp.ok) throw new Error(await resp.text());
-      const data = await resp.json();
-      setLlmResult(data);
-    } catch (e) {
-      setLlmResult({ error: e.message });
-    } finally {
-      setLlmLoading(false);
-    }
-  };
-
   // Fetch local models
   const fetchLocalModels = async () => {
     try {

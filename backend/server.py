@@ -993,9 +993,11 @@ async def vlm_endpoint(
                 analysis['idle_ranges'] = compute_ranges(analysis.get('idle_frames', []), samples, fps)
                 analysis['work_ranges'] = compute_ranges(analysis.get('work_frames', []), samples, fps)
                 # If compare_timings is enabled and subtask_id is provided, compare expected vs actual work time and update counts
+                logging.info(f'compare_timings={compare_timings}, subtask_id={subtask_id}')
                 if compare_timings and subtask_id:
                     try:
                         subtask = get_subtask_from_db(subtask_id)
+                        logging.info(f'Fetched subtask for timing comparison: {subtask}')
                         if subtask:
                             expected_duration = subtask['duration_sec']
                             task_description = subtask['subtask_info']
@@ -1003,6 +1005,7 @@ async def vlm_endpoint(
                             work_frames = proc.get('work_frames') or []
                             samples = proc.get('samples', [])
                             work_captions = [s['caption'] for s in samples if s.get('label') == 'work' and s.get('caption')]
+                            logging.info(f'Work frames: {work_frames}, captions: {work_captions}')
                             if work_frames:
                                 min_frame = min(work_frames)
                                 max_frame = max(work_frames)
@@ -1010,6 +1013,7 @@ async def vlm_endpoint(
                                 actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
                                 # Check if task is completed using LLM
                                 task_completed = False
+                                logging.info(f'Text LLM availability for completion check: {get_local_text_llm() is not None} and {text_llm}')
                                 if work_captions and text_llm is not None:
                                     try:
                                         completion_prompt = TASK_COMPLETION_PROMPT_TEMPLATE.format(task=task_description, captions=' | '.join(work_captions))
@@ -1019,6 +1023,7 @@ async def vlm_endpoint(
                                             first = llm_raw[0]
                                             if isinstance(first, dict):
                                                 out_text = first.get('generated_text') or first.get('text') or str(first)
+                                                logging.info(f'Task completion LLM output (dict): {out_text}')
                                             else:
                                                 out_text = str(first)
                                         else:
@@ -1262,178 +1267,178 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
     return StreamingResponse(gen(), media_type='text/event-stream')
 
 
-@app.post("/backend/vlm_local")
-async def vlm_local(
-    model: str = Form(...),
-    prompt: str = Form(''),
-    video: UploadFile = File(None),
-    use_llm: bool = Form(False),
-    subtask_id: str = Form(None),
-    compare_timings: bool = Form(False),
-):
-    """Run a local lightweight VLM-like captioner on a representative frame.
-    This uses a BLIP image->text pipeline (Salesforce/blip-image-captioning-large) if installed.
-    Returns the caption(s) plus the same basic video analysis as `/backend/vlm`.
-    """
-    analysis = {"model": model, "prompt": prompt}
+# @app.post("/backend/vlm_local")
+# async def vlm_local(
+#     model: str = Form(...),
+#     prompt: str = Form(''),
+#     video: UploadFile = File(None),
+#     use_llm: bool = Form(False),
+#     subtask_id: str = Form(None),
+#     compare_timings: bool = Form(False),
+# ):
+#     """Run a local lightweight VLM-like captioner on a representative frame.
+#     This uses a BLIP image->text pipeline (Salesforce/blip-image-captioning-large) if installed.
+#     Returns the caption(s) plus the same basic video analysis as `/backend/vlm`.
+#     """
+#     analysis = {"model": model, "prompt": prompt}
 
-    if video is None:
-        raise HTTPException(status_code=400, detail="No video provided")
+#     if video is None:
+#         raise HTTPException(status_code=400, detail="No video provided")
 
-    # Save uploaded video
-    file_id = str(uuid.uuid4())
-    filename = f"{file_id}_{video.filename}"
-    save_path = os.path.join(VLM_UPLOAD_DIR, filename)
-    with open(save_path, "wb") as buffer:
-        shutil.copyfileobj(video.file, buffer)
+#     # Save uploaded video
+#     file_id = str(uuid.uuid4())
+#     filename = f"{file_id}_{video.filename}"
+#     save_path = os.path.join(VLM_UPLOAD_DIR, filename)
+#     with open(save_path, "wb") as buffer:
+#         shutil.copyfileobj(video.file, buffer)
 
-    # Basic video analysis (same as /vlm)
-    try:
-        cap = cv2.VideoCapture(save_path)
-        if not cap.isOpened():
-            analysis.update({"warning": "could not open saved video"})
-            return {"message": "VLM local failed", "analysis": analysis}
+#     # Basic video analysis (same as /vlm)
+#     try:
+#         cap = cv2.VideoCapture(save_path)
+#         if not cap.isOpened():
+#             analysis.update({"warning": "could not open saved video"})
+#             return {"message": "VLM local failed", "analysis": analysis}
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 0
-        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-        duration = frame_count / fps if fps > 0 else 0
+#         fps = cap.get(cv2.CAP_PROP_FPS) or 0
+#         frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+#         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+#         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+#         duration = frame_count / fps if fps > 0 else 0
 
-        # Choose a representative frame (middle)
-        mid_frame = int(frame_count // 2)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, mid_frame)
-        ret, frame = cap.read()
-        if ret and frame is not None:
-            avg_color_per_row = frame.mean(axis=0).mean(axis=0)
-            avg_color = [float(avg_color_per_row[2]), float(avg_color_per_row[1]), float(avg_color_per_row[0])]
-            analysis = {**analysis, **{
-                "width": width,
-                "height": height,
-                "fps": float(fps),
-                "frame_count": int(frame_count),
-                "duration_sec": float(duration),
-                "first_frame_avg_color_bgr": avg_color,
-            }}
-        else:
-            analysis = {**analysis, **{"warning": "could not read mid frame"}}
+#         # Choose a representative frame (middle)
+#         mid_frame = int(frame_count // 2)
+#         cap.set(cv2.CAP_PROP_POS_FRAMES, mid_frame)
+#         ret, frame = cap.read()
+#         if ret and frame is not None:
+#             avg_color_per_row = frame.mean(axis=0).mean(axis=0)
+#             avg_color = [float(avg_color_per_row[2]), float(avg_color_per_row[1]), float(avg_color_per_row[0])]
+#             analysis = {**analysis, **{
+#                 "width": width,
+#                 "height": height,
+#                 "fps": float(fps),
+#                 "frame_count": int(frame_count),
+#                 "duration_sec": float(duration),
+#                 "first_frame_avg_color_bgr": avg_color,
+#             }}
+#         else:
+#             analysis = {**analysis, **{"warning": "could not read mid frame"}}
 
-        cap.release()
-    except Exception as e:
-        analysis.update({"error": str(e)})
+#         cap.release()
+#     except Exception as e:
+#         analysis.update({"error": str(e)})
 
-    # Run local captioner on multiple sampled frames if available (respect requested model)
-    captioner = get_captioner_for_model(model)
-    if captioner is None:
-        analysis.update({"local_captioner": "not available (install transformers/torch or cache model)"})
-        analysis["video_url"] = f"/backend/vlm_video/{filename}"
-        return {"message": "VLM local stub response", "analysis": analysis}
+#     # Run local captioner on multiple sampled frames if available (respect requested model)
+#     captioner = get_captioner_for_model(model)
+#     if captioner is None:
+#         analysis.update({"local_captioner": "not available (install transformers/torch or cache model)"})
+#         analysis["video_url"] = f"/backend/vlm_video/{filename}"
+#         return {"message": "VLM local stub response", "analysis": analysis}
 
-    try:
-        import cv2 as _cv2
-        from PIL import Image
+#     try:
+#         import cv2 as _cv2
+#         from PIL import Image
 
-        # Decide sampling strategy: up to `max_samples` evenly across the video
-        max_samples = 30
-        total_frames = int(frame_count)
-        desired = min(max_samples, max(1, total_frames))
-        step = max(1, total_frames // desired) if total_frames > 0 else 1
+#         # Decide sampling strategy: up to `max_samples` evenly across the video
+#         max_samples = 30
+#         total_frames = int(frame_count)
+#         desired = min(max_samples, max(1, total_frames))
+#         step = max(1, total_frames // desired) if total_frames > 0 else 1
 
-        samples = []
-        work_frames = []
-        idle_frames = []
+#         samples = []
+#         work_frames = []
+#         idle_frames = []
 
-        # simple keyword-based classifier for 'work' vs 'idle'
-        work_keywords = [
-            'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
-            'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
-            'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
-        ]
+#         # simple keyword-based classifier for 'work' vs 'idle'
+#         work_keywords = [
+#             'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
+#             'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
+#             'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
+#         ]
 
-        cap2 = cv2.VideoCapture(save_path)
-        if not cap2.isOpened():
-            analysis.update({"error": "could not open video for sampling"})
-            analysis["video_url"] = f"/backend/vlm_video/{filename}"
-            return {"message": "VLM local response", "analysis": analysis}
+#         cap2 = cv2.VideoCapture(save_path)
+#         if not cap2.isOpened():
+#             analysis.update({"error": "could not open video for sampling"})
+#             analysis["video_url"] = f"/backend/vlm_video/{filename}"
+#             return {"message": "VLM local response", "analysis": analysis}
 
-        for idx in range(0, total_frames, step):
-            if len(samples) >= max_samples:
-                break
+#         for idx in range(0, total_frames, step):
+#             if len(samples) >= max_samples:
+#                 break
 
-            cap2.set(cv2.CAP_PROP_POS_FRAMES, idx)
-            ret_s, f = cap2.read()
-            if not ret_s or f is None:
-                continue
+#             cap2.set(cv2.CAP_PROP_POS_FRAMES, idx)
+#             ret_s, f = cap2.read()
+#             if not ret_s or f is None:
+#                 continue
 
-            # Convert to RGB PIL image and caption
-            rgb = _cv2.cvtColor(f, _cv2.COLOR_BGR2RGB)
-            pil = Image.fromarray(rgb)
-            try:
-                out = captioner(pil)
-            except Exception as ex:
-                samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": None, "error": str(ex)})
-                idle_frames.append(idx)
-                continue
+#             # Convert to RGB PIL image and caption
+#             rgb = _cv2.cvtColor(f, _cv2.COLOR_BGR2RGB)
+#             pil = Image.fromarray(rgb)
+#             try:
+#                 out = captioner(pil)
+#             except Exception as ex:
+#                 samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": None, "error": str(ex)})
+#                 idle_frames.append(idx)
+#                 continue
 
-            # normalize output to text
-            text = _normalize_caption_output(captioner, out)
+#             # normalize output to text
+#             text = _normalize_caption_output(captioner, out)
 
-            text_lower = (text or '').lower()
-            is_work = any(k in text_lower for k in work_keywords)
+#             text_lower = (text or '').lower()
+#             is_work = any(k in text_lower for k in work_keywords)
 
-            samples.append({
-                "frame_index": idx,
-                "time_sec": float(idx / fps) if fps > 0 else 0.0,
-                "caption": text,
-                "label": "work" if is_work else "idle",
-            })
+#             samples.append({
+#                 "frame_index": idx,
+#                 "time_sec": float(idx / fps) if fps > 0 else 0.0,
+#                 "caption": text,
+#                 "label": "work" if is_work else "idle",
+#             })
 
-            if is_work:
-                work_frames.append(idx)
-            else:
-                idle_frames.append(idx)
+#             if is_work:
+#                 work_frames.append(idx)
+#             else:
+#                 idle_frames.append(idx)
 
-        cap2.release()
+#         cap2.release()
 
-        analysis["samples"] = samples
-        analysis["idle_frames"] = idle_frames
-        analysis["work_frames"] = work_frames
+#         analysis["samples"] = samples
+#         analysis["idle_frames"] = idle_frames
+#         analysis["work_frames"] = work_frames
 
-        # If compare_timings is enabled and subtask_id is provided, compare expected vs actual work time and update counts
-        if compare_timings and subtask_id:
-            try:
-                subtask = get_subtask_from_db(subtask_id)
-                if subtask:
-                    expected_duration = subtask['duration_sec']
-                    # Calculate actual work time from work_frames (time span from first to last work frame)
-                    if work_frames:
-                        min_frame = min(work_frames)
-                        max_frame = max(work_frames)
-                        actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
-                        if actual_work_time <= expected_duration:
-                            completed_in_time_increment = 1
-                            completed_with_delay_increment = 0
-                        else:
-                            completed_in_time_increment = 0
-                            completed_with_delay_increment = 1
-                        # Update counts in database
-                        update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
-                        # Add to analysis for response
-                        analysis['timing_comparison'] = {
-                            'expected_duration_sec': expected_duration,
-                            'actual_work_time_sec': actual_work_time,
-                            'completed_in_time': completed_in_time_increment > 0,
-                            'completed_with_delay': completed_with_delay_increment > 0
-                        }
-            except Exception as e:
-                logging.exception('Error in timing comparison')
-                analysis['timing_comparison_error'] = str(e)
+#         # If compare_timings is enabled and subtask_id is provided, compare expected vs actual work time and update counts
+#         if compare_timings and subtask_id:
+#             try:
+#                 subtask = get_subtask_from_db(subtask_id)
+#                 if subtask:
+#                     expected_duration = subtask['duration_sec']
+#                     # Calculate actual work time from work_frames (time span from first to last work frame)
+#                     if work_frames:
+#                         min_frame = min(work_frames)
+#                         max_frame = max(work_frames)
+#                         actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
+#                         if actual_work_time <= expected_duration:
+#                             completed_in_time_increment = 1
+#                             completed_with_delay_increment = 0
+#                         else:
+#                             completed_in_time_increment = 0
+#                             completed_with_delay_increment = 1
+#                         # Update counts in database
+#                         update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
+#                         # Add to analysis for response
+#                         analysis['timing_comparison'] = {
+#                             'expected_duration_sec': expected_duration,
+#                             'actual_work_time_sec': actual_work_time,
+#                             'completed_in_time': completed_in_time_increment > 0,
+#                             'completed_with_delay': completed_with_delay_increment > 0
+#                         }
+#             except Exception as e:
+#                 logging.exception('Error in timing comparison')
+#                 analysis['timing_comparison_error'] = str(e)
 
-    except Exception as e:
-        analysis.update({"caption_error": str(e)})
+#     except Exception as e:
+#         analysis.update({"caption_error": str(e)})
 
-    analysis["video_url"] = f"/backend/vlm_video/{filename}"
-    return {"message": "VLM local response", "analysis": analysis}
+#     analysis["video_url"] = f"/backend/vlm_video/{filename}"
+#     return {"message": "VLM local response", "analysis": analysis}
 
 
 @app.get("/backend/vlm_video/{filename}")
