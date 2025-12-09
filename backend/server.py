@@ -56,9 +56,6 @@ TASK_COMPLETION_PROMPT_TEMPLATE = (
     "Task: {task}\nCaptions: {captions}\n"
 )
 
-# In-memory assignments store (id -> dict)
-ASSIGNMENTS = {}
-
 # Cache captioners by model id so repeated requests don't reload them
 _captioner_cache = {}
 
@@ -128,57 +125,10 @@ def get_captioner_for_model(model_id: str):
                 task = e.get('task', task)
                 break
  
-
-    # # Try local-only load first
-    # try:
-        # p = pipeline(task, model=model_id, device=device, local_files_only=True)
     p = pipeline(task, model=model_id, device=device)
     _captioner_cache[model_id] = p
     logging.info('Loaded captioner for model %s (task=%s) from local cache on device=%s', model_id, task, device)
     return p
-    # except Exception as ex_local:
-    #     logging.info('Local-only load failed for %s: %s', model_id, ex_local)
-    #     # If this looks like a CUDA OOM / CUDA error, try falling back to CPU to avoid OOM
-    #     ex_text = str(ex_local).lower()
-    #     tried_cpu_fallback = False
-    #     try:
-    #         if 'out of memory' in ex_text or 'cuda' in ex_text or 'cudart' in ex_text:
-    #             logging.info('Detected CUDA-related error while loading %s, attempting CPU fallback...', model_id)
-    #             try:
-    #                 p = pipeline(task, model=model_id, device=-1, local_files_only=True)
-    #                 _captioner_cache[model_id] = p
-    #                 logging.info('Loaded captioner for model %s (task=%s) from local cache on CPU', model_id, task)
-    #                 return p
-    #             except Exception as ex_cpu:
-    #                 logging.info('CPU fallback also failed for %s: %s', model_id, ex_cpu)
-    #             tried_cpu_fallback = True
-    #     except Exception:
-    #         tried_cpu_fallback = False
-
-    #     # Attempt a fallback download (may be slow). If the earlier failure was CUDA-related
-    #     # and we haven't yet tried CPU, try downloading then falling back to CPU on failure.
-    #     try:
-    #         logging.info('Attempting to download model %s (task=%s)...', model_id, task)
-    #         p = pipeline(task, model=model_id, device=device)
-    #         _captioner_cache[model_id] = p
-    #         logging.info('Downloaded and loaded captioner for model %s (task=%s)', model_id, task)
-    #         return p
-    #     except Exception as ex_fetch:
-    #         logging.info('Failed to download/load captioner for %s on device=%s: %s', model_id, device, ex_fetch)
-    #         # If download/load failed and we haven't yet tried CPU, try CPU download/load (may still OOM but often works)
-    #         if not tried_cpu_fallback:
-    #             try:
-    #                 logging.info('Attempting to download/load %s on CPU...', model_id)
-    #                 p = pipeline(task, model=model_id, device=-1)
-    #                 _captioner_cache[model_id] = p
-    #                 logging.info('Downloaded and loaded captioner for %s on CPU', model_id)
-    #                 return p
-    #             except Exception as ex_cpu_fetch:
-    #                 logging.info('Failed to download/load captioner for %s on CPU: %s', model_id, ex_cpu_fetch)
-
-    #         _captioner_cache[model_id] = None
-    #         return None
-
 
 
 
@@ -314,32 +264,6 @@ def _normalize_caption_output(captioner, out):
         return "Error normalizing caption output"
 
 
-def _ask_duration_llm(task_text: str):
-    """Ask the local LLM to estimate an expected duration in seconds.
-    Returns integer seconds or None if unavailable/parse failed."""
-    try:
-        text_llm = get_local_text_llm()
-        if text_llm is None:
-            return None
-        prompt = DURATION_PROMPT_TEMPLATE.format(task=task_text)
-        out = text_llm(prompt, max_new_tokens=32)
-        out_text = None
-        try:
-            first = out[0] if isinstance(out, list) and len(out) > 0 else out
-            out_text = first.get('generated_text') or first.get('text') or str(first)
-        except (AttributeError, IndexError, TypeError):
-            out_text = str(out)
-        if not out_text:
-            return None
-        # Extract integer from response
-        import re
-        m = re.search(r"(\d+)", out_text)
-        if m:
-            return int(m.group(1))
-    except Exception:
-        logging.exception("Error in duration estimation LLM")
-        return None
-    return None
 
 def process_video_samples(file_path: str, captioner=None, max_samples: int = 30, stream_callback: Optional[Callable] = None, prompt: str = '', use_llm: bool = False):
     """Process a video file: compute basic video_info and sample frames to caption.
@@ -815,58 +739,6 @@ def compute_ranges(frames, samples, fps):
         r['captions'] = captions
     return ranges
 
-# @app.post("/backend/analyze_video")
-# async def analyze_video(file: UploadFile = File(...)):
-#     # Save uploaded file
-#     file_id = str(uuid.uuid4())
-#     input_filename = f"{file_id}_{file.filename}"
-#     input_path = os.path.join(UPLOAD_DIR, input_filename)
-    
-#     with open(input_path, "wb") as buffer:
-#         shutil.copyfileobj(file.file, buffer)
-        
-#     # Process video
-#     output_filename = f"processed_{input_filename}"
-#     output_path = os.path.join(PROCESSED_DIR, output_filename)
-    
-#     cap = cv2.VideoCapture(input_path)
-#     if not cap.isOpened():
-#         raise HTTPException(status_code=400, detail="Could not open video file")
-        
-#     # Get video properties
-#     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-#     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-#     fps = int(cap.get(cv2.CAP_PROP_FPS))
-    
-#     # Define codec and create VideoWriter
-#     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-#     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-    
-#     tracker = BehaviorTracker()
-#     task_completed = False
-    
-#     while cap.isOpened():
-#         ret, frame = cap.read()
-#         if not ret:
-#             break
-            
-#         # Process frame
-#         processed_frame, state, completed = tracker.process_frame(frame)
-#         if completed:
-#             task_completed = True
-            
-#         out.write(processed_frame)
-        
-#     cap.release()
-#     out.release()
-    
-#     return {
-#         "message": "Video processed successfully",
-#         "task_completed": task_completed,
-#         "processed_video_path": output_path,
-#         "download_url": f"/backend/download/{output_filename}"
-#     }
-
 @app.get("/backend/download/{filename}")
 async def download_video(filename: str):
     file_path = os.path.join(PROCESSED_DIR, filename)
@@ -909,171 +781,6 @@ async def stop_webcam():
     global _webcam_active
     _webcam_active = False
     return {"message": "Webcam stopped"}
-
-
-@app.post("/backend/vlm")
-async def vlm_endpoint(
-    model: str = Form(...),
-    prompt: str = Form(''),
-    video: UploadFile = File(None),
-    use_llm: bool = Form(False),
-    subtask_id: str = Form(None),
-    compare_timings: bool = Form(False),
-):
-    """VLM endpoint stub for videos: saves optional video and returns basic analysis.
-    Placeholder — extend to call a real VLM when available.
-    """
-    video_url = None
-    analysis = {"model": model, "prompt": prompt}
-
-    if video:
-        # Save uploaded video
-        file_id = str(uuid.uuid4())
-        filename = f"{file_id}_{video.filename}"
-        save_path = os.path.join(VLM_UPLOAD_DIR, filename)
-        with open(save_path, "wb") as buffer:
-            shutil.copyfileobj(video.file, buffer)
-
-        # duration, fps, width, height
-        try:
-            cap = cv2.VideoCapture(save_path)
-            if not cap.isOpened():
-                analysis.update({"warning": "could not open saved video"})
-            else:
-                fps = cap.get(cv2.CAP_PROP_FPS) or 0
-                frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-                duration = frame_count / fps if fps > 0 else 0
-
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    avg_color_per_row = frame.mean(axis=0).mean(axis=0)
-                    avg_color = [float(avg_color_per_row[2]), float(avg_color_per_row[1]), float(avg_color_per_row[0])]
-                    analysis = {**analysis, **{
-                        "width": width,
-                        "height": height,
-                        "fps": float(fps),
-                        "frame_count": int(frame_count),
-                        "duration_sec": float(duration),
-                        "first_frame_avg_color_bgr": avg_color,
-                    }}
-                else:
-                    analysis = {**analysis, **{"warning": "could not read first frame"}}
-                cap.release()
-        except Exception as e:
-            analysis.update({"error": str(e)})
-
-        video_url = f"/backend/vlm_video/{filename}"
-        analysis["video_url"] = video_url
-
-    # If a local captioner is available for the requested model, run the sampling/captioning helper
-    captioner = get_captioner_for_model(model)
-    if captioner is not None:
-        try:
-            proc = process_video_samples(save_path, captioner=captioner, max_samples=30, stream_callback=None, prompt=prompt, use_llm=use_llm)
-            # merge proc results into analysis
-            # if video_info present, expose fields at top-level for backward compat
-            vi = proc.get('video_info') or {}
-            try:
-                analysis = {**analysis, **vi}
-            except TypeError:
-                analysis["error"] = "Failed to merge video_info: not a dict-like object"
-            if 'samples' in proc:
-                analysis['samples'] = proc.get('samples', [])
-            if 'idle_frames' in proc:
-                analysis['idle_frames'] = proc.get('idle_frames', [])
-            if 'work_frames' in proc:
-                analysis['work_frames'] = proc.get('work_frames', [])
-                analysis['idle_frames'] = proc.get('idle_frames', [])
-                # Compute ranges for idle and work frames
-                fps = analysis.get('fps', 30.0)
-                samples = proc.get('samples', [])
-                analysis['idle_ranges'] = compute_ranges(analysis.get('idle_frames', []), samples, fps)
-                analysis['work_ranges'] = compute_ranges(analysis.get('work_frames', []), samples, fps)
-                # If compare_timings is enabled and subtask_id is provided, compare expected vs actual work time and update counts
-                logging.info(f'compare_timings={compare_timings}, subtask_id={subtask_id}')
-                if compare_timings and subtask_id:
-                    try:
-                        subtask = get_subtask_from_db(subtask_id)
-                        logging.info(f'Fetched subtask for timing comparison: {subtask}')
-                        if subtask:
-                            expected_duration = subtask['duration_sec']
-                            task_description = subtask['subtask_info']
-                            # Calculate actual work time from work_frames (time span from first to last work frame)
-                            work_frames = proc.get('work_frames') or []
-                            samples = proc.get('samples', [])
-                            work_captions = [s['caption'] for s in samples if s.get('label') == 'work' and s.get('caption')]
-                            logging.info(f'Work frames: {work_frames}, captions: {work_captions}')
-                            if work_frames:
-                                min_frame = min(work_frames)
-                                max_frame = max(work_frames)
-                                fps = analysis.get('fps', 30.0)
-                                actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
-                                # Check if task is completed using LLM
-                                task_completed = False
-                                logging.info(f'Text LLM availability for completion check: {get_local_text_llm() is not None} and {text_llm}')
-                                if work_captions and text_llm is not None:
-                                    try:
-                                        completion_prompt = TASK_COMPLETION_PROMPT_TEMPLATE.format(task=task_description, captions=' | '.join(work_captions))
-                                        llm_raw = text_llm(completion_prompt, max_new_tokens=8)
-                                        out_text = None
-                                        if isinstance(llm_raw, list) and len(llm_raw) > 0:
-                                            first = llm_raw[0]
-                                            if isinstance(first, dict):
-                                                out_text = first.get('generated_text') or first.get('text') or str(first)
-                                                logging.info(f'Task completion LLM output (dict): {out_text}')
-                                            else:
-                                                out_text = str(first)
-                                        else:
-                                            out_text = str(llm_raw)
-                                        task_completed = 'yes' in out_text.lower()
-                                        logging.info(f'Task completion check: {task_description}, completed={task_completed}, llm_output={out_text}')
-                                    except Exception as e:
-                                        logging.exception('Task completion LLM failed')
-                                        task_completed = False
-                                else:
-                                    # Fallback: assume completed if work detected
-                                    task_completed = True
-                                if task_completed:
-                                    if actual_work_time <= expected_duration:
-                                        completed_in_time_increment = 1
-                                        completed_with_delay_increment = 0
-                                    else:
-                                        completed_in_time_increment = 0
-                                        completed_with_delay_increment = 1
-                                    # Update counts in database
-                                    update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
-                                    logging.info(f'Updated subtask {subtask_id}: in_time={completed_in_time_increment}, delay={completed_with_delay_increment}')
-                                else:
-                                    logging.info(f'Task not completed for subtask {subtask_id}, no update')
-                                # Add to analysis for response
-                                analysis['timing_comparison'] = {
-                                    'expected_duration_sec': expected_duration,
-                                    'actual_work_time_sec': actual_work_time,
-                                    'task_completed': task_completed,
-                                    'completed_in_time': completed_in_time_increment if task_completed else False,
-                                    'completed_with_delay': completed_with_delay_increment if task_completed else False
-                                }
-                    except Exception as e:
-                        logging.exception('Error in timing comparison')
-                        analysis['timing_comparison_error'] = str(e)
-                # Persist final analysis to SQLite DB (samples + meta)
-                try:
-                    aid = str(uuid.uuid4())
-                    save_analysis_to_db(aid, filename, model, prompt, video_url, vi, proc.get('samples'), subtask_id=subtask_id)
-                    analysis['stored_analysis_id'] = aid
-                except Exception:
-                    logging.exception('Failed to save analysis to DB')
-            analysis["video_url"] = video_url or ""
-            return {"message": "VLM (video) local response", "analysis": analysis}
-        except Exception as e:
-            logging.exception('Local VLM processing failed')
-            analysis.update({"error": str(e)})
-
-    # Fallback/stub response (no local captioner available or processing failed)
-    return {"message": "VLM (video) stub response", "analysis": analysis}
 
 
 @app.post("/backend/upload_vlm")
@@ -1177,11 +884,15 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                 else:
                                     cls_text = str(cls_out)
                                 if cls_text:
-                                    ct = cls_text.lower()
-                                    if 'work' in ct and 'idle' not in ct:
-                                        label = 'work'
-                                    elif 'idle' in ct and 'work' not in ct:
-                                        label = 'idle'
+                                    import re
+                                    cleaned = re.sub(r'[^\w\s]', '', cls_text).strip()
+                                    words = cleaned.split()
+                                    if words:
+                                        last_word = words[-1].lower()
+                                        if last_word == 'work':
+                                            label = 'work'
+                                        elif last_word == 'idle':
+                                            label = 'idle'
                             except Exception as e:
                                 logging.info('SSE LLM classification failed: %s', e)
                     if label == 'idle':
@@ -1265,180 +976,6 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             yield _sse_event({"stage": "error", "message": str(e)})
 
     return StreamingResponse(gen(), media_type='text/event-stream')
-
-
-# @app.post("/backend/vlm_local")
-# async def vlm_local(
-#     model: str = Form(...),
-#     prompt: str = Form(''),
-#     video: UploadFile = File(None),
-#     use_llm: bool = Form(False),
-#     subtask_id: str = Form(None),
-#     compare_timings: bool = Form(False),
-# ):
-#     """Run a local lightweight VLM-like captioner on a representative frame.
-#     This uses a BLIP image->text pipeline (Salesforce/blip-image-captioning-large) if installed.
-#     Returns the caption(s) plus the same basic video analysis as `/backend/vlm`.
-#     """
-#     analysis = {"model": model, "prompt": prompt}
-
-#     if video is None:
-#         raise HTTPException(status_code=400, detail="No video provided")
-
-#     # Save uploaded video
-#     file_id = str(uuid.uuid4())
-#     filename = f"{file_id}_{video.filename}"
-#     save_path = os.path.join(VLM_UPLOAD_DIR, filename)
-#     with open(save_path, "wb") as buffer:
-#         shutil.copyfileobj(video.file, buffer)
-
-#     # Basic video analysis (same as /vlm)
-#     try:
-#         cap = cv2.VideoCapture(save_path)
-#         if not cap.isOpened():
-#             analysis.update({"warning": "could not open saved video"})
-#             return {"message": "VLM local failed", "analysis": analysis}
-
-#         fps = cap.get(cv2.CAP_PROP_FPS) or 0
-#         frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
-#         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-#         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-#         duration = frame_count / fps if fps > 0 else 0
-
-#         # Choose a representative frame (middle)
-#         mid_frame = int(frame_count // 2)
-#         cap.set(cv2.CAP_PROP_POS_FRAMES, mid_frame)
-#         ret, frame = cap.read()
-#         if ret and frame is not None:
-#             avg_color_per_row = frame.mean(axis=0).mean(axis=0)
-#             avg_color = [float(avg_color_per_row[2]), float(avg_color_per_row[1]), float(avg_color_per_row[0])]
-#             analysis = {**analysis, **{
-#                 "width": width,
-#                 "height": height,
-#                 "fps": float(fps),
-#                 "frame_count": int(frame_count),
-#                 "duration_sec": float(duration),
-#                 "first_frame_avg_color_bgr": avg_color,
-#             }}
-#         else:
-#             analysis = {**analysis, **{"warning": "could not read mid frame"}}
-
-#         cap.release()
-#     except Exception as e:
-#         analysis.update({"error": str(e)})
-
-#     # Run local captioner on multiple sampled frames if available (respect requested model)
-#     captioner = get_captioner_for_model(model)
-#     if captioner is None:
-#         analysis.update({"local_captioner": "not available (install transformers/torch or cache model)"})
-#         analysis["video_url"] = f"/backend/vlm_video/{filename}"
-#         return {"message": "VLM local stub response", "analysis": analysis}
-
-#     try:
-#         import cv2 as _cv2
-#         from PIL import Image
-
-#         # Decide sampling strategy: up to `max_samples` evenly across the video
-#         max_samples = 30
-#         total_frames = int(frame_count)
-#         desired = min(max_samples, max(1, total_frames))
-#         step = max(1, total_frames // desired) if total_frames > 0 else 1
-
-#         samples = []
-#         work_frames = []
-#         idle_frames = []
-
-#         # simple keyword-based classifier for 'work' vs 'idle'
-#         work_keywords = [
-#             'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
-#             'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
-#             'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
-#         ]
-
-#         cap2 = cv2.VideoCapture(save_path)
-#         if not cap2.isOpened():
-#             analysis.update({"error": "could not open video for sampling"})
-#             analysis["video_url"] = f"/backend/vlm_video/{filename}"
-#             return {"message": "VLM local response", "analysis": analysis}
-
-#         for idx in range(0, total_frames, step):
-#             if len(samples) >= max_samples:
-#                 break
-
-#             cap2.set(cv2.CAP_PROP_POS_FRAMES, idx)
-#             ret_s, f = cap2.read()
-#             if not ret_s or f is None:
-#                 continue
-
-#             # Convert to RGB PIL image and caption
-#             rgb = _cv2.cvtColor(f, _cv2.COLOR_BGR2RGB)
-#             pil = Image.fromarray(rgb)
-#             try:
-#                 out = captioner(pil)
-#             except Exception as ex:
-#                 samples.append({"frame_index": idx, "time_sec": float(idx / fps) if fps > 0 else 0.0, "caption": None, "error": str(ex)})
-#                 idle_frames.append(idx)
-#                 continue
-
-#             # normalize output to text
-#             text = _normalize_caption_output(captioner, out)
-
-#             text_lower = (text or '').lower()
-#             is_work = any(k in text_lower for k in work_keywords)
-
-#             samples.append({
-#                 "frame_index": idx,
-#                 "time_sec": float(idx / fps) if fps > 0 else 0.0,
-#                 "caption": text,
-#                 "label": "work" if is_work else "idle",
-#             })
-
-#             if is_work:
-#                 work_frames.append(idx)
-#             else:
-#                 idle_frames.append(idx)
-
-#         cap2.release()
-
-#         analysis["samples"] = samples
-#         analysis["idle_frames"] = idle_frames
-#         analysis["work_frames"] = work_frames
-
-#         # If compare_timings is enabled and subtask_id is provided, compare expected vs actual work time and update counts
-#         if compare_timings and subtask_id:
-#             try:
-#                 subtask = get_subtask_from_db(subtask_id)
-#                 if subtask:
-#                     expected_duration = subtask['duration_sec']
-#                     # Calculate actual work time from work_frames (time span from first to last work frame)
-#                     if work_frames:
-#                         min_frame = min(work_frames)
-#                         max_frame = max(work_frames)
-#                         actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
-#                         if actual_work_time <= expected_duration:
-#                             completed_in_time_increment = 1
-#                             completed_with_delay_increment = 0
-#                         else:
-#                             completed_in_time_increment = 0
-#                             completed_with_delay_increment = 1
-#                         # Update counts in database
-#                         update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
-#                         # Add to analysis for response
-#                         analysis['timing_comparison'] = {
-#                             'expected_duration_sec': expected_duration,
-#                             'actual_work_time_sec': actual_work_time,
-#                             'completed_in_time': completed_in_time_increment > 0,
-#                             'completed_with_delay': completed_with_delay_increment > 0
-#                         }
-#             except Exception as e:
-#                 logging.exception('Error in timing comparison')
-#                 analysis['timing_comparison_error'] = str(e)
-
-#     except Exception as e:
-#         analysis.update({"caption_error": str(e)})
-
-#     analysis["video_url"] = f"/backend/vlm_video/{filename}"
-#     return {"message": "VLM local response", "analysis": analysis}
 
 
 @app.get("/backend/vlm_video/{filename}")
@@ -1578,59 +1115,6 @@ async def load_vlm_model(model: str = Form(...)):
     except Exception as e:
         logging.exception('Error loading model %s', model)
         return {"loaded": False, "model": model, "error": str(e)}
-
-
-@app.post('/backend/llm_length_check')
-async def llm_length_check(text: str = Form(...), max_context: int = Form(2048)):
-    """Check whether `text` is too long for a model with `max_context` tokens.
-    Attempts to use a local text LLM to give a suggested summary or strategy; falls
-    back to a heuristic token estimate if no local LLM is available.
-    """
-    if not isinstance(text, str) or len(text.strip()) == 0:
-        raise HTTPException(status_code=400, detail='No text provided')
-
-    # rough token estimate: approx 1 token ~= 4 characters (very approximate)
-    approx_tokens = max(1, int(len(text) / 4))
-    too_long = approx_tokens > int(max_context)
-
-    suggestions = []
-    if too_long:
-        suggestions.append({"type": "summarize", "desc": f"Summarize the text to ~{int(max_context * 0.25)} tokens (short summary)."})
-        suggestions.append({"type": "split", "desc": f"Split the text into {max(2, approx_tokens // int(max_context))} segments each <= {max_context} tokens."})
-        suggestions.append({"type": "extract_actions", "desc": "Extract action items or steps only (reduce verbose context)."})
-    else:
-        suggestions.append({"type": "ok", "desc": "Text fits within the context window; no change required."})
-
-    # Try to use a local text LLM to produce a short example summary/proposal
-    example_summary = None
-    text_llm = get_local_text_llm()
-    if text_llm is not None:
-        try:
-            prompt = (
-                f"You are an assistant that evaluates whether a text is too long for a model with "
-                f"context {max_context} tokens. Respond with a 1-2 sentence summary and a single suggestion.\n\nText:\n" + text
-            )
-            # some pipelines return list/dict; call safely
-            out = text_llm(prompt, max_new_tokens=128)
-            if isinstance(out, list) and len(out) > 0:
-                first = out[0]
-                if isinstance(first, dict):
-                    example_summary = first.get('generated_text') or first.get('text') or str(first)
-                else:
-                    example_summary = str(first)
-            else:
-                example_summary = str(out)
-        except Exception as e:
-            logging.info('Local text LLM failed: %s', e)
-
-    return {
-        "too_long": bool(too_long),
-        "approx_tokens": int(approx_tokens),
-        "max_context": int(max_context),
-        "suggestions": suggestions,
-        "example_summary": example_summary,
-    }
-
 
 @app.get('/backend/subtask/{subtask_id}')
 async def get_subtask(subtask_id: str):
