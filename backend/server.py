@@ -570,7 +570,7 @@ async def download_video(filename: str):
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False)):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None)):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
@@ -670,7 +670,22 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             payload['subtask_overrun'] = subtask_overrun
                         # Encode current frame as JPEG and include as base64 to allow clients to render a live image.
                         try:
-                            ret_jpg, buf = cv2.imencode('.jpg', frame)
+                            enc_frame = frame
+                            # Optionally downscale to max_width to reduce bandwidth
+                            if max_width is not None:
+                                try:
+                                    h, w = enc_frame.shape[:2]
+                                    if w > int(max_width):
+                                        new_w = int(max_width)
+                                        new_h = int(h * (new_w / w))
+                                        enc_frame = cv2.resize(enc_frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                                except Exception as e_r:
+                                    logging.debug('Failed to resize frame for SSE image: %s', e_r)
+                            # Respect JPEG quality parameter
+                            try:
+                                ret_jpg, buf = cv2.imencode('.jpg', enc_frame, [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)])
+                            except Exception:
+                                ret_jpg, buf = cv2.imencode('.jpg', enc_frame)
                             if ret_jpg and buf is not None:
                                 b64 = base64.b64encode(buf.tobytes()).decode('ascii')
                                 payload['image'] = b64

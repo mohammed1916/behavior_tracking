@@ -1743,3 +1743,4 @@ If this is a private repository, make sure to pass a token having permission to 
 2025-12-09 13:19:31,301 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=-1
 2025-12-09 13:47:11,986 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
 2025-12-09 14:38:26,644 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 14:50:53,989 INFO Loaded default local captioner Salesforce/blip-image-captioning-large

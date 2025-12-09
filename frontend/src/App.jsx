@@ -274,6 +274,10 @@ function App() {
             </label>
             
 
+            <label style={{ display: 'block', marginTop: 8 }}>
+              <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
+              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
+            </label>     
             
             <br/>
 
@@ -289,7 +293,7 @@ function App() {
                 {activeTab === 'upload' ? (
                   <FileUpload accept="video/*" onFileSelect={(f) => setVlmVideo(f)} initialFile={vlmVideo} label="Select a video for analysis" />
                 ) : (
-                  <LiveView />
+                  <LiveView model={vlmModel} prompt={vlmPrompt} useLLM={vlmUseLLM} selectedSubtask={selectedSubtasks.length > 0 ? selectedSubtasks[0].id : ''} />
                 )}
               </div>
             </div>
@@ -301,10 +305,6 @@ function App() {
               </div>
             )}
 
-            <label style={{ display: 'block', marginTop: 8 }}>
-              <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
-              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
-            </label>     
 
             <div style={{ marginTop: 6 }}>
               <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${selectedVlmModelName}` : 'No local VLM models detected on the server.'}</small>
