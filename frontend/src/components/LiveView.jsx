@@ -14,6 +14,8 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
   const [jpegQuality, setJpegQuality] = useState(80);
   const [maxWidth, setMaxWidth] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [saveRecording, setSaveRecording] = useState(false);
+  const [savedVideoUrl, setSavedVideoUrl] = useState('');
 
   // Live metadata
   const [captionText, setCaptionText] = useState('');
@@ -44,6 +46,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
     if (compareTimings) params.set('compare_timings', 'true');
     if (jpegQuality) params.set('jpeg_quality', String(jpegQuality));
     if (maxWidth) params.set('max_width', String(maxWidth));
+    if (saveRecording) params.set('save_video', 'true');
     return base + '/backend/stream_pose' + (Array.from(params).length ? ('?' + params.toString()) : '');
   };
 
@@ -58,6 +61,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
     setLabelText('');
     setLlmOutput('');
     setStatusMessage('Connecting...');
+    setSavedVideoUrl('');
 
     const es = new EventSource(url);
     eventSourceRef.current = es;
@@ -87,6 +91,10 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
         const b64 = data.image || data.frame || data.jpeg || data.jpg;
         if (b64 && imgRef.current) {
           imgRef.current.src = `data:image/jpeg;base64,${b64}`;
+        }
+        if (data.stage === 'finished' && data.video_url) {
+          // save the returned video URL for display
+          setSavedVideoUrl(data.video_url);
         }
       } else {
         // Fallback: some servers might emit raw base64 frames
@@ -152,6 +160,10 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
               <label>Max Width (px):</label>
               <input style={{ width: '100%' }} value={maxWidth} onChange={(e) => setMaxWidth(e.target.value)} placeholder="e.g. 640" />
             </div>
+            <div>
+              <label>Save Recording:</label>
+              <input type="checkbox" checked={saveRecording} onChange={(e) => setSaveRecording(e.target.checked)} />
+            </div>
           </div>
         )}
 
@@ -186,6 +198,12 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
             </div>
           </div>
         </div>
+        {savedVideoUrl ? (
+          <div style={{ marginTop: 10 }}>
+            <strong>Saved Recording</strong>
+            <div style={{ marginTop: 6 }}><a target="_blank" rel="noreferrer" href={savedVideoUrl}>{savedVideoUrl}</a></div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -564,13 +564,22 @@ def compute_ranges(frames, samples, fps):
 async def download_video(filename: str):
     file_path = os.path.join(PROCESSED_DIR, filename)
     if os.path.exists(file_path):
-        return FileResponse(file_path, media_type="video/mp4", filename=filename, headers={"Accept-Ranges": "bytes"})
+        # Choose media type by extension
+        ext = os.path.splitext(filename)[1].lower()
+        media_type = "application/octet-stream"
+        if ext == '.mp4':
+            media_type = 'video/mp4'
+        elif ext == '.avi':
+            media_type = 'video/x-msvideo'
+        elif ext in ('.mov', '.qt'):
+            media_type = 'video/quicktime'
+        return FileResponse(file_path, media_type=media_type, filename=filename, headers={"Accept-Ranges": "bytes"})
     raise HTTPException(status_code=404, detail="File not found")
 
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None)):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False)):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
@@ -596,12 +605,68 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             cumulative_work_frames = 0
             start_time = time.time()
             
+            writer = None
+            saved_basename = None
+            saved_path = None
+            record_enabled = bool(save_video)
+
             while app.state.webcam_event.is_set():
                 ret, frame = cap.read()
                 if not ret:
                     yield _sse_event({"stage": "error", "message": "failed to read frame"})
                     break
                 frame = cv2.flip(frame, 1)
+                # If recording requested, lazily create VideoWriter once we have a frame
+                if record_enabled and writer is None:
+                    try:
+                        # Ensure processed dir exists
+                        os.makedirs(PROCESSED_DIR, exist_ok=True)
+                        uniq = str(uuid.uuid4())
+                        saved_basename = f"live_{uniq}.mp4"
+                        saved_path = os.path.join(PROCESSED_DIR, saved_basename)
+                        # Determine fps (fallback to 30)
+                        try:
+                            cap_fps = float(cap.get(cv2.CAP_PROP_FPS) or 0) or 30.0
+                        except Exception:
+                            cap_fps = 30.0
+                        h, w = frame.shape[:2]
+                        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                        writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
+                        # verify writer opened; if not, try AVI/XVID fallback
+                        if not getattr(writer, 'isOpened', lambda: False)():
+                            try:
+                                writer.release()
+                            except Exception:
+                                pass
+                            # fallback to AVI/XVID
+                            saved_basename = f"live_{uniq}.avi"
+                            saved_path = os.path.join(PROCESSED_DIR, saved_basename)
+                            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                            writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
+                        if not getattr(writer, 'isOpened', lambda: False)():
+                            raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
+                        logging.info('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                    except Exception as e:
+                        logging.exception('Failed to create VideoWriter: %s', e)
+                        # notify client and disable recording for this session
+                        try:
+                            yield _sse_event({"stage": "error", "message": f"Failed to create recorder: {e}"})
+                        except Exception:
+                            pass
+                        writer = None
+                        record_enabled = False
+                        # remove any partial file
+                        try:
+                            if saved_path and os.path.exists(saved_path):
+                                os.remove(saved_path)
+                        except Exception:
+                            pass
+                # If writer is active, write the raw frame (BGR)
+                try:
+                    if writer is not None:
+                        writer.write(frame)
+                except Exception:
+                    pass
                 frame_counter += 1
                 elapsed_time = time.time() - start_time
                 
@@ -706,13 +771,38 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     except Exception as e:
                         yield _sse_event({"stage": "sample_error", "frame_index": frame_counter, "error": str(e)})
             
-            cap.release()
+            # release resources
+            try:
+                cap.release()
+            except Exception:
+                pass
+            try:
+                if writer is not None:
+                    writer.release()
+            except Exception:
+                pass
             
             # Save to DB at the end (similar to vlm_local_stream)
             try:
-                vid_info = {'fps': 30.0, 'frame_count': frame_counter, 'width': 640, 'height': 480, 'duration': elapsed_time}  # Approximate for live stream
+                # Provide accurate video info if recording was saved
+                vid_info = {'fps': 30.0, 'frame_count': frame_counter, 'width': None, 'height': None, 'duration': elapsed_time}
+                if saved_path and os.path.exists(saved_path):
+                    try:
+                        # probe saved file via cv2 to get width/height/fps
+                        vcap = cv2.VideoCapture(saved_path)
+                        vid_fps = float(vcap.get(cv2.CAP_PROP_FPS) or 0) or vid_info['fps']
+                        vid_w = int(vcap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0) or None
+                        vid_h = int(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0) or None
+                        vcap.release()
+                        vid_info['fps'] = vid_fps
+                        vid_info['width'] = vid_w
+                        vid_info['height'] = vid_h
+                    except Exception:
+                        pass
                 aid = str(uuid.uuid4())
-                save_analysis_to_db(aid, f"live_webcam_{aid}.mp4", model or 'default', prompt, None, vid_info, collected_samples, subtask_id=subtask_id)
+                filename_for_db = saved_basename if saved_basename else f"live_webcam_{aid}.mp4"
+                video_url = f"/backend/download/{filename_for_db}" if saved_basename else None
+                save_analysis_to_db(aid, filename_for_db, model or 'default', prompt, video_url, vid_info, collected_samples, subtask_id=subtask_id)
                 
                 # Update subtask counts if compare_timings enabled
                 if compare_timings and subtask_id:
@@ -730,7 +820,10 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     except Exception as e:
                         logging.exception(f'Failed to update subtask counts for {subtask_id}')
                 
-                yield _sse_event({"stage": "finished", "message": "live processing complete", "stored_analysis_id": aid})
+                out = {"stage": "finished", "message": "live processing complete", "stored_analysis_id": aid}
+                if video_url:
+                    out['video_url'] = video_url
+                yield _sse_event(out)
             except Exception as e:
                 yield _sse_event({"stage": "finished", "message": "live processing complete"})
         except Exception as e:
