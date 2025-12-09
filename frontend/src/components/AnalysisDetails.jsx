@@ -56,7 +56,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                 <a href={`http://localhost:8001${analysis.video_url}`} target="_blank" rel="noreferrer">Open video</a>
                 <div style={{ marginTop: 8 }}>
                   <video ref={videoRef} controls width="100%">
-                    <source src={`http://localhost:8001${analysis.video_url}`} type="video/mp4" />
+                    <source src={`http://localhost:8001${analysis.video_url}`} />
                   </video>
 
                   <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>

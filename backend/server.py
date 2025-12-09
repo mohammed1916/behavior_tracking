@@ -428,6 +428,14 @@ def get_analysis_from_db(aid):
     analysis['samples'] = samples
     analysis['idle_frames'] = idle_frames
     analysis['work_frames'] = work_frames
+    # Compute contiguous time ranges for idle/work frames to simplify frontend playback
+    try:
+        fps = analysis.get('fps') or 30.0
+        analysis['idle_ranges'] = compute_ranges(idle_frames, samples, fps)
+        analysis['work_ranges'] = compute_ranges(work_frames, samples, fps)
+    except Exception:
+        analysis['idle_ranges'] = []
+        analysis['work_ranges'] = []
     conn.close()
     return analysis
 
@@ -523,7 +531,7 @@ def get_subtask_from_db(subtask_id):
     }
 
 def compute_ranges(frames, samples, fps):
-    if not frames or frames.length == 0:
+    if not frames or (hasattr(frames, '__len__') and len(frames) == 0):
         return []
     sample_map = {}
     for s in samples or []:
@@ -606,6 +614,8 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             start_time = time.time()
             
             writer = None
+            writer_type = None
+            ffmpeg_proc = None
             saved_basename = None
             saved_path = None
             record_enabled = bool(save_video)
@@ -630,22 +640,54 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         except Exception:
                             cap_fps = 30.0
                         h, w = frame.shape[:2]
-                        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                        writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
-                        # verify writer opened; if not, try AVI/XVID fallback
-                        if not getattr(writer, 'isOpened', lambda: False)():
+                        # Prefer ffmpeg encoding (H.264) when available for browser compatibility
+                        ffmpeg_path = shutil.which('ffmpeg')
+                        if ffmpeg_path:
+                            # Build ffmpeg command to read raw BGR frames from stdin and encode to h264 mp4
+                            cmd = [
+                                ffmpeg_path,
+                                '-y',
+                                '-f', 'rawvideo',
+                                '-pix_fmt', 'bgr24',
+                                '-s', f'{w}x{h}',
+                                '-r', str(int(cap_fps)),
+                                '-i', '-',
+                                '-c:v', 'libx264',
+                                '-preset', 'veryfast',
+                                '-pix_fmt', 'yuv420p',
+                                '-crf', '23',
+                                saved_path
+                            ]
                             try:
-                                writer.release()
-                            except Exception:
-                                pass
-                            # fallback to AVI/XVID
-                            saved_basename = f"live_{uniq}.avi"
-                            saved_path = os.path.join(PROCESSED_DIR, saved_basename)
-                            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                                ffmpeg_proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+                                writer_type = 'ffmpeg'
+                                writer = ffmpeg_proc
+                                logging.info('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                            except Exception as e:
+                                logging.warning('ffmpeg recording failed to start: %s', e)
+                                ffmpeg_proc = None
+                                writer = None
+                                writer_type = None
+
+                        # If ffmpeg unavailable or failed, fall back to OpenCV VideoWriter
+                        if writer is None:
+                            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
                             writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
-                        if not getattr(writer, 'isOpened', lambda: False)():
-                            raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
-                        logging.info('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                            writer_type = 'cv2'
+                            # verify writer opened; if not, try AVI/XVID fallback
+                            if not getattr(writer, 'isOpened', lambda: False)():
+                                try:
+                                    writer.release()
+                                except Exception:
+                                    pass
+                                # fallback to AVI/XVID
+                                saved_basename = f"live_{uniq}.avi"
+                                saved_path = os.path.join(PROCESSED_DIR, saved_basename)
+                                fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                                writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
+                            if not getattr(writer, 'isOpened', lambda: False)():
+                                raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
+                            logging.info('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
                     except Exception as e:
                         logging.exception('Failed to create VideoWriter: %s', e)
                         # notify client and disable recording for this session
@@ -664,7 +706,27 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 # If writer is active, write the raw frame (BGR)
                 try:
                     if writer is not None:
-                        writer.write(frame)
+                        if writer_type == 'ffmpeg' and ffmpeg_proc is not None and ffmpeg_proc.stdin:
+                            # Ensure contiguous bytes and write to ffmpeg stdin
+                            try:
+                                data = frame.tobytes()
+                                ffmpeg_proc.stdin.write(data)
+                            except BrokenPipeError:
+                                logging.exception('ffmpeg stdin broken pipe during write')
+                                # disable recording on error
+                                try:
+                                    ffmpeg_proc.stdin.close()
+                                except Exception:
+                                    pass
+                                ffmpeg_proc = None
+                                writer = None
+                                writer_type = None
+                        else:
+                            # OpenCV writer
+                            try:
+                                writer.write(frame)
+                            except Exception:
+                                pass
                 except Exception:
                     pass
                 frame_counter += 1
@@ -777,8 +839,24 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             except Exception:
                 pass
             try:
-                if writer is not None:
-                    writer.release()
+                if writer_type == 'ffmpeg' and ffmpeg_proc is not None:
+                    try:
+                        ffmpeg_proc.stdin.close()
+                    except Exception:
+                        pass
+                    try:
+                        ffmpeg_proc.wait(timeout=10)
+                    except Exception:
+                        try:
+                            ffmpeg_proc.kill()
+                        except Exception:
+                            pass
+                else:
+                    if writer is not None:
+                        try:
+                            writer.release()
+                        except Exception:
+                            pass
             except Exception:
                 pass
             

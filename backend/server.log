@@ -1755,3 +1755,7 @@ If this is a private repository, make sure to pass a token having permission to 
 2025-12-09 16:21:25,016 INFO Recording live stream to processed\live_4b180c45-c368-4a8a-873b-0c77d95caa71.mp4 (fps=30.0 size=640x480)
 2025-12-09 16:21:33,872 INFO Recording live stream to processed\live_a1df92fd-2ab0-4647-a03e-31d71fcd2f8a.mp4 (fps=30.0 size=640x480)
 2025-12-09 16:23:37,849 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 16:59:03,623 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) from local cache on device=0
+2025-12-09 16:59:39,332 INFO Recording live stream to processed\live_cc4d386f-6068-4eaf-bd2f-b36a7a8f0b00.mp4 (fps=30.0 size=640x480)
+2025-12-09 17:00:25,207 INFO Loaded default local captioner Salesforce/blip-image-captioning-large
+2025-12-09 17:01:16,311 INFO Recording live stream to processed\live_c59a56bc-3273-42b2-b67d-5a1c5ca6fe5a.mp4 (fps=30.0 size=640x480)
