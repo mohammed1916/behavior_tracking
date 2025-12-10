@@ -96,7 +96,7 @@ class FrameRenderer:
         self.color_timer = (255, 255, 0)   # Yellow
         self.color_alert = (0, 255, 0)     # Green
     
-    def render_activity_info(self, frame, activity, elapsed_time, alert_message="", fps=0, show_mediapipe=False):
+    def render_activity_info(self, frame, activity, elapsed_time, alert_message="", fps=0, show_mediapipe=False, show_yolo=False):
         """Render activity information on frame
         
         Args:
@@ -106,6 +106,7 @@ class FrameRenderer:
             alert_message: Alert message to display (optional)
             fps: Current processing FPS (optional)
             show_mediapipe: Whether MediaPipe visualization is enabled (optional)
+            show_yolo: Whether YOLO visualization is enabled (optional)
         
         Returns:
             frame: Rendered frame
@@ -157,9 +158,21 @@ class FrameRenderer:
             self.thickness
         )
         
+        # YOLO status indicator
+        yolo_status = "YOLO: ON" if show_yolo else "YOLO: OFF"
+        cv2.putText(
+            frame,
+            yolo_status,
+            (30, y_offset + 25),
+            self.font,
+            0.7,  # Smaller font
+            (0, 255, 255) if show_yolo else (128, 128, 128),  # Yellow if on, gray if off
+            self.thickness
+        )
+        
         # Alert message
         if alert_message:
-            alert_y = y_offset + 40
+            alert_y = y_offset + 50
             cv2.putText(
                 frame,
                 alert_message,

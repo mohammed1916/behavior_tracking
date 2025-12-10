@@ -1,9 +1,11 @@
-"""Main activity tracking system orchestrator"""
+"""Main activity tracking system orchestrator with YOLO object detection"""
 
 import time
 import cv2
+import os
 from motion_detector import MediaPipeMotionDetector
 from vlm_classifier import VLMActivityClassifier
+from yolo_detector import YOLOObjectDetector
 from activity_logger import ActivityLogger, ActivityTracker
 from decision_engine import ActivityDecisionEngine
 from video_handler import VideoCapture, FrameRenderer
@@ -11,13 +13,14 @@ from config import VLM_CLASSIFY_INTERVAL, PHONE_RESET_FRAMES, TARGET_PROCESS_FPS
 
 
 class ActivityTrackingSystem:
-    """Main system that orchestrates activity tracking"""
+    """Main system that orchestrates activity tracking with object detection"""
     
-    def __init__(self, video_source=0):
+    def __init__(self, video_source=0, enable_yolo=True):
         """Initialize the activity tracking system
         
         Args:
             video_source: Video source (0 for webcam, or file path)
+            enable_yolo: Whether to enable YOLO object detection
         """
         print("Initializing Activity Tracking System...")
         
@@ -34,6 +37,22 @@ class ActivityTrackingSystem:
         )
         self.frame_renderer = FrameRenderer()
         
+        # Initialize YOLO detector
+        self.enable_yolo = enable_yolo
+        self.yolo_detector = None
+        if enable_yolo:
+            try:
+                # Find YOLO model
+                model_path = "yolov8n.pt"
+                if not os.path.exists(model_path):
+                    model_path = os.path.join("..", model_path)
+                
+                self.yolo_detector = YOLOObjectDetector(model_path)
+                print(f"YOLO detector initialized with {model_path}")
+            except Exception as e:
+                print(f"Warning: Could not initialize YOLO detector: {e}")
+                self.enable_yolo = False
+        
         # Frame sampling: process at ~TARGET_PROCESS_FPS
         input_fps = self.video_handler.get_input_fps() or TARGET_PROCESS_FPS
         self.frame_interval = max(1, int(round(input_fps / TARGET_PROCESS_FPS)))
@@ -49,17 +68,29 @@ class ActivityTrackingSystem:
         self.current_fps = 0
         self.fps_samples = []  # Track FPS for average calculation
         
+        # VLM classification interval (dynamic)
+        self.vlm_classify_interval = VLM_CLASSIFY_INTERVAL
+        self.vlm_interval_index = 0  # Cycle through options
+        self.vlm_interval_options = [0.5, 1.0, 2.0]
+        
         # Visualization control
         self.show_mediapipe = False  # Toggle MediaPipe landmarks visualization
+        self.show_yolo = enable_yolo  # Toggle YOLO detections visualization
         
         print("System initialized successfully!")
         print(f"Video dimensions: {self.video_handler.get_dimensions()}")
         print(f"Source FPS: {input_fps:.2f}, processing every {self.frame_interval} frame(s)")
+        print(f"YOLO detection: {'ENABLED' if self.enable_yolo else 'DISABLED'}")
     
     def run(self):
         """Run the activity tracking system"""
         print("Starting activity tracking...")
-        print("Controls: 'q' = quit | 'm' = toggle MediaPipe landmarks")
+        print("Controls:")
+        print("  'q' = quit")
+        print("  'm' = toggle MediaPipe landmarks")
+        print("  'y' = toggle YOLO object detection")
+        print("  'c' = cycle VLM interval (0.5s / 1.0s / 2.0s)")
+        print("")
         
         try:
             while True:
@@ -82,13 +113,18 @@ class ActivityTrackingSystem:
                     self.fps_samples.append(self.current_fps)  # Add to samples for averaging
                     self.fps_counter = 0
                     self.fps_start_time = current_time
-                    print(f"Processing FPS: {self.current_fps:.2f}")
+                    print(f"Processing FPS: {self.current_fps:.2f} | VLM Interval: {self.vlm_classify_interval:.1f}s")
                 
                 # Process frame with motion detection
                 detection_info = self.motion_detector.process_frame(frame)
                 
-                # Run VLM classification once per second
-                if current_time - self.prev_classify_time >= VLM_CLASSIFY_INTERVAL:
+                # Run YOLO object detection
+                yolo_detections = None
+                if self.enable_yolo and self.yolo_detector:
+                    yolo_detections = self.yolo_detector.detect_objects(frame)
+                
+                # Run VLM classification at dynamic interval
+                if current_time - self.prev_classify_time >= self.vlm_classify_interval:
                     vlm_result = self.vlm_classifier.classify(frame)
                     vlm_result = self.vlm_classifier.post_process_vlm_result(vlm_result)
                     self.prev_classify_time = current_time
@@ -134,6 +170,10 @@ class ActivityTrackingSystem:
                         detection_info['pose_results']
                     )
                 
+                # Draw YOLO detections if enabled
+                if self.show_yolo and yolo_detections:
+                    frame = self.yolo_detector.draw_detections(frame, yolo_detections)
+                
                 # Render information on frame
                 frame = self.frame_renderer.render_activity_info(
                     frame,
@@ -141,7 +181,8 @@ class ActivityTrackingSystem:
                     elapsed_time,
                     alert_message,
                     fps=self.current_fps,
-                    show_mediapipe=self.show_mediapipe
+                    show_mediapipe=self.show_mediapipe,
+                    show_yolo=self.show_yolo
                 )
                 
                 # Display and write frame
@@ -157,6 +198,15 @@ class ActivityTrackingSystem:
                     self.show_mediapipe = not self.show_mediapipe
                     status = "ON" if self.show_mediapipe else "OFF"
                     print(f"MediaPipe visualization: {status}")
+                elif key == ord('y'):
+                    if self.enable_yolo:
+                        self.show_yolo = not self.show_yolo
+                        status = "ON" if self.show_yolo else "OFF"
+                        print(f"YOLO detection visualization: {status}")
+                elif key == ord('c'):
+                    self.vlm_interval_index = (self.vlm_interval_index + 1) % len(self.vlm_interval_options)
+                    self.vlm_classify_interval = self.vlm_interval_options[self.vlm_interval_index]
+                    print(f"VLM classification interval changed to {self.vlm_classify_interval:.1f}s")
         
         except KeyboardInterrupt:
             print("Interrupted by user")
@@ -181,6 +231,8 @@ class ActivityTrackingSystem:
         # Cleanup resources
         self.motion_detector.release()
         self.vlm_classifier.release()
+        if self.yolo_detector:
+            self.yolo_detector.release()
         self.video_handler.release()
         
         # Print summary
@@ -197,8 +249,11 @@ def main():
     # For webcam use: ActivityTrackingSystem(video_source=0)
     # For video file use: ActivityTrackingSystem(video_source="path/to/video.mp4")
     
-    system = ActivityTrackingSystem(0)
-    # system = ActivityTrackingSystem(video_source="C:\\Users\\BBBS-AI-01\\d\\behavior_tracking\\data\\assembly_idle.mp4")
+    system = ActivityTrackingSystem(0);
+    # system = ActivityTrackingSystem(
+    #     video_source="C:\\Users\\BBBS-AI-01\\d\\behavior_tracking\\data\\assembly_idle.mp4",
+    #     enable_yolo=True
+    # )
     system.run()
 
 
