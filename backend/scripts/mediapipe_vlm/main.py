@@ -197,7 +197,8 @@ def main():
     # For webcam use: ActivityTrackingSystem(video_source=0)
     # For video file use: ActivityTrackingSystem(video_source="path/to/video.mp4")
     
-    system = ActivityTrackingSystem(video_source="C:\\Users\\BBBS-AI-01\\d\\behavior_tracking\\data\\assembly_idle.mp4")
+    system = ActivityTrackingSystem(0)
+    # system = ActivityTrackingSystem(video_source="C:\\Users\\BBBS-AI-01\\d\\behavior_tracking\\data\\assembly_idle.mp4")
     system.run()
 
 

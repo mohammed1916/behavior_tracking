@@ -29,7 +29,7 @@ VLM_CLASSIFY_INTERVAL = 1.0    # Classify activity once per second (seconds)
 PHONE_RESET_FRAMES = 5          # Frames to wait before resetting phone detection
 
 # Throughput and scaling
-TARGET_PROCESS_FPS = 1.0        # Process only N frames per second (ingest may be higher)
+TARGET_PROCESS_FPS = 24.0        # Process only N frames per second (ingest may be higher)
 PROCESSING_DOWNSCALE = 0.5      # Resize factor for inference to speed up processing
 OUTPUT_FPS = TARGET_PROCESS_FPS # Save output video at the processed frame rate
 
