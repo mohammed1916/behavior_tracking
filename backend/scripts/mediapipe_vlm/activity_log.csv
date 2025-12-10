@@ -1,13 +1,19 @@
-timestamp,activity,duration_sec
-2025-12-10 12:51:14,unknown,0.0
-2025-12-10 12:51:17,simply_sitting,0.0
-2025-12-10 12:51:24,assembling_drone,0.0
-2025-12-10 12:51:30,simply_sitting,0.0
-2025-12-10 12:51:33,assembling_drone,0.0
-2025-12-10 12:51:34,simply_sitting,0.0
-2025-12-10 12:51:35,assembling_drone,0.0
-2025-12-10 12:51:42,simply_sitting,0.0
-2025-12-10 12:51:46,assembling_drone,0.0
-2025-12-10 12:51:48,simply_sitting,0.0
-2025-12-10 12:51:50,assembling_drone,0.0
-2025-12-10 12:51:50,simply_sitting,0.55
+timestamp,activity,duration_sec,avg_fps
+2025-12-10 13:27:32,unknown,0.0,3.87
+2025-12-10 13:27:34,simply_sitting,0.0,2.1
+2025-12-10 13:27:37,assembling_drone,0.0,1.45
+2025-12-10 13:27:38,simply_sitting,0.0,3.65
+2025-12-10 13:27:39,idle,0.0,3.56
+2025-12-10 13:27:43,simply_sitting,0.0,3.29
+2025-12-10 13:27:45,assembling_drone,0.0,0.75
+2025-12-10 13:27:46,simply_sitting,0.0,0.57
+2025-12-10 13:27:47,assembling_drone,0.0,0.71
+2025-12-10 13:27:50,simply_sitting,0.0,1.88
+2025-12-10 13:27:50,assembling_drone,0.0,0.47
+2025-12-10 13:27:52,simply_sitting,0.0,1.6
+2025-12-10 13:27:53,assembling_drone,0.0,0.69
+2025-12-10 13:27:58,simply_sitting,0.0,2.64
+2025-12-10 13:28:00,assembling_drone,0.0,1.83
+2025-12-10 13:28:01,simply_sitting,0.0,3.72
+2025-12-10 13:28:02,assembling_drone,0.0,1.83
+2025-12-10 13:28:02,simply_sitting,0.54,0.0

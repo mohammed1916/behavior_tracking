@@ -17,31 +17,32 @@ class ActivityLogger:
         self.csv_file = csv_file
         self.log_data = []
     
-    def log_activity(self, activity, start_time, end_time):
+    def log_activity(self, activity, start_time, end_time, avg_fps=0):
         """Log an activity session
         
         Args:
             activity: Activity label (string)
             start_time: Start timestamp (seconds since epoch)
             end_time: End timestamp (seconds since epoch)
+            avg_fps: Average FPS during activity (optional)
         """
         duration = round(end_time - start_time, 2)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        self.log_data.append([timestamp, activity, duration])
+        self.log_data.append([timestamp, activity, duration, round(avg_fps, 2)])
         
         # Write to CSV
-        df = pd.DataFrame(self.log_data, columns=["timestamp", "activity", "duration_sec"])
+        df = pd.DataFrame(self.log_data, columns=["timestamp", "activity", "duration_sec", "avg_fps"])
         df.to_csv(self.csv_file, index=False)
         
-        print(f"Logged: {activity} for {duration}s at {timestamp}")
+        print(f"Logged: {activity} for {duration}s (avg FPS: {avg_fps:.2f}) at {timestamp}")
     
     def get_session_summary(self):
         """Get summary of logged activities"""
         if not self.log_data:
             return None
         
-        df = pd.DataFrame(self.log_data, columns=["timestamp", "activity", "duration_sec"])
+        df = pd.DataFrame(self.log_data, columns=["timestamp", "activity", "duration_sec", "avg_fps"])
         return df
 
 

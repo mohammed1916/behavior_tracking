@@ -43,6 +43,12 @@ class ActivityTrackingSystem:
         self.prev_classify_time = time.time()
         self.activity_tracker.activity_start_time = time.time()
         
+        # FPS Tracking
+        self.fps_counter = 0
+        self.fps_start_time = time.time()
+        self.current_fps = 0
+        self.fps_samples = []  # Track FPS for average calculation
+        
         print("System initialized successfully!")
         print(f"Video dimensions: {self.video_handler.get_dimensions()}")
         print(f"Source FPS: {input_fps:.2f}, processing every {self.frame_interval} frame(s)")
@@ -64,6 +70,16 @@ class ActivityTrackingSystem:
                 
                 current_time = time.time()
                 
+                # Update FPS counter
+                self.fps_counter += 1
+                elapsed_fps_time = current_time - self.fps_start_time
+                if elapsed_fps_time >= 1.0:
+                    self.current_fps = self.fps_counter / elapsed_fps_time
+                    self.fps_samples.append(self.current_fps)  # Add to samples for averaging
+                    self.fps_counter = 0
+                    self.fps_start_time = current_time
+                    print(f"Processing FPS: {self.current_fps:.2f}")
+                
                 # Process frame with motion detection
                 detection_info = self.motion_detector.process_frame(frame)
                 
@@ -81,14 +97,17 @@ class ActivityTrackingSystem:
                         new_activity, current_time, PHONE_RESET_FRAMES
                     )
                     
-                    # Log activity transition
+                    # Log activity transition with average FPS
                     if activity_changed:
+                        avg_fps = sum(self.fps_samples) / len(self.fps_samples) if self.fps_samples else 0
                         self.activity_logger.log_activity(
                             old_activity,
                             self.activity_tracker.activity_start_time,
-                            current_time
+                            current_time,
+                            avg_fps=avg_fps
                         )
                         self.activity_tracker.activity_start_time = current_time
+                        self.fps_samples = []  # Reset FPS samples for new activity
                     
                     # Debug output
                     self.decision_engine.print_motion_debug_info(
@@ -108,7 +127,8 @@ class ActivityTrackingSystem:
                     frame,
                     self.activity_tracker.current_activity,
                     elapsed_time,
-                    alert_message
+                    alert_message,
+                    fps=self.current_fps
                 )
                 
                 # Optional: Draw motion landmarks (uncomment to visualize)
@@ -137,12 +157,14 @@ class ActivityTrackingSystem:
         """Shutdown the system and cleanup resources"""
         print("Shutting down system...")
         
-        # Log final activity
+        # Log final activity with average FPS
         if self.activity_tracker.activity_start_time:
+            avg_fps = sum(self.fps_samples) / len(self.fps_samples) if self.fps_samples else 0
             self.activity_logger.log_activity(
                 self.activity_tracker.current_activity,
                 self.activity_tracker.activity_start_time,
-                time.time()
+                time.time(),
+                avg_fps=avg_fps
             )
         
         # Cleanup resources

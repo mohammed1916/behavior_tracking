@@ -96,7 +96,7 @@ class FrameRenderer:
         self.color_timer = (255, 255, 0)   # Yellow
         self.color_alert = (0, 255, 0)     # Green
     
-    def render_activity_info(self, frame, activity, elapsed_time, alert_message=""):
+    def render_activity_info(self, frame, activity, elapsed_time, alert_message="", fps=0):
         """Render activity information on frame
         
         Args:
@@ -104,6 +104,7 @@ class FrameRenderer:
             activity: Current activity label
             elapsed_time: Elapsed time for activity (seconds)
             alert_message: Alert message to display (optional)
+            fps: Current processing FPS (optional)
         
         Returns:
             frame: Rendered frame
@@ -130,12 +131,25 @@ class FrameRenderer:
             self.thickness
         )
         
+        # FPS display
+        if fps > 0:
+            cv2.putText(
+                frame,
+                f"FPS: {fps:.1f}",
+                (30, 120),
+                self.font,
+                self.font_scale,
+                self.color_info,
+                self.thickness
+            )
+        
         # Alert message
         if alert_message:
+            alert_y = 160 if fps > 0 else 120
             cv2.putText(
                 frame,
                 alert_message,
-                (30, 120),
+                (30, alert_y),
                 self.font,
                 self.font_scale,
                 self.color_alert,
