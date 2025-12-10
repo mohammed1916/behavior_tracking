@@ -7,7 +7,7 @@ from vlm_classifier import VLMActivityClassifier
 from activity_logger import ActivityLogger, ActivityTracker
 from decision_engine import ActivityDecisionEngine
 from video_handler import VideoCapture, FrameRenderer
-from config import VLM_CLASSIFY_INTERVAL, PHONE_RESET_FRAMES
+from config import VLM_CLASSIFY_INTERVAL, PHONE_RESET_FRAMES, TARGET_PROCESS_FPS, PROCESSING_DOWNSCALE, OUTPUT_FPS
 
 
 class ActivityTrackingSystem:
@@ -27,8 +27,17 @@ class ActivityTrackingSystem:
         self.activity_logger = ActivityLogger()
         self.activity_tracker = ActivityTracker()
         self.decision_engine = ActivityDecisionEngine()
-        self.video_handler = VideoCapture(source=video_source)
+        self.video_handler = VideoCapture(
+            source=video_source,
+            fps=OUTPUT_FPS,
+            resize_scale=PROCESSING_DOWNSCALE
+        )
         self.frame_renderer = FrameRenderer()
+        
+        # Frame sampling: process at ~TARGET_PROCESS_FPS
+        input_fps = self.video_handler.get_input_fps() or TARGET_PROCESS_FPS
+        self.frame_interval = max(1, int(round(input_fps / TARGET_PROCESS_FPS)))
+        self.frame_index = 0
         
         # Timing
         self.prev_classify_time = time.time()
@@ -36,6 +45,7 @@ class ActivityTrackingSystem:
         
         print("System initialized successfully!")
         print(f"Video dimensions: {self.video_handler.get_dimensions()}")
+        print(f"Source FPS: {input_fps:.2f}, processing every {self.frame_interval} frame(s)")
     
     def run(self):
         """Run the activity tracking system"""
@@ -47,6 +57,10 @@ class ActivityTrackingSystem:
                 if not ret:
                     print("End of video or camera disconnected")
                     break
+                
+                self.frame_index += 1
+                if self.frame_index % self.frame_interval != 0:
+                    continue
                 
                 current_time = time.time()
                 

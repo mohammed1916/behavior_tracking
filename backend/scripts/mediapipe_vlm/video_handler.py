@@ -1,13 +1,13 @@
 """Video capture and processing utilities"""
 
 import cv2
-from config import VIDEO_FPS, VIDEO_CODEC, VIDEO_OUTPUT_FILE
+from config import VIDEO_FPS, VIDEO_CODEC, VIDEO_OUTPUT_FILE, OUTPUT_FPS
 
 
 class VideoCapture:
-    """Wrapper for video capture with output recording"""
+    """Wrapper for video capture with optional downscaling and output recording"""
     
-    def __init__(self, source=0, output_file=VIDEO_OUTPUT_FILE, fps=VIDEO_FPS, codec=VIDEO_CODEC):
+    def __init__(self, source=0, output_file=VIDEO_OUTPUT_FILE, fps=OUTPUT_FPS, codec=VIDEO_CODEC, resize_scale=1.0):
         """Initialize video capture
         
         Args:
@@ -15,15 +15,22 @@ class VideoCapture:
             output_file: Path for output video file
             fps: Frames per second for output
             codec: Video codec (e.g., 'mp4v', 'XVID')
+            resize_scale: Scale factor to downsize frames for processing/output
         """
         self.cap = cv2.VideoCapture(source)
+        self.resize_scale = resize_scale
         
-        # Get video properties
-        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        # Get source video properties
+        self.input_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 0
+        self.input_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 0
+        self.input_fps = self.cap.get(cv2.CAP_PROP_FPS) or fps
+        
+        # Apply scaling for processing/output
+        self.width = max(1, int(self.input_width * self.resize_scale)) if self.input_width else int(640 * self.resize_scale)
+        self.height = max(1, int(self.input_height * self.resize_scale)) if self.input_height else int(480 * self.resize_scale)
         self.fps = fps
         
-        # Initialize video writer
+        # Initialize video writer sized to processed frames
         fourcc = cv2.VideoWriter_fourcc(*codec)
         self.out = cv2.VideoWriter(
             output_file,
@@ -33,12 +40,17 @@ class VideoCapture:
         )
     
     def read(self):
-        """Read next frame from video
+        """Read next frame from video and optionally downscale it
         
         Returns:
             tuple: (success, frame)
         """
-        return self.cap.read()
+        ret, frame = self.cap.read()
+        if not ret:
+            return ret, frame
+        if self.resize_scale != 1.0:
+            frame = cv2.resize(frame, (self.width, self.height))
+        return ret, frame
     
     def write(self, frame):
         """Write frame to output video
@@ -61,6 +73,10 @@ class VideoCapture:
             tuple: (width, height)
         """
         return self.width, self.height
+
+    def get_input_fps(self):
+        """Get source video FPS (falls back to configured fps if unknown)"""
+        return self.input_fps
 
 
 class FrameRenderer:
