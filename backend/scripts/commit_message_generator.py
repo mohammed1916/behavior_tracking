@@ -76,13 +76,14 @@ def analyze_file_changes() -> Dict[str, int]:
 def determine_commit_type(diff: str, files: List[str]) -> str:
     """Determine the type of commit based on the changes."""
     diff_lower = diff.lower()
+    diff_lines = diff.split('\n')
     
     # Check for new files
-    if '+++' in diff and any('new file' in line.lower() for line in diff.split('\n')):
+    if '+++' in diff and any('new file' in line.lower() for line in diff_lines):
         return 'feat'
     
     # Check for deletions
-    if '---' in diff and any('deleted file' in line.lower() for line in diff.split('\n')):
+    if '---' in diff and any('deleted file' in line.lower() for line in diff_lines):
         return 'refactor'
     
     # Check for documentation changes
@@ -160,8 +161,9 @@ def generate_commit_description(diff: str, files: List[str]) -> str:
     file_changes = analyze_file_changes()
     
     # Count additions and deletions
-    additions = len([line for line in diff.split('\n') if line.startswith('+')])
-    deletions = len([line for line in diff.split('\n') if line.startswith('-')])
+    diff_lines = diff.split('\n')
+    additions = len([line for line in diff_lines if line.startswith('+')])
+    deletions = len([line for line in diff_lines if line.startswith('-')])
     
     # Describe based on what changed
     descriptions = []

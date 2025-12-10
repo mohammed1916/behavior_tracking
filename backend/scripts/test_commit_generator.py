@@ -83,7 +83,6 @@ def test_import():
     print("\n=== Test 3: Import test ===")
     try:
         # Try importing the functions
-        import sys
         sys.path.insert(0, 'backend/scripts')
         from commit_message_generator import (
             analyze_file_changes,
