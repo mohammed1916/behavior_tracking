@@ -1,2 +1,11 @@
 timestamp,activity,duration_sec
-2025-12-09 16:56:20,unknown,1.29
+2025-12-10 09:25:01,unknown,3.99
+2025-12-10 09:25:02,idle,1.79
+2025-12-10 09:25:04,simply_sitting,2.09
+2025-12-10 09:25:09,assembling_drone,5.1
+2025-12-10 09:25:14,simply_sitting,5.11
+2025-12-10 09:25:18,assembling_drone,4.15
+2025-12-10 09:25:19,simply_sitting,1.04
+2025-12-10 09:25:20,assembling_drone,1.03
+2025-12-10 09:25:23,simply_sitting,2.03
+2025-12-10 09:25:33,using_phone,10.35
