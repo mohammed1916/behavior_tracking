@@ -24,12 +24,92 @@ model = AutoModelForImageTextToText.from_pretrained(
 ).to(device)
 
 # ------------------------------------------------------
-# Classification using VLM model
+# Enhanced Motion Detection for Productive Work
 # ------------------------------------------------------
 prev_frame_gray = None
+motion_history = []
+MOTION_HISTORY_SIZE = 10
+
+def analyze_motion_pattern(frame_gray, prev_gray):
+    """Enhanced motion analysis with region-based detection"""
+    h, w = frame_gray.shape
+    
+    # Calculate overall motion
+    diff = cv2.absdiff(frame_gray, prev_gray)
+    overall_motion = np.sum(diff) / (h * w)
+    
+    # Region-based motion analysis (work area detection)
+    # Bottom half = work area (hands, tools, desk)
+    # Top half = upper body (less relevant for work detection)
+    work_area = diff[h//2:, :]
+    upper_area = diff[:h//2, :]
+    
+    work_motion = np.sum(work_area) / work_area.size
+    upper_motion = np.sum(upper_area) / upper_area.size
+    
+    # Detect localized motion (small, precise movements = productive work)
+    # Apply threshold to get significant motion pixels
+    _, motion_mask = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+    
+    # Find contours of motion regions
+    contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Analyze motion characteristics
+    num_motion_regions = len([c for c in contours if cv2.contourArea(c) > 50])
+    
+    # Hand-like motion detection (small to medium regions)
+    hand_motion_regions = [c for c in contours if 100 < cv2.contourArea(c) < 5000]
+    hand_motion_score = len(hand_motion_regions)
+    
+    return {
+        'overall': overall_motion,
+        'work_area': work_motion,
+        'upper_area': upper_motion,
+        'num_regions': num_motion_regions,
+        'hand_score': hand_motion_score,
+        'work_ratio': work_motion / (upper_motion + 0.1)  # Avoid division by zero
+    }
+
+def classify_motion_as_productive(motion_stats, motion_history):
+    """Determine if motion pattern indicates productive work"""
+    
+    # Thresholds (tune these based on your environment)
+    WORK_MOTION_MIN = 2.0      # Minimum motion in work area
+    WORK_MOTION_MAX = 15.0     # Maximum (too much = not focused)
+    HAND_SCORE_MIN = 2         # Minimum hand-like motion regions
+    WORK_RATIO_MIN = 1.2       # Work area should have more motion than upper body
+    
+    # Add current stats to history
+    motion_history.append(motion_stats)
+    if len(motion_history) > MOTION_HISTORY_SIZE:
+        motion_history.pop(0)
+    
+    # Analyze recent motion pattern (smoothing)
+    if len(motion_history) >= 3:
+        avg_work_motion = np.mean([m['work_area'] for m in motion_history[-5:]])
+        avg_hand_score = np.mean([m['hand_score'] for m in motion_history[-5:]])
+        avg_work_ratio = np.mean([m['work_ratio'] for m in motion_history[-5:]])
+        consistency = np.std([m['work_area'] for m in motion_history[-5:]])
+        
+        # Productive work indicators:
+        # 1. Moderate, consistent motion in work area
+        # 2. Multiple small motion regions (hands working)
+        # 3. More motion in lower half than upper half
+        # 4. Consistent pattern (not erratic)
+        
+        is_productive = (
+            WORK_MOTION_MIN < avg_work_motion < WORK_MOTION_MAX and
+            avg_hand_score >= HAND_SCORE_MIN and
+            avg_work_ratio >= WORK_RATIO_MIN and
+            consistency < 5.0  # Consistent motion pattern
+        )
+        
+        return is_productive, avg_work_motion, avg_hand_score
+    
+    return False, 0, 0
 
 def classify_activity(frame):
-    global prev_frame_gray
+    global prev_frame_gray, motion_history
 
     # Convert frame to PIL image
     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
@@ -69,34 +149,60 @@ def classify_activity(frame):
     result = lines[-1] if lines else "unknown"
 
     # ----------------------------
-    # MOTION DETECTION
+    # ENHANCED MOTION DETECTION
     # ----------------------------
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    motion = 0
-
+    motion_stats = None
+    is_productive_motion = False
+    
     if prev_frame_gray is not None:
-        diff = cv2.absdiff(frame_gray, prev_frame_gray)
-        motion = np.sum(diff) / (frame_gray.shape[0] * frame_gray.shape[1])
-
+        motion_stats = analyze_motion_pattern(frame_gray, prev_frame_gray)
+        is_productive_motion, avg_work_motion, hand_score = classify_motion_as_productive(
+            motion_stats, motion_history
+        )
+        
+        print(f"Motion - Overall: {motion_stats['overall']:.2f}, Work Area: {motion_stats['work_area']:.2f}, "
+              f"Hand Score: {motion_stats['hand_score']}, Productive: {is_productive_motion}")
+    
     prev_frame_gray = frame_gray
-    MOTION_THRESHOLD = 3   # tune this
-
-    print("Motion:", motion)
 
     # ----------------------------
-    # FINAL DECISION LOGIC
+    # FINAL DECISION LOGIC (Enhanced)
     # ----------------------------
     if "phone" in result:
         return "using_phone"
 
     if "assemble" in result or "drone" in result:
         return "assembling_drone"
-
-    # If VLM is unsure:
-    if "idle" in result and motion > MOTION_THRESHOLD:
+    
+    # Enhanced decision making with motion analysis
+    if motion_stats:
+        # Strong productive motion pattern detected
+        if is_productive_motion:
+            if "idle" in result or "unknown" in result:
+                return "assembling_drone"  # Override VLM with motion evidence
+            return "assembling_drone"
+        
+        # Minimal motion detected
+        if motion_stats['overall'] < 2.0:
+            return "idle"
+        
+        # Medium motion but not productive pattern
+        if 2.0 <= motion_stats['overall'] < 8.0:
+            if "idle" in result:
+                return "simply_sitting"  # Some movement but not working
+            elif "unknown" in result:
+                return "simply_sitting"
+        
+        # High overall motion but not in work area (body movement)
+        if motion_stats['overall'] > 8.0 and motion_stats['work_ratio'] < 1.0:
+            return "simply_sitting"  # Moving but not working
+    
+    # Fallback to simple logic
+    if "idle" in result:
+        return "idle"
+    elif "unknown" in result:
         return "simply_sitting"
-    elif "unknown" in result and motion > MOTION_THRESHOLD:
-        return "working"
     else:
         return "idle"
 
@@ -129,7 +235,8 @@ def log_activity(activity, start, end):
 # ------------------------------------------------------
 # Real-time video stream
 # ------------------------------------------------------
-cap = cv2.VideoCapture("drone.mp4")
+# cap = cv2.VideoCapture("drone.mp4")
+cap = cv2.VideoCapture(0)
 
 
 
@@ -139,7 +246,7 @@ height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 # Define VideoWriter for output
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 'XVID' or 'mp4v'
-out = cv2.VideoWriter("data_collection_20251105_141950.997_.mp4", fourcc, 30.0, (width, height))
+out = cv2.VideoWriter("data_collection_.mp4", fourcc, 30.0, (width, height))
 
 prev_classify_time = time.time()
 font = cv2.FONT_HERSHEY_SIMPLEX
