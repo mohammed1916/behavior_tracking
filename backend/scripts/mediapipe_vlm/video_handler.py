@@ -96,7 +96,7 @@ class FrameRenderer:
         self.color_timer = (255, 255, 0)   # Yellow
         self.color_alert = (0, 255, 0)     # Green
     
-    def render_activity_info(self, frame, activity, elapsed_time, alert_message="", fps=0):
+    def render_activity_info(self, frame, activity, elapsed_time, alert_message="", fps=0, show_mediapipe=False):
         """Render activity information on frame
         
         Args:
@@ -105,6 +105,7 @@ class FrameRenderer:
             elapsed_time: Elapsed time for activity (seconds)
             alert_message: Alert message to display (optional)
             fps: Current processing FPS (optional)
+            show_mediapipe: Whether MediaPipe visualization is enabled (optional)
         
         Returns:
             frame: Rendered frame
@@ -143,9 +144,22 @@ class FrameRenderer:
                 self.thickness
             )
         
+        # MediaPipe status indicator
+        y_offset = 160 if fps > 0 else 120
+        mediapipe_status = "MediaPipe: ON" if show_mediapipe else "MediaPipe: OFF"
+        cv2.putText(
+            frame,
+            mediapipe_status,
+            (30, y_offset),
+            self.font,
+            0.7,  # Smaller font
+            (255, 255, 255) if show_mediapipe else (128, 128, 128),  # White if on, gray if off
+            self.thickness
+        )
+        
         # Alert message
         if alert_message:
-            alert_y = 160 if fps > 0 else 120
+            alert_y = y_offset + 40
             cv2.putText(
                 frame,
                 alert_message,

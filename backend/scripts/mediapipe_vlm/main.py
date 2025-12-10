@@ -49,13 +49,17 @@ class ActivityTrackingSystem:
         self.current_fps = 0
         self.fps_samples = []  # Track FPS for average calculation
         
+        # Visualization control
+        self.show_mediapipe = False  # Toggle MediaPipe landmarks visualization
+        
         print("System initialized successfully!")
         print(f"Video dimensions: {self.video_handler.get_dimensions()}")
         print(f"Source FPS: {input_fps:.2f}, processing every {self.frame_interval} frame(s)")
     
     def run(self):
         """Run the activity tracking system"""
-        print("Starting activity tracking... Press 'q' to quit.")
+        print("Starting activity tracking...")
+        print("Controls: 'q' = quit | 'm' = toggle MediaPipe landmarks")
         
         try:
             while True:
@@ -122,30 +126,37 @@ class ActivityTrackingSystem:
                     self.activity_tracker.current_activity, elapsed_time
                 )
                 
+                # Draw MediaPipe landmarks if enabled
+                if self.show_mediapipe:
+                    frame = self.motion_detector.draw_landmarks(
+                        frame,
+                        detection_info['hand_results'],
+                        detection_info['pose_results']
+                    )
+                
                 # Render information on frame
                 frame = self.frame_renderer.render_activity_info(
                     frame,
                     self.activity_tracker.current_activity,
                     elapsed_time,
                     alert_message,
-                    fps=self.current_fps
+                    fps=self.current_fps,
+                    show_mediapipe=self.show_mediapipe
                 )
-                
-                # Optional: Draw motion landmarks (uncomment to visualize)
-                # frame = self.motion_detector.draw_landmarks(
-                #     frame,
-                #     detection_info['hand_results'],
-                #     detection_info['pose_results']
-                # )
                 
                 # Display and write frame
                 cv2.imshow("Drone Assembly Monitoring", frame)
                 self.video_handler.write(frame)
                 
-                # Check for exit
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                # Check for keyboard input
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
                     print("Exiting...")
                     break
+                elif key == ord('m'):
+                    self.show_mediapipe = not self.show_mediapipe
+                    status = "ON" if self.show_mediapipe else "OFF"
+                    print(f"MediaPipe visualization: {status}")
         
         except KeyboardInterrupt:
             print("Interrupted by user")

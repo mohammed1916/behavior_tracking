@@ -157,13 +157,13 @@ pip install torch transformers mediapipe opencv-python pandas pillow numpy
 
 ## Key Features
 
-✅ **MediaPipe Integration**: Hand and pose tracking for robust motion detection
-✅ **VLM Classification**: State-of-the-art vision language model for activity recognition
-✅ **Fusion Architecture**: Combines multiple signals for improved accuracy
-✅ **Modular Design**: Easy to extend and maintain
-✅ **Real-time Processing**: GPU-accelerated inference
-✅ **Activity Logging**: CSV export of activity sessions
-✅ **Alert System**: Time-based alerts for productivity monitoring
+**MediaPipe Integration**: Hand and pose tracking for robust motion detection
+**VLM Classification**: State-of-the-art vision language model for activity recognition
+**Fusion Architecture**: Combines multiple signals for improved accuracy
+**Modular Design**: Easy to extend and maintain
+**Real-time Processing**: GPU-accelerated inference
+**Activity Logging**: CSV export of activity sessions
+**Alert System**: Time-based alerts for productivity monitoring
 
 ## Extending the System
 
