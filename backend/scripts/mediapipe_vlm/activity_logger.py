@@ -2,7 +2,7 @@
 
 import pandas as pd
 from datetime import datetime
-from config import ACTIVITY_CSV_FILE
+from config import ACTIVITY_CSV_FILE, ENABLE_ACTIVITY_CSV_LOGGING, ENABLE_MLFLOW, MLFLOW_TRACKING_URI
 
 
 class ActivityLogger:
@@ -31,10 +31,27 @@ class ActivityLogger:
         
         self.log_data.append([timestamp, activity, duration, round(avg_fps, 2)])
         
-        # Write to CSV
-        df = pd.DataFrame(self.log_data, columns=["timestamp", "activity", "duration_sec", "avg_fps"])
-        df.to_csv(self.csv_file, index=False)
-        
+        # Write to CSV if enabled
+        if ENABLE_ACTIVITY_CSV_LOGGING:
+            df = pd.DataFrame(self.log_data, columns=["timestamp", "activity", "duration_sec", "avg_fps"])
+            try:
+                df.to_csv(self.csv_file, index=False)
+            except Exception:
+                print(f"Failed to write activity CSV to {self.csv_file}")
+
+        # Optional MLflow logging
+        if ENABLE_MLFLOW:
+            try:
+                import mlflow
+                if MLFLOW_TRACKING_URI:
+                    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+                with mlflow.start_run(nested=True):
+                    mlflow.log_metric('activity_duration_sec', duration)
+                    mlflow.set_tag('activity', activity)
+                    mlflow.log_metric('avg_fps', round(avg_fps, 2))
+            except Exception as e:
+                print(f"MLflow logging failed: {e}")
+
         print(f"Logged: {activity} for {duration}s (avg FPS: {avg_fps:.2f}) at {timestamp}")
     
     def get_session_summary(self):

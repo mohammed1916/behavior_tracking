@@ -16,6 +16,8 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saveRecording, setSaveRecording] = useState(false);
   const [savedVideoUrl, setSavedVideoUrl] = useState('');
+  const [enableMediapipe, setEnableMediapipe] = useState(false);
+  const [enableYolo, setEnableYolo] = useState(false);
 
   // Live metadata
   const [captionText, setCaptionText] = useState('');
@@ -47,6 +49,8 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
     if (jpegQuality) params.set('jpeg_quality', String(jpegQuality));
     if (maxWidth) params.set('max_width', String(maxWidth));
     if (saveRecording) params.set('save_video', 'true');
+    if (enableMediapipe) params.set('enable_mediapipe', 'true');
+    if (enableYolo) params.set('enable_yolo', 'true');
     return base + '/backend/stream_pose' + (Array.from(params).length ? ('?' + params.toString()) : '');
   };
 
@@ -163,6 +167,14 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
             <div>
               <label>Save Recording:</label>
               <input type="checkbox" checked={saveRecording} onChange={(e) => setSaveRecording(e.target.checked)} />
+            </div>
+            <div>
+              <label>Enable MediaPipe:</label>
+              <input type="checkbox" checked={enableMediapipe} onChange={(e) => setEnableMediapipe(e.target.checked)} />
+            </div>
+            <div>
+              <label>Enable YOLO:</label>
+              <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} />
             </div>
           </div>
         )}

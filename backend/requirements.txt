@@ -9,3 +9,7 @@ requests
 transformers
 torch
 Pillow
+pytest
+pytest-asyncio
+httpx
+pytest-mock

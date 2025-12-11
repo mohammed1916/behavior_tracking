@@ -48,6 +48,14 @@ ACTIVITY_CSV_FILE = os.path.join("logs", "activity_log.csv")
 VIDEO_OUTPUT_FILE = os.path.join("logs", "data_collection_.mp4")
 VIDEO_CODEC = 'mp4v'
 
+# Logging toggles
+# When False, GPU memory logging calls become no-ops.
+ENABLE_GPU_LOGGING = False
+# Control writing activity sessions to CSV
+ENABLE_ACTIVITY_CSV_LOGGING = True
+# Optional MLflow integration (not enabled by default)
+ENABLE_MLFLOW = True
+MLFLOW_TRACKING_URI = "file:///C:/Users/BBBS-AI-01/d/behavior_tracking/backend/scripts/mlruns"
 # Activity labels
 ACTIVITY_ASSEMBLING_DRONE = "assembling_drone"
 ACTIVITY_IDLE = "idle"

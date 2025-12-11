@@ -26,6 +26,8 @@ function App() {
   const [vlmStream, setVlmStream] = useState(null);
   const [vlmUseLLM, setVlmUseLLM] = useState(false);
   const [viewAnalysisId, setViewAnalysisId] = useState(null);
+  const [enableMediapipe, setEnableMediapipe] = useState(false);
+  const [enableYolo, setEnableYolo] = useState(false);
   // LLM length check state
   const [llmText, setLlmText] = useState('');
   const [llmMaxContext, setLlmMaxContext] = useState(2048);
@@ -114,7 +116,7 @@ function App() {
       const upj = await up.json();
       const filename = upj.filename;
 
-      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${selectedSubtasks.length > 0 ? `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}&compare_timings=true` : ''}`;
+      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${enableMediapipe ? '&enable_mediapipe=true' : ''}${enableYolo ? '&enable_yolo=true' : ''}${selectedSubtasks.length > 0 ? `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}&compare_timings=true` : ''}`;
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
       setVlmStream(es);
@@ -279,6 +281,15 @@ function App() {
               <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
             </label>     
             
+            <label style={{ display: 'block', marginTop: 8 }}>
+              <input type="checkbox" checked={enableMediapipe} onChange={(e) => setEnableMediapipe(e.target.checked)} /> Enable MediaPipe preprocessing
+              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, server runs MediaPipe and returns a short summary.</small>
+            </label>
+
+            <label style={{ display: 'block', marginTop: 8 }}>
+              <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} /> Enable YOLO preprocessing
+              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, server runs YOLO and returns a short summary.</small>
+            </label>
             <br/>
 
             <div style={{ marginTop: 8, border: '1px dotted var(--accent)', padding: '8px', paddingTop: 16 }}>

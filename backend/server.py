@@ -80,6 +80,104 @@ TASK_COMPLETION_PROMPT_TEMPLATE = (
 # Cache captioners by model id so repeated requests don't reload them
 _captioner_cache = {}
 
+
+import importlib
+import importlib.util
+QwenVLMAdapter = None
+try:
+    # Try package-relative import first
+    from .vlm_qwen import QwenVLMAdapter  # type: ignore
+except Exception:
+    try:
+        # Try absolute import (when backend is on PYTHONPATH)
+        from vlm_qwen import QwenVLMAdapter  # type: ignore
+    except Exception:
+        # Fallback: attempt to load by filepath so server can import even when
+        # `backend` is not a package or PYTHONPATH is not set.
+        try:
+            vlm_path = os.path.join(os.path.dirname(__file__), 'vlm_qwen.py')
+            if os.path.exists(vlm_path):
+                spec = importlib.util.spec_from_file_location('vlm_qwen', vlm_path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)  # type: ignore
+                QwenVLMAdapter = getattr(mod, 'QwenVLMAdapter', None)
+        except Exception:
+            QwenVLMAdapter = None
+
+
+# Startup hook: attempt to preload a local qwen model if present. This makes
+# Qwen available deterministically at startup instead of loading lazily
+# inside request handlers (avoids unexpected heavy I/O during requests).
+@app.on_event("startup")
+def preload_qwen_local():
+    try:
+        qwen_dir = os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model')
+        if os.path.isdir(qwen_dir) and QwenVLMAdapter is not None:
+            try:
+                # Force CPU by default for safety at startup; operator can change
+                # device/ENV if GPU usage is desired.
+                adapter = QwenVLMAdapter(qwen_dir, device='cpu')
+                _captioner_cache['qwen_local'] = adapter
+                logging.info('Preloaded qwen_local adapter from %s', qwen_dir)
+            except Exception:
+                logging.exception('Failed to preload qwen_local adapter')
+        else:
+            logging.info('qwen_local model dir not found or QwenVLMAdapter missing; skipping preload')
+    except Exception:
+        logging.exception('Unexpected error during qwen_local preload')
+
+
+@app.post('/backend/load_qwen_local')
+def load_qwen_local():
+    """Admin endpoint to (re)load the local qwen adapter on demand.
+
+    Returns JSON with `loaded: true` on success.
+    """
+    qwen_dir = os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model')
+    if not os.path.isdir(qwen_dir):
+        raise HTTPException(status_code=404, detail='qwen model directory not found')
+    if QwenVLMAdapter is None:
+        raise HTTPException(status_code=500, detail='QwenVLMAdapter not available on this server')
+    try:
+        adapter = QwenVLMAdapter(qwen_dir, device='cpu')
+        _captioner_cache['qwen_local'] = adapter
+        logging.info('Loaded qwen_local adapter via admin endpoint')
+        return {"loaded": True, "path": qwen_dir}
+    except Exception as e:
+        logging.exception('Failed to load qwen_local via admin endpoint')
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/backend/preloaded_models')
+def preloaded_models():
+    """Return a JSON object describing which captioner/adapter models are preloaded.
+
+    The response maps model id -> metadata (type, loaded).
+    """
+    try:
+        models = {}
+        for mid, obj in _captioner_cache.items():
+            try:
+                obj_type = type(obj).__name__ if obj is not None else None
+            except Exception:
+                obj_type = None
+            models[mid] = {"type": obj_type, "loaded": obj is not None}
+        return {"status": "ok", "models": models}
+    except Exception:
+        logging.exception('Failed to list preloaded models')
+        raise HTTPException(status_code=500, detail='Failed to list preloaded models')
+
+
+@app.get('/backend/health')
+def health():
+    """Simple health endpoint with basic server status and preloaded model count."""
+    try:
+        model_count = len(_captioner_cache)
+        return {"status": "ok", "preloaded_models": model_count}
+    except Exception:
+        logging.exception('Health check failed')
+        raise HTTPException(status_code=500, detail='health check failed')
+
 def get_local_captioner():
     """Return a default local captioner (BLIP) if available."""
     global _local_captioner
@@ -146,7 +244,33 @@ def get_captioner_for_model(model_id: str):
                 task = e.get('task', task)
                 break
  
-    p = pipeline(task, model=model_id, device=device)
+        # Special-case Qwen/local VLM adapter: if model_id explicitly matches our
+        # local adapter id (e.g. 'qwen_local') or starts with 'qwen', attempt to
+        # load VLMAdapter and DO NOT fall back to HuggingFace pipeline if adapter
+        # initialization fails. This prevents trying to treat our local adapter id
+        # as a HuggingFace model identifier.
+        try:
+            mid = (model_id or '').lower()
+            if mid == 'qwen_local' or mid.startswith('qwen'):
+                # Prefer the dedicated Qwen adapter (no mediapipe dependencies)
+                if QwenVLMAdapter is not None:
+                    try:
+                        adapter = QwenVLMAdapter(model_id)
+                        _captioner_cache[model_id] = adapter
+                        logging.info('Loaded QwenVLMAdapter for model %s', model_id)
+                        return adapter
+                    except Exception:
+                        logging.exception('Failed to initialize QwenVLMAdapter for %s', model_id)
+                        return None
+                # If adapter module not present, do NOT fall back to HF pipeline for qwen_local
+                logging.warning('QwenVLMAdapter not available; refusing to load non-HF model id %s', model_id)
+                return None
+        except Exception:
+            logging.exception('Unexpected error while handling special model id %s', model_id)
+            return None
+
+        # Not a special-case local adapter; proceed to load via HuggingFace pipeline
+        p = pipeline(task, model=model_id, device=device)
     _captioner_cache[model_id] = p
     logging.info('Loaded captioner for model %s (task=%s) from local cache on device=%s', model_id, task, device)
     return p
@@ -958,7 +1082,7 @@ def _sse_event(data: dict, event: Optional[str] = None) -> bytes:
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False)):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False)):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -992,6 +1116,19 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 yield _sse_event({"stage": "error", "message": f"no local captioner available for model '{model}'"})
                 return
 
+                # Lazy init optional detectors - NOTE: server is not configured to
+                # directly import or run the standalone `mediapipe_vlm` scripts.
+                # If `enable_mediapipe`/`enable_yolo` are true, we do not import
+                # those script files here to avoid coupling; instead return a
+                # minimal placeholder summary indicating server-side support is
+                # disabled unless you explicitly enable/implement it separately.
+                mp_detector = None
+                yolo_detector = None
+                if enable_mediapipe:
+                    logging.info('Mediapipe preprocessing requested but disabled in server configuration')
+                if enable_yolo:
+                    logging.info('YOLO preprocessing requested but disabled in server configuration')
+
             # Open second capture for seeking samples
             cap2 = cv2.VideoCapture(file_path)
             # Track cumulative work frames when subtask monitoring is requested
@@ -1010,6 +1147,21 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     # convert BGR->RGB PIL image
 
                     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+
+                    # Optional preprocessing
+                    mediapipe_info = None
+                    yolo_info = None
+                    try:
+                        if mp_detector is not None:
+                            mediapipe_info = mp_detector.process_frame(frame)
+                    except Exception:
+                        logging.exception('MediaPipe processing failed on frame')
+                    try:
+                        if yolo_detector is not None:
+                            yolo_info = yolo_detector.detect_objects(frame)
+                    except Exception:
+                        logging.exception('YOLO processing failed on frame')
+
                     out = captioner(img)
                     caption = _normalize_caption_output(captioner, out)
 
@@ -1071,6 +1223,16 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                             subtask_overrun = None
 
                     payload = {"stage": "sample", "frame_index": fi, "time_sec": time_sec, "caption": caption, "label": label, "llm_output": cls_text}
+                    if mediapipe_info is not None:
+                        payload['mediapipe'] = {
+                            'hand_motion_regions': mediapipe_info.get('hand_motion_regions'),
+                            'is_productive_motion': mediapipe_info.get('is_productive_motion')
+                        }
+                    if yolo_info is not None:
+                        payload['yolo'] = {
+                            'objects': {k: v.get('count') for k, v in (yolo_info.get('objects') or {}).items()},
+                            'object_boxes_count': len(yolo_info.get('object_boxes', []))
+                        }
                     if subtask_overrun is not None:
                         payload['subtask_overrun'] = subtask_overrun
 
@@ -1212,16 +1374,30 @@ async def caption_image(request: dict):
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
         
+        # Optional preprocessing flags (can be supplied in JSON body)
+        enable_mediapipe = bool(request.get('enable_mediapipe', False))
+        enable_yolo = bool(request.get('enable_yolo', False))
+
         # Get the appropriate captioner
         captioner = get_captioner_for_model(model_id)
         
         if captioner is None:
             raise HTTPException(status_code=500, detail=f"Model {model_id} is not available")
         
-        # Generate caption
+        # Optionally run mediapipe / yolo preprocessing: server does not
+        # execute the standalone mediapipe_vlm scripts here to avoid tight
+        # coupling. If the frontend requests these features, return a minimal
+        # summary indicating whether the server is configured to run them.
+        mediapipe_summary = None
+        yolo_summary = None
+        if enable_mediapipe:
+            mediapipe_summary = {'available': False, 'message': 'Mediapipe preprocessing is not enabled on this server'}
+        if enable_yolo:
+            yolo_summary = {'available': False, 'message': 'YOLO preprocessing is not enabled on this server'}
+
+        # Generate caption (or label via adapter)
         try:
             result = captioner(image)
-            
             # Extract caption text from result
             if isinstance(result, list) and len(result) > 0:
                 if isinstance(result[0], dict) and 'generated_text' in result[0]:
@@ -1230,13 +1406,17 @@ async def caption_image(request: dict):
                     caption_text = str(result[0])
             else:
                 caption_text = str(result)
-            
-            return {
+
+            out = {
                 "caption": caption_text,
                 "model": model_id,
                 "status": "success"
             }
-            
+            if mediapipe_summary is not None:
+                out['mediapipe'] = mediapipe_summary
+            if yolo_summary is not None:
+                out['yolo'] = yolo_summary
+            return out
         except Exception as e:
             logging.error(f"Error during caption generation with {model_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Caption generation failed: {str(e)}")

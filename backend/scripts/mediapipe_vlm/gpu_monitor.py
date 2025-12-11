@@ -9,7 +9,7 @@ except Exception:
 import pandas as pd
 
 import os
-from config import GPU_CSV_FILE 
+from config import GPU_CSV_FILE, ENABLE_GPU_LOGGING
 
 def get_gpu_memory_info():
     """Return GPU memory usage information in MB.
@@ -51,6 +51,8 @@ def get_gpu_memory_info():
 
 def log_gpu_usage(label=None, csv_file=GPU_CSV_FILE):
     """Append current GPU usage to a CSV file with timestamp and optional label."""
+    if not ENABLE_GPU_LOGGING:
+        return None
     info = get_gpu_memory_info()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
