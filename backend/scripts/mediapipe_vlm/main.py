@@ -8,6 +8,7 @@ from vlm_classifier import VLMActivityClassifier
 from yolo_detector import YOLOObjectDetector
 from activity_logger import ActivityLogger, ActivityTracker
 from decision_engine import ActivityDecisionEngine
+from gpu_monitor import log_gpu_usage
 from video_handler import VideoCapture, FrameRenderer
 from config import VLM_CLASSIFY_INTERVAL, PHONE_RESET_FRAMES, TARGET_PROCESS_FPS, PROCESSING_DOWNSCALE, OUTPUT_FPS
 
@@ -167,6 +168,12 @@ class ActivityTrackingSystem:
                     detection_info['hand_touching_assembly'] = hand_touching_assembly
                     detection_info['hand_touching_details'] = hand_touching_details
 
+                    # Log GPU usage after VLM inference for monitoring
+                    try:
+                        log_gpu_usage(label='vlm_inference')
+                    except Exception:
+                        pass
+
                     # Combine VLM and motion analysis (decision engine may use YOLO evidence)
                     new_activity = self.decision_engine.classify_activity(vlm_result, detection_info)
                     
@@ -292,6 +299,12 @@ class ActivityTrackingSystem:
                 time.time(),
                 avg_fps=avg_fps
             )
+
+        # Log GPU usage at shutdown
+        try:
+            log_gpu_usage(label='shutdown')
+        except Exception:
+            pass
         
         # Cleanup resources
         self.motion_detector.release()
@@ -314,11 +327,11 @@ def main():
     # For webcam use: ActivityTrackingSystem(video_source=0)
     # For video file use: ActivityTrackingSystem(video_source="path/to/video.mp4")
     
-    system = ActivityTrackingSystem(0);
-    # system = ActivityTrackingSystem(
-    #     video_source="C:\\Users\\BBBS-AI-01\\d\\behavior_tracking\\data\\assembly_idle.mp4",
-    #     enable_yolo=True
-    # )
+    # system = ActivityTrackingSystem(0);
+    system = ActivityTrackingSystem(
+        video_source="C:\\Users\\BBBS-AI-01\\d\\behavior_tracking\\data\\assembly_idle.mp4",
+        enable_yolo=True
+    )
     system.run()
 
 

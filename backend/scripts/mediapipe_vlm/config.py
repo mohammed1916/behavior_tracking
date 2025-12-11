@@ -1,3 +1,4 @@
+import os
 """Configuration constants for activity tracking system"""
 
 # Model configuration
@@ -34,8 +35,8 @@ PROCESSING_DOWNSCALE = 0.5      # Resize factor for inference to speed up proces
 OUTPUT_FPS = TARGET_PROCESS_FPS # Save output video at the processed frame rate
 
 # Output
-CSV_FILE = "activity_log.csv"
-VIDEO_OUTPUT_FILE = "data_collection_.mp4"
+CSV_FILE = os.path.join("logs", "activity_log.csv")
+VIDEO_OUTPUT_FILE = os.path.join("logs", "data_collection_.mp4")
 VIDEO_CODEC = 'mp4v'
 
 # Activity labels
