@@ -3,6 +3,9 @@
 import time
 import cv2
 import os
+# Protobuf compatibility shim: ensure MessageFactory.GetPrototype exists when needed
+from protobuf_compat import _mf  # noqa: F401
+
 from motion_detector import MediaPipeMotionDetector
 from vlm_classifier import VLMActivityClassifier
 from yolo_detector import YOLOObjectDetector
@@ -10,7 +13,11 @@ from activity_logger import ActivityLogger, ActivityTracker
 from decision_engine import ActivityDecisionEngine
 from gpu_monitor import log_gpu_usage
 from video_handler import VideoCapture, FrameRenderer
-from config import VLM_CLASSIFY_INTERVAL, PHONE_RESET_FRAMES, TARGET_PROCESS_FPS, PROCESSING_DOWNSCALE, OUTPUT_FPS
+from config import (
+    VLM_CLASSIFY_INTERVAL, PHONE_RESET_FRAMES, TARGET_PROCESS_FPS,
+    PROCESSING_DOWNSCALE, OUTPUT_FPS, VLM_USE_TWO_MODELS, VLM_ALTERNATE_HALF_INTERVAL,
+    ACTIVITY_UNKNOWN
+)
 
 
 class ActivityTrackingSystem:
@@ -27,7 +34,26 @@ class ActivityTrackingSystem:
         
         # Initialize components
         self.motion_detector = MediaPipeMotionDetector()
-        self.vlm_classifier = VLMActivityClassifier()
+        # VLM classifiers: support single or dual-model alternating mode
+        self.vlm_use_two_models = VLM_USE_TWO_MODELS
+        self.vlm_alternate_half_interval = VLM_ALTERNATE_HALF_INTERVAL
+
+        if self.vlm_use_two_models:
+            print("Initializing two VLM model instances for alternating inference...")
+            self.vlm_classifier_1 = VLMActivityClassifier()
+            self.vlm_classifier_2 = VLMActivityClassifier()
+            self.vlm_model_index = 0
+            # If alternating halves the classify interval, adjust effective interval
+            eff_interval = VLM_CLASSIFY_INTERVAL / 2.0 if self.vlm_alternate_half_interval else VLM_CLASSIFY_INTERVAL
+            self.vlm_classify_interval = eff_interval
+        else:
+            self.vlm_classifier = VLMActivityClassifier()
+            self.vlm_classifier_1 = None
+            self.vlm_classifier_2 = None
+            self.vlm_model_index = 0
+        # Ensure classify interval is set for single-model case
+        if not hasattr(self, 'vlm_classify_interval'):
+            self.vlm_classify_interval = VLM_CLASSIFY_INTERVAL
         self.activity_logger = ActivityLogger()
         self.activity_tracker = ActivityTracker()
         self.decision_engine = ActivityDecisionEngine()
@@ -69,10 +95,15 @@ class ActivityTrackingSystem:
         self.current_fps = 0
         self.fps_samples = []  # Track FPS for average calculation
         
-        # VLM classification interval (dynamic)
-        self.vlm_classify_interval = VLM_CLASSIFY_INTERVAL
+        # VLM classification interval options (dynamic)
+        # Note: when using two models with half-interval enabled, self.vlm_classify_interval
+        # was already set above to VLM_CLASSIFY_INTERVAL/2.
         self.vlm_interval_index = 0  # Cycle through options
         self.vlm_interval_options = [0.5, 1.0, 2.0]
+
+        # VLM inference counters for monitoring
+        self.vlm_inference_count = 0
+        self.vlm_inference_start_time = time.time()
         
         # Visualization control
         self.show_mediapipe = False  # Toggle MediaPipe landmarks visualization
@@ -128,8 +159,34 @@ class ActivityTrackingSystem:
                 
                 # Run VLM classification at dynamic interval
                 if current_time - self.prev_classify_time >= self.vlm_classify_interval:
-                    vlm_result = self.vlm_classifier.classify(frame)
-                    vlm_result = self.vlm_classifier.post_process_vlm_result(vlm_result)
+                    # Choose VLM model (alternate if two-model mode enabled)
+                    try:
+                        if self.vlm_use_two_models and self.vlm_classifier_1 and self.vlm_classifier_2:
+                            classifier = self.vlm_classifier_1 if self.vlm_model_index == 0 else self.vlm_classifier_2
+                            model_label = f"vlm{self.vlm_model_index+1}"
+                            # Toggle for next time
+                            self.vlm_model_index = 1 - self.vlm_model_index
+                        else:
+                            classifier = self.vlm_classifier
+                            model_label = "vlm"
+
+                        # Run inference
+                        vlm_result = classifier.classify(frame)
+                        vlm_result = classifier.post_process_vlm_result(vlm_result)
+
+                        # Bookkeeping for VLM inference rate
+                        self.vlm_inference_count += 1
+                        elapsed_vlm_time = time.time() - self.vlm_inference_start_time
+                        vlm_fps = (self.vlm_inference_count / elapsed_vlm_time) if elapsed_vlm_time > 0 else 0.0
+                        # Print VLM inference rate and model used
+                        print(f"VLM [{model_label}] result: {vlm_result} | VLM rate: {vlm_fps:.2f} inf/s")
+
+                        # Log GPU usage after VLM inference for monitoring (label by model)
+                        log_gpu_usage(label=f'{model_label}_inference')
+
+                    except Exception as e:
+                        print(f"Warning: VLM inference failed: {e}")
+                        vlm_result = None
                     self.prev_classify_time = current_time
                     
                     # Include YOLO detections in detection_info for richer rules
@@ -168,11 +225,9 @@ class ActivityTrackingSystem:
                     detection_info['hand_touching_assembly'] = hand_touching_assembly
                     detection_info['hand_touching_details'] = hand_touching_details
 
-                    # Log GPU usage after VLM inference for monitoring
-                    try:
-                        log_gpu_usage(label='vlm_inference')
-                    except Exception:
-                        pass
+                    # Ensure vlm_result fallback
+                    if not vlm_result:
+                        vlm_result = ACTIVITY_UNKNOWN
 
                     # Combine VLM and motion analysis (decision engine may use YOLO evidence)
                     new_activity = self.decision_engine.classify_activity(vlm_result, detection_info)
@@ -277,8 +332,12 @@ class ActivityTrackingSystem:
                     print(f"Hand-object overlay: {status}")
                 elif key == ord('c'):
                     self.vlm_interval_index = (self.vlm_interval_index + 1) % len(self.vlm_interval_options)
-                    self.vlm_classify_interval = self.vlm_interval_options[self.vlm_interval_index]
-                    print(f"VLM classification interval changed to {self.vlm_classify_interval:.1f}s")
+                    base = self.vlm_interval_options[self.vlm_interval_index]
+                    if self.vlm_use_two_models and self.vlm_alternate_half_interval:
+                        self.vlm_classify_interval = base / 2.0
+                    else:
+                        self.vlm_classify_interval = base
+                    print(f"VLM classification interval changed to {self.vlm_classify_interval:.1f}s (base {base:.1f}s)")
         
         except KeyboardInterrupt:
             print("Interrupted by user")
@@ -301,14 +360,17 @@ class ActivityTrackingSystem:
             )
 
         # Log GPU usage at shutdown
-        try:
-            log_gpu_usage(label='shutdown')
-        except Exception:
-            pass
+        log_gpu_usage(label='shutdown')
         
         # Cleanup resources
         self.motion_detector.release()
-        self.vlm_classifier.release()
+        # Release VLM models
+        if self.vlm_classifier_1:
+            self.vlm_classifier_1.release()
+        if self.vlm_classifier_2:
+            self.vlm_classifier_2.release()
+        if hasattr(self, 'vlm_classifier') and self.vlm_classifier:
+            self.vlm_classifier.release()
         if self.yolo_detector:
             self.yolo_detector.release()
         self.video_handler.release()

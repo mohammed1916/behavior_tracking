@@ -9,8 +9,7 @@ except Exception:
 import pandas as pd
 
 import os
-LOG_CSV = os.path.join("logs", "gpu_memory_log.csv")
-
+from config import GPU_CSV_FILE 
 
 def get_gpu_memory_info():
     """Return GPU memory usage information in MB.
@@ -50,7 +49,7 @@ def get_gpu_memory_info():
     }
 
 
-def log_gpu_usage(label=None, csv_file=LOG_CSV):
+def log_gpu_usage(label=None, csv_file=GPU_CSV_FILE):
     """Append current GPU usage to a CSV file with timestamp and optional label."""
     info = get_gpu_memory_info()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

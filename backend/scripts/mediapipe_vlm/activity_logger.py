@@ -2,13 +2,13 @@
 
 import pandas as pd
 from datetime import datetime
-from config import CSV_FILE
+from config import ACTIVITY_CSV_FILE
 
 
 class ActivityLogger:
     """Handles logging of activities to CSV"""
     
-    def __init__(self, csv_file=CSV_FILE):
+    def __init__(self, csv_file=ACTIVITY_CSV_FILE):
         """Initialize activity logger
         
         Args:

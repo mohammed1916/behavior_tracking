@@ -29,13 +29,22 @@ VIDEO_FPS = 30
 VLM_CLASSIFY_INTERVAL = 1.0    # Classify activity once per second (seconds)
 PHONE_RESET_FRAMES = 5          # Frames to wait before resetting phone detection
 
+# Dual-model inference to increase throughput
+# When True, two VLM model instances are created and used alternately.
+# VLM_USE_TWO_MODELS = True
+VLM_USE_TWO_MODELS = False
+# If True and using two models, the effective classify interval is halved
+# so the two models together produce twice the number of outputs per second.
+# VLM_ALTERNATE_HALF_INTERVAL = True
+VLM_ALTERNATE_HALF_INTERVAL = False
 # Throughput and scaling
 TARGET_PROCESS_FPS = 24.0        # Process only N frames per second (ingest may be higher)
 PROCESSING_DOWNSCALE = 0.5      # Resize factor for inference to speed up processing
 OUTPUT_FPS = TARGET_PROCESS_FPS # Save output video at the processed frame rate
 
 # Output
-CSV_FILE = os.path.join("logs", "activity_log.csv")
+GPU_CSV_FILE = os.path.join("logs", "gpu_memory_log.csv")
+ACTIVITY_CSV_FILE = os.path.join("logs", "activity_log.csv")
 VIDEO_OUTPUT_FILE = os.path.join("logs", "data_collection_.mp4")
 VIDEO_CODEC = 'mp4v'
 
