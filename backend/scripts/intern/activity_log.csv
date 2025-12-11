@@ -1,0 +1,21 @@
+timestamp,activity,duration_sec
+2025-12-11 10:59:19,unknown,5.13
+2025-12-11 10:59:21,simply_sitting,2.03
+2025-12-11 10:59:22,assembling_drone,1.03
+2025-12-11 10:59:23,simply_sitting,1.04
+2025-12-11 10:59:24,assembling_drone,1.02
+2025-12-11 10:59:27,simply_sitting,3.05
+2025-12-11 10:59:28,assembling_drone,1.02
+2025-12-11 10:59:31,simply_sitting,3.08
+2025-12-11 10:59:33,assembling_drone,2.07
+2025-12-11 10:59:34,simply_sitting,1.0
+2025-12-11 10:59:35,assembling_drone,1.05
+2025-12-11 11:00:00,simply_sitting,24.9
+2025-12-11 11:00:04,assembling_drone,4.18
+2025-12-11 11:00:06,simply_sitting,2.06
+2025-12-11 11:00:07,assembling_drone,1.01
+2025-12-11 11:00:08,simply_sitting,1.06
+2025-12-11 11:00:10,assembling_drone,1.05
+2025-12-11 11:00:10,simply_sitting,1.05
+2025-12-11 11:00:16,assembling_drone,5.18
+2025-12-11 11:00:17,simply_sitting,1.56
