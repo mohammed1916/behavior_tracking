@@ -29,10 +29,6 @@ class ActivityDecisionEngine:
         pose_info = detection_info.get('pose_info')
         hand_motion_regions = detection_info.get('hand_motion_regions', 0)
         
-        # Check phone usage from pose
-        if pose_info and pose_info.get('wrists_near_face'):
-            return ACTIVITY_USING_PHONE
-        
         # Check VLM result for phone
         if "phone" in vlm_result:
             return ACTIVITY_USING_PHONE

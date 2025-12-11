@@ -76,23 +76,14 @@ class MediaPipeMotionDetector:
         """Determine activity type from pose landmarks"""
         if not pose_results.pose_landmarks:
             return None
-        
+
         landmarks = pose_results.pose_landmarks.landmark
-        
-        # Get key points
+
+        # Get key points (retain wrist y positions for potential future use)
         left_wrist = landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value]
         right_wrist = landmarks[self.mp_pose.PoseLandmark.RIGHT_WRIST.value]
-        left_ear = landmarks[self.mp_pose.PoseLandmark.LEFT_EAR.value]
-        right_ear = landmarks[self.mp_pose.PoseLandmark.RIGHT_EAR.value]
-        
-        # Check if hands are near face (phone usage indicator)
-        wrist_near_face = False
-        if (left_wrist.y < left_ear.y and left_wrist.presence > 0.5) or \
-           (right_wrist.y < right_ear.y and right_wrist.presence > 0.5):
-            wrist_near_face = True
-        
+
         return {
-            'wrists_near_face': wrist_near_face,
             'left_wrist_y': left_wrist.y,
             'right_wrist_y': right_wrist.y,
         }
