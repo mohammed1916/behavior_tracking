@@ -40,6 +40,29 @@ class ActivityDecisionEngine:
         # Check for drone assembly from VLM
         if "assemble" in vlm_result or "drone" in vlm_result:
             return ACTIVITY_ASSEMBLING_DRONE
+
+        # Additional rule: combine YOLO object evidence with Mediapipe motion/hand signals
+        yolo_detections = detection_info.get('yolo_detections') if detection_info else None
+        hand_motion_regions = detection_info.get('hand_motion_regions', 0)
+        hand_touching_assembly = detection_info.get('hand_touching_assembly', False)
+
+        # Collect YOLO labels if available (support dict format returned by YOLOObjectDetector)
+        yolo_labels = set()
+        if yolo_detections and isinstance(yolo_detections, dict):
+            for obj in yolo_detections.get('object_boxes', []):
+                class_name = obj.get('class', '').lower()
+                if class_name:
+                    yolo_labels.add(class_name)
+        elif yolo_detections and isinstance(yolo_detections, list):
+            for d in yolo_detections:
+                yolo_labels.add(d.get('label', '').lower())
+
+        assembly_indicators = {"drone", "propeller", "drone_part", "screwdriver", "tool", "motor", "battery", "part"}
+        # If YOLO finds assembly-related objects OR a hand is touching such an object,
+        # and hands/motion indicate interaction, classify as assembling drone.
+        if (yolo_labels & assembly_indicators) or hand_touching_assembly:
+            if detection_info.get('is_productive_motion') or hand_motion_regions > 0 or hand_touching_assembly:
+                return ACTIVITY_ASSEMBLING_DRONE
         
         # Enhanced decision making with motion analysis
         if motion_stats:

@@ -76,6 +76,7 @@ class ActivityTrackingSystem:
         # Visualization control
         self.show_mediapipe = False  # Toggle MediaPipe landmarks visualization
         self.show_yolo = enable_yolo  # Toggle YOLO detections visualization
+        self.show_touch_overlay = True  # Toggle hand-to-object overlay
         
         print("System initialized successfully!")
         print(f"Video dimensions: {self.video_handler.get_dimensions()}")
@@ -90,6 +91,7 @@ class ActivityTrackingSystem:
         print("  'm' = toggle MediaPipe landmarks")
         print("  'y' = toggle YOLO object detection")
         print("  'c' = cycle VLM interval (0.5s / 1.0s / 2.0s)")
+        print("  'o' = toggle hand-object overlay")
         print("")
         
         try:
@@ -129,7 +131,43 @@ class ActivityTrackingSystem:
                     vlm_result = self.vlm_classifier.post_process_vlm_result(vlm_result)
                     self.prev_classify_time = current_time
                     
-                    # Combine VLM and motion analysis
+                    # Include YOLO detections in detection_info for richer rules
+                    detection_info['yolo_detections'] = yolo_detections
+
+                    # Compute hand-landmark proximity to YOLO boxes (assembly indicator)
+                    hand_touching_assembly = False
+                    hand_touching_details = []
+                    if yolo_detections and isinstance(yolo_detections, dict):
+                        boxes = yolo_detections.get('object_boxes', [])
+                        h_img, w_img = frame.shape[:2]
+                        assembly_keywords = (
+                            'drone', 'propell', 'screw', 'tool', 'motor', 'battery', 'part', 'assembly'
+                        )
+                        hand_results = detection_info.get('hand_results')
+                        if hand_results and getattr(hand_results, 'multi_hand_landmarks', None):
+                            for hand_landmarks in hand_results.multi_hand_landmarks:
+                                for lm in hand_landmarks.landmark:
+                                    x_px = int(lm.x * w_img)
+                                    y_px = int(lm.y * h_img)
+                                    for obj in boxes:
+                                        cls = obj.get('class', '').lower()
+                                        if any(k in cls for k in assembly_keywords):
+                                            x1, y1, x2, y2 = obj['box']
+                                            pad_x = int((x2 - x1) * 0.2)
+                                            pad_y = int((y2 - y1) * 0.2)
+                                            if (x1 - pad_x) <= x_px <= (x2 + pad_x) and (y1 - pad_y) <= y_px <= (y2 + pad_y):
+                                                hand_touching_assembly = True
+                                                hand_touching_details.append({'box': obj, 'hand_point': (x_px, y_px)})
+                                                break
+                                    if hand_touching_assembly:
+                                        break
+                                if hand_touching_assembly:
+                                    break
+
+                    detection_info['hand_touching_assembly'] = hand_touching_assembly
+                    detection_info['hand_touching_details'] = hand_touching_details
+
+                    # Combine VLM and motion analysis (decision engine may use YOLO evidence)
                     new_activity = self.decision_engine.classify_activity(vlm_result, detection_info)
                     
                     # Update activity tracker
@@ -173,6 +211,29 @@ class ActivityTrackingSystem:
                 # Draw YOLO detections if enabled
                 if self.show_yolo and yolo_detections:
                     frame = self.yolo_detector.draw_detections(frame, yolo_detections)
+
+                # Draw hand-to-object overlay for tuning if hand_touching_details present
+                touch_details = detection_info.get('hand_touching_details', [])
+                if touch_details and self.show_touch_overlay:
+                    for td in touch_details:
+                        obj = td.get('box')
+                        hand_pt = td.get('hand_point')
+                        try:
+                            if obj and hand_pt:
+                                x1, y1, x2, y2 = obj['box']
+                                # Draw highlighted box (orange) and hand point (red)
+                                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 128, 255), 2)
+                                cv2.circle(frame, hand_pt, 6, (0, 0, 255), -1)
+                                # Draw line from hand point to center of box
+                                cx = int((x1 + x2) / 2)
+                                cy = int((y1 + y2) / 2)
+                                cv2.line(frame, hand_pt, (cx, cy), (0, 128, 255), 1)
+                                # Label
+                                label = f"{obj.get('class','object')} touch"
+                                cv2.putText(frame, label, (x1, max(12, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 128, 255), 2)
+                        except Exception:
+                            # Defensive: skip any malformed entries
+                            continue
                 
                 # Render information on frame
                 frame = self.frame_renderer.render_activity_info(
@@ -203,6 +264,10 @@ class ActivityTrackingSystem:
                         self.show_yolo = not self.show_yolo
                         status = "ON" if self.show_yolo else "OFF"
                         print(f"YOLO detection visualization: {status}")
+                elif key == ord('o'):
+                    self.show_touch_overlay = not self.show_touch_overlay
+                    status = "ON" if self.show_touch_overlay else "OFF"
+                    print(f"Hand-object overlay: {status}")
                 elif key == ord('c'):
                     self.vlm_interval_index = (self.vlm_interval_index + 1) % len(self.vlm_interval_options)
                     self.vlm_classify_interval = self.vlm_interval_options[self.vlm_interval_index]
