@@ -51,6 +51,7 @@ class VLMActivityClassifier:
 
         Answer:
         """
+        # return """<|vision_start|><|image_pad|><|vision_end|>"""
     
     def classify(self, frame):
         """Classify activity in a frame
