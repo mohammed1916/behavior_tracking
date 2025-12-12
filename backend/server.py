@@ -161,7 +161,43 @@ def preloaded_models():
                 obj_type = type(obj).__name__ if obj is not None else None
             except Exception:
                 obj_type = None
-            models[mid] = {"type": obj_type, "loaded": obj is not None}
+            # attempt to detect device (cpu / cuda)
+            device_str = None
+            try:
+                if obj is None:
+                    device_str = None
+                else:
+                    # common patterns: obj.device, obj.model.device, parameters
+                    dev = None
+                    if hasattr(obj, 'device'):
+                        dev = getattr(obj, 'device')
+                    elif hasattr(obj, 'model'):
+                        try:
+                            dev = getattr(obj.model, 'device', None)
+                        except Exception:
+                            dev = None
+                        if dev is None:
+                            try:
+                                params = next(obj.model.parameters())
+                                dev = getattr(params, 'device', None)
+                            except Exception:
+                                dev = None
+                    else:
+                        try:
+                            params = next(obj.parameters())
+                            dev = getattr(params, 'device', None)
+                        except Exception:
+                            dev = None
+                    if isinstance(dev, torch.device):
+                        device_str = str(dev)
+                    elif dev is not None:
+                        device_str = str(dev)
+                    else:
+                        device_str = None
+            except Exception:
+                device_str = None
+
+            models[mid] = {"type": obj_type, "loaded": obj is not None, "device": device_str}
         return {"status": "ok", "models": models}
     except Exception:
         logging.exception('Failed to list preloaded models')

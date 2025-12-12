@@ -18,6 +18,7 @@ function App() {
   // VLM state
   const [vlmModel, setVlmModel] = useState('gpt-4o-vlm');
   const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
+  const [preloadedDevices, setPreloadedDevices] = useState({});
   const [modelLoading, setModelLoading] = useState(false);
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
@@ -207,7 +208,22 @@ function App() {
 
   useEffect(() => {
     fetchLocalModels();
+    fetchPreloadedModels();
   }, []);
+
+  const fetchPreloadedModels = async () => {
+    try {
+      const resp = await fetch('http://localhost:8001/backend/preloaded_models');
+      if (!resp.ok) return setPreloadedDevices({});
+      const data = await resp.json();
+      const models = data.models || {};
+      // models is a map id -> {type, loaded, device}
+      setPreloadedDevices(models);
+    } catch (e) {
+      console.warn('Could not fetch preloaded models', e);
+      setPreloadedDevices({});
+    }
+  };
 
   const loadModel = async () => {
     if (!vlmModel) return alert('Select a model first');
@@ -223,6 +239,7 @@ function App() {
         alert('Model loaded: ' + data.model);
         // refresh list to reflect loaded status (if server updates it)
         fetchLocalModels();
+        fetchPreloadedModels();
       }
     } catch (e) {
       alert('Load model error: ' + (e.message || String(e)));
@@ -330,7 +347,15 @@ function App() {
 
 
             <div style={{ marginTop: 6 }}>
-              <small style={{ color: '#666' }}>{vlmAvailableModels.length > 0 ? `Using local model: ${selectedVlmModelName}` : 'No local VLM models detected on the server.'}</small>
+              <small style={{ color: '#666' }}>
+                {vlmAvailableModels.length > 0 ? (
+                  (() => {
+                    const dev = preloadedDevices && preloadedDevices[vlmModel] && preloadedDevices[vlmModel].device;
+                    const devLabel = dev ? (String(dev).toLowerCase().includes('cuda') ? 'GPU' : 'CPU') : 'unknown';
+                    return `Using local model: ${selectedVlmModelName} (device: ${devLabel})`;
+                  })()
+                ) : 'No local VLM models detected on the server.'}
+              </small>
             </div>
 
             <div style={{ marginTop: 8 }}>
