@@ -79,6 +79,7 @@ TASK_COMPLETION_PROMPT_TEMPLATE = (
 
 # Cache captioners by model id so repeated requests don't reload them
 _captioner_cache = {}
+_captioner_status = {}
 
 
 import importlib
@@ -114,11 +115,17 @@ def preload_qwen_local():
         qwen_dir = os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model')
         if os.path.isdir(qwen_dir) and QwenVLMAdapter is not None:
             try:
-                # Force CPU by default for safety at startup; operator can change
-                # device/ENV if GPU usage is desired.
-                adapter = QwenVLMAdapter(qwen_dir, device='cpu')
+                # Default to GPU if available; allow override via PRELOAD_QWEN_DEVICE
+                preferred = os.environ.get('PRELOAD_QWEN_DEVICE')
+                if not preferred:
+                    preferred = ('cuda:0' if torch.cuda.is_available() else 'cpu')
+                try:
+                    adapter = QwenVLMAdapter(qwen_dir, device=preferred)
+                except TypeError:
+                    adapter = QwenVLMAdapter(qwen_dir)
                 _captioner_cache['qwen_local'] = adapter
-                logging.info('Preloaded qwen_local adapter from %s', qwen_dir)
+                _captioner_status['qwen_local'] = {'device': preferred, 'reason': 'preloaded'}
+                logging.info('Preloaded qwen_local adapter from %s (device=%s)', qwen_dir, preferred)
             except Exception:
                 logging.exception('Failed to preload qwen_local adapter')
         else:
@@ -139,10 +146,18 @@ def load_qwen_local():
     if QwenVLMAdapter is None:
         return make_alert_json('QwenVLMAdapter not available on this server', status_code=500)
     try:
-        adapter = QwenVLMAdapter(qwen_dir, device='cpu')
+        # allow admin to request GPU by setting env var LOAD_QWEN_DEVICE
+        dev = os.environ.get('LOAD_QWEN_DEVICE')
+        if not dev:
+            dev = ('cuda:0' if torch.cuda.is_available() else 'cpu')
+        try:
+            adapter = QwenVLMAdapter(qwen_dir, device=dev)
+        except TypeError:
+            adapter = QwenVLMAdapter(qwen_dir)
         _captioner_cache['qwen_local'] = adapter
-        logging.info('Loaded qwen_local adapter via admin endpoint')
-        return {"loaded": True, "path": qwen_dir}
+        _captioner_status['qwen_local'] = {'device': dev, 'reason': 'admin_loaded'}
+        logging.info('Loaded qwen_local adapter via admin endpoint (device=%s)', dev)
+        return {"loaded": True, "path": qwen_dir, "device": dev}
     except Exception as e:
         logging.exception('Failed to load qwen_local via admin endpoint')
         return make_alert_json(f'Failed to load qwen_local: {e}', status_code=500)
@@ -188,16 +203,28 @@ def preloaded_models():
                             dev = getattr(params, 'device', None)
                         except Exception:
                             dev = None
-                    if isinstance(dev, torch.device):
-                        device_str = str(dev)
-                    elif dev is not None:
-                        device_str = str(dev)
-                    else:
-                        device_str = None
+                            if isinstance(dev, torch.device):
+                                device_str = str(dev)
+                            elif dev is not None:
+                                device_str = str(dev)
+                            else:
+                                device_str = None
             except Exception:
                 device_str = None
 
-            models[mid] = {"type": obj_type, "loaded": obj is not None, "device": device_str}
+            # attach recorded device status/reason if available
+            status = _captioner_status.get(mid, {})
+            recorded_device = status.get('device') if status.get('device') is not None else device_str
+            recorded_reason = status.get('reason')
+            # If the model ended up on CPU, include an explanatory status message
+            cpu_explain = None
+            if recorded_device == 'cpu':
+                cpu_explain = (
+                    "If the backend still reports CPU the server either:\n"
+                    "has no CUDA-visible GPU, or\n"
+                    "detected insufficient free GPU memory and fell back to CPU (the loader performs a safety check)."
+                )
+            models[mid] = {"type": obj_type, "loaded": obj is not None, "device": recorded_device, "device_reason": recorded_reason, "device_status_message": cpu_explain}
         return {"status": "ok", "models": models}
     except Exception:
         logging.exception('Failed to list preloaded models')
@@ -230,7 +257,7 @@ def get_local_captioner():
     return _local_captioner
 
 
-def get_captioner_for_model(model_id: str):
+def get_captioner_for_model(model_id: str, device_override: Optional[str] = None):
     """Return a captioner pipeline for `model_id`.
     Tries local cache first (`local_files_only=True`), then falls back to downloading the model.
     Special handling for OpenFlamingo models.
@@ -250,9 +277,39 @@ def get_captioner_for_model(model_id: str):
     # OpenFlamingo support removed: fall through to normal pipeline loading
     # (Previously there was special-case OpenFlamingo handling here.)
 
-    # Choose device: prefer GPU if available and it has sufficient free memory,
+    # Choose device: allow override via `device_override` (e.g. 'cpu' or 'cuda:0').
+    # Otherwise prefer GPU if available and it has sufficient free memory,
     # otherwise fall back to CPU to avoid CUDA OOM during model load.
-    device = 0 if torch.cuda.is_available() else -1
+    def _parse_device_override(o: Optional[str]):
+        if not o:
+            return None
+        s = str(o).lower()
+        if s in ('cpu', 'none', '-1'):
+            return -1
+        # allow 'gpu' as alias for cuda:0
+        if s.startswith('cuda') or 'gpu' in s:
+            m = re.match(r'cuda:(\d+)', s)
+            if m:
+                return int(m.group(1))
+            return 0
+        return None
+
+    parsed_override = _parse_device_override(device_override)
+    device_reason = None
+    explicit_gpu_request = False
+    if parsed_override is not None:
+        device = parsed_override
+        device_reason = f'override requested ({device_override})'
+        # If override explicitly asked for a GPU device, treat as explicit request
+        if device >= 0:
+            explicit_gpu_request = True
+    else:
+        if torch.cuda.is_available():
+            device = 0
+            device_reason = 'gpu_available'
+        else:
+            device = -1
+            device_reason = 'no_cuda_visible'
     try:
         if device >= 0:
             # torch.cuda.mem_get_info(device) -> (free, total)
@@ -291,12 +348,22 @@ def get_captioner_for_model(model_id: str):
                 # Prefer the dedicated Qwen adapter (no mediapipe dependencies)
                 if QwenVLMAdapter is not None:
                     try:
-                        adapter = QwenVLMAdapter(model_id)
+                        # pass device override through to adapter if supported
+                        dev_arg = ('cpu' if device < 0 else f'cuda:{device}')
+                        try:
+                            adapter = QwenVLMAdapter(model_id, device=dev_arg)
+                        except TypeError:
+                            adapter = QwenVLMAdapter(model_id)
                         _captioner_cache[model_id] = adapter
-                        logging.info('Loaded QwenVLMAdapter for model %s', model_id)
+                        _captioner_status[model_id] = {'device': dev_arg, 'reason': device_reason}
+                        logging.info('Loaded QwenVLMAdapter for model %s (device=%s)', model_id, dev_arg)
                         return adapter
-                    except Exception:
+                    except Exception as e:
                         logging.exception('Failed to initialize QwenVLMAdapter for %s', model_id)
+                        # If user explicitly requested GPU, do NOT silently fallback to CPU
+                        if explicit_gpu_request:
+                            _captioner_status[model_id] = {'device': None, 'reason': f'explicit_gpu_request_failed: {e}'}
+                            raise RuntimeError(f'Requested GPU device but Qwen adapter initialization failed: {e}')
                         return None
                 # If adapter module not present, do NOT fall back to HF pipeline for qwen_local
                 logging.warning('QwenVLMAdapter not available; refusing to load non-HF model id %s', model_id)
@@ -306,10 +373,30 @@ def get_captioner_for_model(model_id: str):
             return None
 
         # Not a special-case local adapter; proceed to load via HuggingFace pipeline
-        p = pipeline(task, model=model_id, device=device)
-    _captioner_cache[model_id] = p
-    logging.info('Loaded captioner for model %s (task=%s) from local cache on device=%s', model_id, task, device)
-    return p
+        # attempt to load HF pipeline on chosen device; record status
+        try:
+            p = pipeline(task, model=model_id, device=device)
+            _captioner_cache[model_id] = p
+            dev_str = ('cpu' if device < 0 else f'cuda:{device}')
+            _captioner_status[model_id] = {'device': dev_str, 'reason': device_reason}
+            logging.info('Loaded captioner for model %s (task=%s) from local cache on device=%s', model_id, task, dev_str)
+            return p
+        except Exception as e:
+            # If user explicitly requested GPU, do NOT fallback to CPU silently
+            if explicit_gpu_request:
+                _captioner_status[model_id] = {'device': None, 'reason': f'explicit_gpu_request_failed: {e}'}
+                logging.exception('Explicit GPU load requested but failed for model %s', model_id)
+                raise RuntimeError(f'Requested GPU device but model load failed: {e}')
+            # otherwise, try CPU fallback and record reason
+            try:
+                p = pipeline(task, model=model_id, device=-1)
+                _captioner_cache[model_id] = p
+                _captioner_status[model_id] = {'device': 'cpu', 'reason': 'gpu_load_failed_fallback_cpu'}
+                logging.info('GPU load failed; loaded captioner for model %s on CPU as fallback', model_id)
+                return p
+            except Exception:
+                _captioner_status[model_id] = {'device': None, 'reason': 'failed_to_load'}
+                raise
 
 
 # Lazy loader for a local text LLM 
@@ -1474,20 +1561,31 @@ async def caption_image(request: dict):
 
 
 @app.post('/backend/load_vlm_model')
-async def load_vlm_model(model: str = Form(...)):
+async def load_vlm_model(model: str = Form(...), device: str = Form(None)):
     """Load and cache a VLM/captioner model on demand.
     Returns JSON indicating whether the model was successfully loaded.
     """
     if not model:
-        raise HTTPException(status_code=400, detail='No model specified')
+        return {"loaded": False, "model": model, "error": "No model specified"}
     try:
-        p = get_captioner_for_model(model)
+        p = get_captioner_for_model(model, device_override=device)
         if p is None:
             return {"loaded": False, "model": model, "error": "failed to load model (not available)"}
-        return {"loaded": True, "model": model}
+        status = _captioner_status.get(model, {})
+        recorded_device = status.get('device')
+        recorded_reason = status.get('reason')
+        device_status_message = None
+        if recorded_device == 'cpu':
+            device_status_message = (
+                "If the backend still reports CPU the server either:\n"
+                "has no CUDA-visible GPU, or\n"
+                "detected insufficient free GPU memory and fell back to CPU (the loader performs a safety check)."
+            )
+        return {"loaded": True, "model": model, "device": recorded_device, "device_reason": recorded_reason, "device_status_message": device_status_message}
     except Exception as e:
         logging.exception('Error loading model %s', model)
-        return {"loaded": False, "model": model, "error": str(e)}
+        # Return structured alert JSON so frontend can show a clear message
+        return make_alert_json(str(e), status_code=500)
 
 @app.get('/backend/subtask/{subtask_id}')
 async def get_subtask(subtask_id: str):

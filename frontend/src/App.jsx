@@ -20,6 +20,7 @@ function App() {
   const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
   const [preloadedDevices, setPreloadedDevices] = useState({});
   const [modelLoading, setModelLoading] = useState(false);
+  const [vlmLoadDevice, setVlmLoadDevice] = useState('auto');
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
   const [vlmResult, setVlmResult] = useState(null);
@@ -231,12 +232,13 @@ function App() {
     try {
       const form = new FormData();
       form.append('model', vlmModel);
+      if (vlmLoadDevice && vlmLoadDevice !== 'auto') form.append('device', vlmLoadDevice);
       const resp = await fetch('http://localhost:8001/backend/load_vlm_model', { method: 'POST', body: form });
       const data = await resp.json();
       if (!resp.ok || !data.loaded) {
-        alert('Model load failed: ' + (data.error || resp.statusText));
+        alert('Model load failed: ' + (data.alert || data.error || resp.statusText));
       } else {
-        alert('Model loaded: ' + data.model);
+        alert('Model loaded: ' + data.model + (data.device ? ' (device: ' + data.device + ')' : ''));
         // refresh list to reflect loaded status (if server updates it)
         fetchLocalModels();
         fetchPreloadedModels();
@@ -297,6 +299,11 @@ function App() {
                   <option value="">(no local models available)</option>
                 )}
               </select>
+              <select value={vlmLoadDevice} onChange={(e) => setVlmLoadDevice(e.target.value)} style={{ marginLeft: 8 }} title="Device to load model on">
+                <option value="auto">Auto</option>
+                <option value="cpu">CPU</option>
+                <option value="cuda:0">GPU (cuda:0)</option>
+              </select>
               <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
             </label>
 
@@ -350,9 +357,16 @@ function App() {
               <small style={{ color: '#666' }}>
                 {vlmAvailableModels.length > 0 ? (
                   (() => {
-                    const dev = preloadedDevices && preloadedDevices[vlmModel] && preloadedDevices[vlmModel].device;
+                    const meta = preloadedDevices && preloadedDevices[vlmModel];
+                    const dev = meta && meta.device;
                     const devLabel = dev ? (String(dev).toLowerCase().includes('cuda') ? 'GPU' : 'CPU') : 'unknown';
-                    return `Using local model: ${selectedVlmModelName} (device: ${devLabel})`;
+                    const statusMsg = meta && meta.device_status_message;
+                    return (
+                      <>
+                        {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
+                        {statusMsg ? <div style={{ color: '#a00', marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
+                      </>
+                    );
                   })()
                 ) : 'No local VLM models detected on the server.'}
               </small>
