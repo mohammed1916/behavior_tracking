@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import os
@@ -135,9 +135,9 @@ def load_qwen_local():
     """
     qwen_dir = os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model')
     if not os.path.isdir(qwen_dir):
-        raise HTTPException(status_code=404, detail='qwen model directory not found')
+        return make_alert_json('qwen model directory not found', status_code=404)
     if QwenVLMAdapter is None:
-        raise HTTPException(status_code=500, detail='QwenVLMAdapter not available on this server')
+        return make_alert_json('QwenVLMAdapter not available on this server', status_code=500)
     try:
         adapter = QwenVLMAdapter(qwen_dir, device='cpu')
         _captioner_cache['qwen_local'] = adapter
@@ -145,7 +145,7 @@ def load_qwen_local():
         return {"loaded": True, "path": qwen_dir}
     except Exception as e:
         logging.exception('Failed to load qwen_local via admin endpoint')
-        raise HTTPException(status_code=500, detail=str(e))
+        return make_alert_json(f'Failed to load qwen_local: {e}', status_code=500)
 
 
 @app.get('/backend/preloaded_models')
@@ -165,7 +165,7 @@ def preloaded_models():
         return {"status": "ok", "models": models}
     except Exception:
         logging.exception('Failed to list preloaded models')
-        raise HTTPException(status_code=500, detail='Failed to list preloaded models')
+        return make_alert_json('Failed to list preloaded models', status_code=500)
 
 
 @app.get('/backend/health')
@@ -176,7 +176,7 @@ def health():
         return {"status": "ok", "preloaded_models": model_count}
     except Exception:
         logging.exception('Health check failed')
-        raise HTTPException(status_code=500, detail='health check failed')
+        return make_alert_json('health check failed', status_code=500)
 
 def get_local_captioner():
     """Return a default local captioner (BLIP) if available."""
@@ -357,6 +357,7 @@ def _normalize_caption_output(captioner, out):
                     return first.get(k)
 
             # If token ids are present, try to decode via tokenizer
+            ids_list = None
             if hasattr(first, '__contains__') and 'input_ids' in first:
                 ids = first.get('input_ids') if hasattr(first, 'get') else None
                 if ids is not None:
@@ -372,11 +373,11 @@ def _normalize_caption_output(captioner, out):
                     except Exception:
                         ids_list = None
 
-                    if ids_list and hasattr(captioner, 'tokenizer'):
-                        try:
-                            return captioner.tokenizer.decode(ids_list, skip_special_tokens=True)
-                        except Exception:
-                            pass
+                if ids_list and hasattr(captioner, 'tokenizer'):
+                    try:
+                        return captioner.tokenizer.decode(ids_list, skip_special_tokens=True)
+                    except Exception:
+                        pass
 
                 # Handle OpenFlamingo processor decoding
                 if ids_list and hasattr(captioner, 'tokenizer') and hasattr(captioner.tokenizer, 'decode'):
@@ -706,7 +707,7 @@ async def download_video(filename: str):
         elif ext in ('.mov', '.qt'):
             media_type = 'video/quicktime'
         return FileResponse(file_path, media_type=media_type, filename=filename, headers={"Accept-Ranges": "bytes"})
-    raise HTTPException(status_code=404, detail="File not found")
+    return make_alert_json('File not found', status_code=404)
 
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
@@ -725,7 +726,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             cap = cv2.VideoCapture(0)
             captioner = get_captioner_for_model(model) if model else get_local_captioner()
             if captioner is None:
-                yield _sse_event({"stage": "error", "message": "no captioner available"})
+                yield _sse_event({"stage": "alert", "message": "no captioner available"})
                 return
             
             current_caption = "Initializing..."
@@ -747,7 +748,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             while app.state.webcam_event.is_set():
                 ret, frame = cap.read()
                 if not ret:
-                    yield _sse_event({"stage": "error", "message": "failed to read frame"})
+                    yield _sse_event({"stage": "alert", "message": "failed to read frame"})
                     break
                 frame = cv2.flip(frame, 1)
                 # If recording requested, lazily create VideoWriter once we have a frame
@@ -816,7 +817,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         logging.exception('Failed to create VideoWriter: %s', e)
                         # notify client and disable recording for this session
                         try:
-                            yield _sse_event({"stage": "error", "message": f"Failed to create recorder: {e}"})
+                            yield _sse_event({"stage": "alert", "message": f"Failed to create recorder: {e}"})
                         except Exception:
                             pass
                         writer = None
@@ -1028,8 +1029,8 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 yield _sse_event(out)
             except Exception as e:
                 yield _sse_event({"stage": "finished", "message": "live processing complete"})
-        except Exception as e:
-            yield _sse_event({"stage": "error", "message": str(e)})
+            except Exception as e:
+                yield _sse_event({"stage": "alert", "message": str(e)})
         finally:
             # Clear the event so other callers know streaming stopped
             app.state.webcam_event.clear()
@@ -1060,17 +1061,21 @@ async def upload_vlm(video: UploadFile = File(...)):
     """Save an uploaded video to `vlm_uploads/` and return the saved filename.
     This is used when the frontend wants to start a streaming processing session.
     """
-    file_id = str(uuid.uuid4())
-    filename = f"{file_id}_{video.filename}"
-    save_path = os.path.join(VLM_UPLOAD_DIR, filename)
-    with open(save_path, "wb") as buffer:
-        while True:
-            chunk = await video.read(1024 * 1024)
-            if not chunk:
-                break
-            buffer.write(chunk)
-    logging.info(f"Saved VLM upload to {save_path}")
-    return {"filename": filename}
+    try:
+        file_id = str(uuid.uuid4())
+        filename = f"{file_id}_{video.filename}"
+        save_path = os.path.join(VLM_UPLOAD_DIR, filename)
+        with open(save_path, "wb") as buffer:
+            while True:
+                chunk = await video.read(1024 * 1024)
+                if not chunk:
+                    break
+                buffer.write(chunk)
+        logging.info(f"Saved VLM upload to {save_path}")
+        return {"filename": filename}
+    except Exception as e:
+        logging.exception('Failed to save uploaded VLM video')
+        return make_alert_json(f'Upload failed: {e}', status_code=500)
 
 
 def _sse_event(data: dict, event: Optional[str] = None) -> bytes:
@@ -1081,6 +1086,10 @@ def _sse_event(data: dict, event: Optional[str] = None) -> bytes:
     return payload.encode('utf-8')
 
 
+def make_alert_json(message: str, status_code: int = 400):
+    return JSONResponse(status_code=status_code, content={"status": "error", "alert": str(message)})
+
+
 @app.get("/backend/vlm_local_stream")
 async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False)):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
@@ -1089,7 +1098,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
     """
     file_path = os.path.join(VLM_UPLOAD_DIR, filename)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Uploaded file not found")
+        return make_alert_json('Uploaded file not found', status_code=404)
 
     def gen():
         try:
@@ -1098,7 +1107,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             # Basic video info
             cap = cv2.VideoCapture(file_path)
             if not cap.isOpened():
-                yield _sse_event({"stage": "error", "message": "failed to open video"})
+                yield _sse_event({"stage": "alert", "message": "failed to open video"})
                 return
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
             fps = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
@@ -1113,21 +1122,21 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
 
             captioner = get_captioner_for_model(model)
             if captioner is None:
-                yield _sse_event({"stage": "error", "message": f"no local captioner available for model '{model}'"})
+                yield _sse_event({"stage": "alert", "message": f"no local captioner available for model '{model}'"})
                 return
 
-                # Lazy init optional detectors - NOTE: server is not configured to
-                # directly import or run the standalone `mediapipe_vlm` scripts.
-                # If `enable_mediapipe`/`enable_yolo` are true, we do not import
-                # those script files here to avoid coupling; instead return a
-                # minimal placeholder summary indicating server-side support is
-                # disabled unless you explicitly enable/implement it separately.
-                mp_detector = None
-                yolo_detector = None
-                if enable_mediapipe:
-                    logging.info('Mediapipe preprocessing requested but disabled in server configuration')
-                if enable_yolo:
-                    logging.info('YOLO preprocessing requested but disabled in server configuration')
+            # Lazy init optional detectors - NOTE: server is not configured to
+            # directly import or run the standalone `mediapipe_vlm` scripts.
+            # If `enable_mediapipe`/`enable_yolo` are true, we do not import
+            # those script files here to avoid coupling; instead return a
+            # minimal placeholder summary indicating server-side support is
+            # disabled unless you explicitly enable/implement it separately.
+            mp_detector = None
+            yolo_detector = None
+            if enable_mediapipe:
+                logging.info('Mediapipe preprocessing requested but disabled in server configuration')
+            if enable_yolo:
+                logging.info('YOLO preprocessing requested but disabled in server configuration')
 
             # Open second capture for seeking samples
             cap2 = cv2.VideoCapture(file_path)
@@ -1286,7 +1295,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             except Exception:
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})
         except Exception as e:
-            yield _sse_event({"stage": "error", "message": str(e)})
+            yield _sse_event({"stage": "alert", "message": str(e)})
 
     return StreamingResponse(gen(), media_type='text/event-stream')
 
@@ -1296,7 +1305,7 @@ async def get_vlm_video(filename: str):
     file_path = os.path.join(VLM_UPLOAD_DIR, filename)
     if os.path.exists(file_path):
         return FileResponse(file_path, media_type="video/mp4", filename=filename)
-    raise HTTPException(status_code=404, detail="File not found")
+    return make_alert_json('File not found', status_code=404)
 
 
 @app.get("/backend/vlm_local_models")
@@ -1349,10 +1358,10 @@ async def caption_image(request: dict):
         model_id = request.get("model")
         
         if not image_data:
-            raise HTTPException(status_code=400, detail="No image data provided")
-        
+            return make_alert_json('No image data provided', status_code=400)
+
         if not model_id:
-            raise HTTPException(status_code=400, detail="No model specified")
+            return make_alert_json('No model specified', status_code=400)
         
         # Decode base64 image
         try:
@@ -1372,7 +1381,7 @@ async def caption_image(request: dict):
                 image = image.resize((224, 224), Image.Resampling.LANCZOS)
                 
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
+            return make_alert_json(f"Invalid image data: {str(e)}", status_code=400)
         
         # Optional preprocessing flags (can be supplied in JSON body)
         enable_mediapipe = bool(request.get('enable_mediapipe', False))
@@ -1382,7 +1391,7 @@ async def caption_image(request: dict):
         captioner = get_captioner_for_model(model_id)
         
         if captioner is None:
-            raise HTTPException(status_code=500, detail=f"Model {model_id} is not available")
+            return make_alert_json(f"Model {model_id} is not available", status_code=500)
         
         # Optionally run mediapipe / yolo preprocessing: server does not
         # execute the standalone mediapipe_vlm scripts here to avoid tight
@@ -1419,13 +1428,13 @@ async def caption_image(request: dict):
             return out
         except Exception as e:
             logging.error(f"Error during caption generation with {model_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Caption generation failed: {str(e)}")
+            return make_alert_json(f"Caption generation failed: {str(e)}", status_code=500)
         
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Unexpected error in caption endpoint: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return make_alert_json('Internal server error', status_code=500)
 
 
 @app.post('/backend/load_vlm_model')
