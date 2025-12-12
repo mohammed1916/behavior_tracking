@@ -22,23 +22,17 @@ import io
 from datetime import datetime
 import threading
 
-
 app = FastAPI()
 
-# Event used to coordinate webcam streaming state across threads/requests
 app.state.webcam_event = threading.Event()
 
-# Attempt to import modular helpers (captioner, llm, db). These modules
-# are optional fallbacks and provide a cleaner separation of concerns.
 captioner_mod = None
 llm_mod = None
 db_mod = None
-import backend.captioner as captioner_mod
-import backend.llm as llm_mod
-import backend.db as db_mod
-#         import captioner as captioner_mod
-#         import llm as llm_mod
-#         import db as db_mod
+
+import captioner as captioner_mod
+import llm as llm_mod
+import db as db_mod
 
 
 get_local_captioner = captioner_mod.get_local_captioner
@@ -52,6 +46,7 @@ DURATION_PROMPT_TEMPLATE = getattr(llm_mod, 'DURATION_PROMPT_TEMPLATE', globals(
 TASK_COMPLETION_PROMPT_TEMPLATE = getattr(llm_mod, 'TASK_COMPLETION_PROMPT_TEMPLATE', globals().get('TASK_COMPLETION_PROMPT_TEMPLATE'))
 get_local_text_llm = getattr(llm_mod, 'get_local_text_llm', None)
 
+DB_PATH = db_mod.DB_PATH
 init_db = db_mod.init_db
 save_analysis_to_db = db_mod.save_analysis_to_db
 list_analyses_from_db = db_mod.list_analyses_from_db
