@@ -16,7 +16,7 @@ function App() {
   // const [mode, setMode] = useState('upload');
 
   // VLM state
-  const [vlmModel, setVlmModel] = useState('gpt-4o-vlm');
+  const [vlmModel, setVlmModel] = useState('qwen_local');
   const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
   const [preloadedDevices, setPreloadedDevices] = useState({});
   const [modelLoading, setModelLoading] = useState(false);
@@ -304,8 +304,13 @@ function App() {
                 <option value="cpu">CPU</option>
                 <option value="cuda:0">GPU (cuda:0)</option>
               </select>
+              <div style={{  margin: 30 }}/>
               <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
+              <button type="button" onClick={() => { fetchLocalModels(); fetchPreloadedModels(); }} style={{ marginLeft: 8 }}>Refresh models</button>
+              
             </label>
+
+            <div style={{  margin: 50 }}/>
 
             <label>Prompt:
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
