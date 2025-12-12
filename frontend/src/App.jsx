@@ -186,10 +186,19 @@ function App() {
   const fetchLocalModels = async () => {
     try {
       const resp = await fetch('http://localhost:8001/backend/vlm_local_models');
-      if (!resp.ok) return setVlmAvailableModels([]);
+      if (!resp.ok) {
+        setVlmAvailableModels([]);
+        return;
+      }
       const data = await resp.json();
-      setVlmAvailableModels(data.models || []);
-      if ((data.models || []).length > 0) setVlmModel(data.models[0].id);
+      const models = data.models || [];
+      setVlmAvailableModels(models);
+      if (models.length > 0) {
+        const exists = models.some(m => m.id === vlmModel);
+        if (!vlmModel || !exists) {
+          setVlmModel(models[0].id);
+        }
+      }
     } catch (e) {
       console.warn('Could not fetch local VLM models', e);
       setVlmAvailableModels([]);
@@ -225,6 +234,9 @@ function App() {
   // derive selected local model's display name
   const selectedVlmModelName = (vlmAvailableModels || []).find(m => m.id === vlmModel)?.name || (vlmAvailableModels && vlmAvailableModels[0] && vlmAvailableModels[0].name) || '';
 
+  useEffect(() => {
+    console.log("selectedVlmModelName changed:", selectedVlmModelName);
+  }, [selectedVlmModelName]);
   // const handleUpload = async () => {
   //   if (!file) return alert('Please select a file first!');
   //   setLoading(true);
