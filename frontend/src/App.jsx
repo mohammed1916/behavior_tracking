@@ -33,6 +33,12 @@ function App() {
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
   const [vlmUseLLM, setVlmUseLLM] = useState(false);
+  const [ruleSets, setRuleSets] = useState({});
+  const [classifiers, setClassifiers] = useState({});
+  const [vlmRuleSet, setVlmRuleSet] = useState('default');
+  const [vlmClassifier, setVlmClassifier] = useState('blip_binary');
+  const [vlmClassifierMode, setVlmClassifierMode] = useState('binary');
+  const [vlmClassifierPrompt, setVlmClassifierPrompt] = useState('');
   const [viewAnalysisId, setViewAnalysisId] = useState(null);
   const [enableMediapipe, setEnableMediapipe] = useState(false);
   const [enableYolo, setEnableYolo] = useState(false);
@@ -216,6 +222,21 @@ function App() {
   useEffect(() => {
     fetchLocalModels();
     fetchPreloadedModels();
+    // fetch available rule sets and classifiers
+    (async () => {
+      try {
+        const resp = await fetch('http://localhost:8001/backend/rules');
+        if (!resp.ok) return;
+        const j = await resp.json();
+        setRuleSets(j.rule_sets || {});
+        setClassifiers(j.classifiers || {});
+        // keep defaults if current selections aren't present
+        if (!vlmRuleSet && Object.keys(j.rule_sets || {}).length) setVlmRuleSet(Object.keys(j.rule_sets)[0]);
+        if (!vlmClassifier && Object.keys(j.classifiers || {}).length) setVlmClassifier(Object.keys(j.classifiers)[0]);
+      } catch (e) {
+        console.warn('Failed to fetch rule sets', e);
+      }
+    })();
   }, []);
 
   const fetchPreloadedModels = async () => {
@@ -357,6 +378,35 @@ function App() {
             <label>Prompt:
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
             </label>
+              <div style={{ marginTop: 8 }}>
+                <label style={{ display: 'block' }}>Rule Set:
+                  <select value={vlmRuleSet} onChange={(e) => setVlmRuleSet(e.target.value)}>
+                    {Object.keys(ruleSets).length > 0 ? Object.keys(ruleSets).map(k => <option key={k} value={k}>{k}</option>) : <option value="default">default</option>}
+                  </select>
+                </label>
+
+                <label style={{ display: 'block', marginTop: 6 }}>Classifier:
+                  <select value={vlmClassifier} onChange={(e) => setVlmClassifier(e.target.value)}>
+                    {Object.keys(classifiers).length > 0 ? Object.keys(classifiers).map(k => <option key={k} value={k}>{k}</option>) : (
+                      <>
+                        <option value="blip_binary">blip_binary</option>
+                        <option value="qwen_activity">qwen_activity</option>
+                      </>
+                    )}
+                  </select>
+                </label>
+
+                <label style={{ display: 'block', marginTop: 6 }}>Classifier Mode:
+                  <select value={vlmClassifierMode} onChange={(e) => setVlmClassifierMode(e.target.value)}>
+                    <option value="binary">binary (work/idle)</option>
+                    <option value="multi">multi (preserve adapter labels)</option>
+                  </select>
+                </label>
+
+                <label style={{ display: 'block', marginTop: 6 }}>Classifier Prompt (optional override):
+                  <textarea value={vlmClassifierPrompt} onChange={(e) => setVlmClassifierPrompt(e.target.value)} placeholder="Optional: override prompt template" rows={3} />
+                </label>
+              </div>
 
             <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
@@ -380,6 +430,10 @@ function App() {
                     model={vlmModel}
                     prompt={vlmPrompt}
                     useLLM={vlmUseLLM}
+                    ruleSet={vlmRuleSet}
+                    classifier={vlmClassifier}
+                    classifierMode={vlmClassifierMode}
+                    classifierPrompt={vlmClassifierPrompt}
                     selectedSubtask={selectedSubtasks.length > 0 ? selectedSubtasks[0].id : ''}
                     subtaskId={advSubtaskId}
                     compareTimings={advCompareTimings}

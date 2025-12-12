@@ -21,6 +21,7 @@ import base64
 import io
 from datetime import datetime
 import threading
+import rules as rules_mod
 
 app = FastAPI()
 
@@ -115,7 +116,7 @@ async def download_video(filename: str):
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False)):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary')):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
@@ -266,43 +267,14 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         out = captioner(img)
                         caption = _normalize_caption_output(captioner, out)
                         
-                        # Classification logic (same as vlm_local_stream)
-                        label = 'idle'
-                        cls_text = None
-                        if use_llm:
-                            text_llm = get_local_text_llm()
-                            if text_llm is not None:
-                                try:
-                                    cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=caption)
-                                    cls_out = text_llm(cls_prompt, max_new_tokens=8)
-                                    if isinstance(cls_out, list) and len(cls_out) > 0:
-                                        f0 = cls_out[0]
-                                        if isinstance(f0, dict):
-                                            cls_text = f0.get('generated_text') or f0.get('text') or str(f0)
-                                        else:
-                                            cls_text = str(f0)
-                                    else:
-                                        cls_text = str(cls_out)
-                                    if cls_text:
-                                        cleaned = re.sub(r'[^\w\s]', '', cls_text).strip()
-                                        words = cleaned.split()
-                                        if words:
-                                            last_word = words[-1].lower()
-                                            if last_word == 'work':
-                                                label = 'work'
-                                            elif last_word == 'idle':
-                                                label = 'idle'
-                                except Exception as e:
-                                    logging.info('SSE LLM classification failed: %s', e)
-                        if label == 'idle':
-                            lw = caption.lower() if isinstance(caption, str) else ''
-                            work_keywords = [
-                                'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
-                                'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
-                                'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
-                            ]
-                            if any(w in lw for w in work_keywords):
-                                label = 'work'
+                        # Determine label (LLM + keyword rules) via centralized helper
+                        label, cls_text = rules_mod.determine_label(
+                            caption,
+                            use_llm=use_llm,
+                            text_llm=get_local_text_llm(),
+                            prompt=prompt,
+                            classify_prompt_template=CLASSIFY_PROMPT_TEMPLATE,
+                        )
                         
                         # Subtask overrun check (same as vlm_local_stream)
                         subtask_overrun = None
@@ -494,7 +466,7 @@ def make_alert_json(message: str, status_code: int = 400):
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False)):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary')):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -577,44 +549,18 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     out = captioner(img)
                     caption = _normalize_caption_output(captioner, out)
 
-                    # Decide label: optionally via LLM
-                    label = 'idle'
-                    cls_text = None
-                    if use_llm:
-                        text_llm = get_local_text_llm()
-                        if text_llm is not None:
-                            try:
-                                cls_prompt = CLASSIFY_PROMPT_TEMPLATE.format(prompt=prompt, caption=caption)
-                                cls_out = text_llm(cls_prompt, max_new_tokens=8)
-                                if isinstance(cls_out, list) and len(cls_out) > 0:
-                                    f0 = cls_out[0]
-                                    if isinstance(f0, dict):
-                                        cls_text = f0.get('generated_text') or f0.get('text') or str(f0)
-                                    else:
-                                        cls_text = str(f0)
-                                else:
-                                    cls_text = str(cls_out)
-                                if cls_text:
-                                    cleaned = re.sub(r'[^\w\s]', '', cls_text).strip()
-                                    words = cleaned.split()
-                                    if words:
-                                        last_word = words[-1].lower()
-                                        if last_word == 'work':
-                                            label = 'work'
-                                        elif last_word == 'idle':
-                                            label = 'idle'
-                            except Exception as e:
-                                logging.info('SSE LLM classification failed: %s', e)
-                    if label == 'idle':
-                        lw = caption.lower() if isinstance(caption, str) else ''
-                        # work_keywords = ['work', 'welding', 'screw', 'screwing', 'tool', 'using', 'assemble', 'hands', 'holding']
-                        work_keywords = [
-                            'make', 'making', 'assemble', 'assembling', 'work', 'working', 'hold', 'holding',
-                            'use', 'using', 'cut', 'screw', 'weld', 'attach', 'insert', 'paint', 'press',
-                            'turn', 'open', 'close', 'pick', 'place', 'operate', 'repair', 'install', 'build'
-                        ]
-                        if any(w in lw for w in work_keywords):
-                            label = 'work'
+                    # Determine label (LLM + keyword rules) via centralized helper
+                    # choose classify prompt: explicit override > classifier default > global
+                    classify_prompt_template = classifier_prompt or rules_mod.CLASSIFIER_PROMPTS.get(classifier)
+                    label, cls_text = rules_mod.determine_label(
+                        caption,
+                        use_llm=use_llm,
+                        text_llm=get_local_text_llm(),
+                        prompt=prompt,
+                        classify_prompt_template=classify_prompt_template or CLASSIFY_PROMPT_TEMPLATE,
+                        rule_set=rule_set,
+                        output_mode=classifier_mode,
+                    )
 
                     time_sec = fi / (fps if fps > 0 else 30.0)
 
@@ -737,6 +683,17 @@ async def vlm_local_models():
         })
 
     return {"available": False, "models": models_out, "probed": False}
+
+
+@app.get('/backend/rules')
+async def list_rules():
+    """Return available rule sets and metadata for frontend selection."""
+    try:
+        out = {'rule_sets': rules_mod.list_rule_sets(), 'classifiers': rules_mod.list_classifiers()}
+        return out
+    except Exception as e:
+        logging.exception('Failed to list rule sets: %s', e)
+        return make_alert_json('Failed to list rule sets', status_code=500)
 
 
 @app.post("/backend/caption")
