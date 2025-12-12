@@ -1,23 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export default function LiveView({ model: propModel = '', prompt: propPrompt = '', useLLM: propUseLLM = false, selectedSubtask = '' }) {
+export default function LiveView({ model: propModel = '', prompt: propPrompt = '', useLLM: propUseLLM = false, selectedSubtask = '', subtaskId = '', compareTimings = false, jpegQuality = 80, maxWidth = '', saveRecording = false, enableMediapipe = false, enableYolo = false }) {
   const [running, setRunning] = useState(false);
   const imgRef = useRef(null);
   const eventSourceRef = useRef(null);
 
-  // UI options (initialize from props passed by App)
+  // UI options (model/useLLM come from props)
   const [model, setModel] = useState(propModel || '');
   const [useLLM, setUseLLM] = useState(!!propUseLLM);
-  // Note: prompt is supplied from parent via `propPrompt`; do not keep a local duplicate state
-  const [subtaskId, setSubtaskId] = useState(selectedSubtask || '');
-  const [compareTimings, setCompareTimings] = useState(false);
-  const [jpegQuality, setJpegQuality] = useState(80);
-  const [maxWidth, setMaxWidth] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [saveRecording, setSaveRecording] = useState(false);
   const [savedVideoUrl, setSavedVideoUrl] = useState('');
-  const [enableMediapipe, setEnableMediapipe] = useState(false);
-  const [enableYolo, setEnableYolo] = useState(false);
 
   // Live metadata
   const [captionText, setCaptionText] = useState('');
@@ -29,7 +20,6 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
     // Keep state in sync if parent props change
     setModel(propModel || '');
     setUseLLM(!!propUseLLM);
-    setSubtaskId(selectedSubtask || '');
     return () => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
@@ -140,44 +130,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
           <div style={{ color: 'var(--muted)' }}><strong>Model:</strong> {model || '(default)'}</div>
           <div style={{ color: 'var(--muted)' }}><strong>Use LLM:</strong> {useLLM ? 'Yes' : 'No'}</div>
-          <div style={{ marginLeft: 'auto' }}>
-            <button onClick={() => setShowAdvanced(s => !s)}>{showAdvanced ? 'Hide' : 'Advanced'}</button>
-          </div>
         </div>
-
-        {showAdvanced && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-            {/* Prompt is managed in App; no local prompt input to avoid duplication */}
-            <div>
-              <label>Subtask ID (optional):</label>
-              <input style={{ width: '100%' }} value={subtaskId} onChange={(e) => setSubtaskId(e.target.value)} placeholder="subtask uuid" />
-            </div>
-            <div>
-              <label>Compare Timings:</label>
-              <input type="checkbox" checked={compareTimings} onChange={(e) => setCompareTimings(e.target.checked)} />
-            </div>
-            <div>
-              <label>JPEG Quality: {jpegQuality}</label>
-              <input type="range" min={10} max={95} value={jpegQuality} onChange={(e) => setJpegQuality(parseInt(e.target.value || '80'))} />
-            </div>
-            <div>
-              <label>Max Width (px):</label>
-              <input style={{ width: '100%' }} value={maxWidth} onChange={(e) => setMaxWidth(e.target.value)} placeholder="e.g. 640" />
-            </div>
-            <div>
-              <label>Save Recording:</label>
-              <input type="checkbox" checked={saveRecording} onChange={(e) => setSaveRecording(e.target.checked)} />
-            </div>
-            <div>
-              <label>Enable MediaPipe:</label>
-              <input type="checkbox" checked={enableMediapipe} onChange={(e) => setEnableMediapipe(e.target.checked)} />
-            </div>
-            <div>
-              <label>Enable YOLO:</label>
-              <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} />
-            </div>
-          </div>
-        )}
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <button onClick={running ? stopLive : startLive}>

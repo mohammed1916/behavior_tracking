@@ -21,6 +21,12 @@ function App() {
   const [preloadedDevices, setPreloadedDevices] = useState({});
   const [modelLoading, setModelLoading] = useState(false);
   const [vlmLoadDevice, setVlmLoadDevice] = useState('auto');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advSubtaskId, setAdvSubtaskId] = useState('');
+  const [advCompareTimings, setAdvCompareTimings] = useState(false);
+  const [advJpegQuality, setAdvJpegQuality] = useState(80);
+  const [advMaxWidth, setAdvMaxWidth] = useState('');
+  const [advSaveRecording, setAdvSaveRecording] = useState(false);
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
   const [vlmResult, setVlmResult] = useState(null);
@@ -310,26 +316,51 @@ function App() {
               
             </label>
 
-            <div style={{  margin: 50 }}/>
+              <div style={{ margin: 16 }}>
+                <button onClick={() => setShowAdvanced(s => !s)}>{showAdvanced ? 'Hide Advanced' : 'Show Advanced'}</button>
+                {showAdvanced && (
+                  <div style={{ marginTop: 8, padding: 8, border: '1px dashed var(--panel-border)', borderRadius: 6 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <label>Subtask ID (optional):</label>
+                        <input style={{ width: '100%' }} value={advSubtaskId} onChange={(e) => setAdvSubtaskId(e.target.value)} placeholder="subtask uuid" />
+                      </div>
+                      <div>
+                        <label>Compare Timings:</label>
+                        <input type="checkbox" checked={advCompareTimings} onChange={(e) => setAdvCompareTimings(e.target.checked)} />
+                      </div>
+                      <div>
+                        <label>JPEG Quality: {advJpegQuality}</label>
+                        <input type="range" min={10} max={95} value={advJpegQuality} onChange={(e) => setAdvJpegQuality(parseInt(e.target.value || '80'))} />
+                      </div>
+                      <div>
+                        <label>Max Width (px):</label>
+                        <input style={{ width: '100%' }} value={advMaxWidth} onChange={(e) => setAdvMaxWidth(e.target.value)} placeholder="e.g. 640" />
+                      </div>
+                      <div>
+                        <label>Save Recording:</label>
+                        <input type="checkbox" checked={advSaveRecording} onChange={(e) => setAdvSaveRecording(e.target.checked)} />
+                      </div>
+                      <div>
+                        <label>Enable MediaPipe:</label>
+                        <input type="checkbox" checked={enableMediapipe} onChange={(e) => setEnableMediapipe(e.target.checked)} />
+                      </div>
+                      <div>
+                        <label>Enable YOLO:</label>
+                        <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
             <label>Prompt:
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
             </label>
-            
 
             <label style={{ display: 'block', marginTop: 8 }}>
               <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
               <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
-            </label>     
-            
-            <label style={{ display: 'block', marginTop: 8 }}>
-              <input type="checkbox" checked={enableMediapipe} onChange={(e) => setEnableMediapipe(e.target.checked)} /> Enable MediaPipe preprocessing
-              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, server runs MediaPipe and returns a short summary.</small>
-            </label>
-
-            <label style={{ display: 'block', marginTop: 8 }}>
-              <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} /> Enable YOLO preprocessing
-              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, server runs YOLO and returns a short summary.</small>
             </label>
             <br/>
 
@@ -345,7 +376,19 @@ function App() {
                 {activeTab === 'upload' ? (
                   <FileUpload accept="video/*" onFileSelect={(f) => setVlmVideo(f)} initialFile={vlmVideo} label="Select a video for analysis" />
                 ) : (
-                  <LiveView model={vlmModel} prompt={vlmPrompt} useLLM={vlmUseLLM} selectedSubtask={selectedSubtasks.length > 0 ? selectedSubtasks[0].id : ''} />
+                  <LiveView
+                    model={vlmModel}
+                    prompt={vlmPrompt}
+                    useLLM={vlmUseLLM}
+                    selectedSubtask={selectedSubtasks.length > 0 ? selectedSubtasks[0].id : ''}
+                    subtaskId={advSubtaskId}
+                    compareTimings={advCompareTimings}
+                    jpegQuality={advJpegQuality}
+                    maxWidth={advMaxWidth}
+                    saveRecording={advSaveRecording}
+                    enableMediapipe={enableMediapipe}
+                    enableYolo={enableYolo}
+                  />
                 )}
               </div>
             </div>
