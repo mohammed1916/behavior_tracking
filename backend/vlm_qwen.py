@@ -39,7 +39,7 @@ class QwenVLMAdapter:
                     self.model = AutoModelForImageTextToText.from_pretrained(
                         self.model_id,
                         torch_dtype=torch.float16,
-                        device_map='auto',
+                        device_map='cuda',
                         trust_remote_code=True
                     )
                 except Exception:
