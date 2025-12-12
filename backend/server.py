@@ -109,29 +109,29 @@ except Exception:
 # Startup hook: attempt to preload a local qwen model if present. This makes
 # Qwen available deterministically at startup instead of loading lazily
 # inside request handlers (avoids unexpected heavy I/O during requests).
-@app.on_event("startup")
-def preload_qwen_local():
-    try:
-        qwen_dir = os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model')
-        if os.path.isdir(qwen_dir) and QwenVLMAdapter is not None:
-            try:
-                # Default to GPU if available; allow override via PRELOAD_QWEN_DEVICE
-                preferred = os.environ.get('PRELOAD_QWEN_DEVICE')
-                if not preferred:
-                    preferred = ('cuda:0' if torch.cuda.is_available() else 'cpu')
-                try:
-                    adapter = QwenVLMAdapter(qwen_dir, device=preferred)
-                except TypeError:
-                    adapter = QwenVLMAdapter(qwen_dir)
-                _captioner_cache['qwen_local'] = adapter
-                _captioner_status['qwen_local'] = {'device': preferred, 'reason': 'preloaded'}
-                logging.info('Preloaded qwen_local adapter from %s (device=%s)', qwen_dir, preferred)
-            except Exception:
-                logging.exception('Failed to preload qwen_local adapter')
-        else:
-            logging.info('qwen_local model dir not found or QwenVLMAdapter missing; skipping preload')
-    except Exception:
-        logging.exception('Unexpected error during qwen_local preload')
+# @app.on_event("startup")
+# def preload_qwen_local():
+#     try:
+#         qwen_dir = os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model')
+#         if os.path.isdir(qwen_dir) and QwenVLMAdapter is not None:
+#             try:
+#                 # Default to GPU if available; allow override via PRELOAD_QWEN_DEVICE
+#                 preferred = os.environ.get('PRELOAD_QWEN_DEVICE')
+#                 if not preferred:
+#                     preferred = ('cuda:0' if torch.cuda.is_available() else 'cpu')
+#                 try:
+#                     adapter = QwenVLMAdapter(qwen_dir, device=preferred)
+#                 except TypeError:
+#                     adapter = QwenVLMAdapter(qwen_dir)
+#                 _captioner_cache['qwen_local'] = adapter
+#                 _captioner_status['qwen_local'] = {'device': preferred, 'reason': 'preloaded'}
+#                 logging.info('Preloaded qwen_local adapter from %s (device=%s)', qwen_dir, preferred)
+#             except Exception:
+#                 logging.exception('Failed to preload qwen_local adapter')
+#         else:
+#             logging.info('qwen_local model dir not found or QwenVLMAdapter missing; skipping preload')
+#     except Exception:
+#         logging.exception('Unexpected error during qwen_local preload')
 
 
 @app.post('/backend/load_qwen_local')
