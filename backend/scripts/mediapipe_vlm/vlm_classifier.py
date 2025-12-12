@@ -8,21 +8,32 @@ from config import VLM_MODEL_NAME, ACTIVITY_ASSEMBLING_DRONE, ACTIVITY_IDLE, ACT
 
 
 class VLMActivityClassifier:
-    """Qwen2-VL based activity classifier"""
-    
-    def __init__(self, device=None):
-        """Initialize VLM model and processor"""
+    """Qwen2-VL based activity classifier. Accepts an optional `model_name`
+    so the caller can specify which VLM to load rather than always using the
+    constant from config."""
+
+    def __init__(self, model_name: str = None, device: str = None):
+        """Initialize VLM model and processor
+
+        Args:
+            model_name: Optional HF model id or local adapter id. If not
+                provided, falls back to `VLM_MODEL_NAME` from config.
+            device: Optional device string (e.g. 'cuda' or 'cpu'). If omitted
+                the code will pick CUDA if available.
+        """
+        self.model_name = model_name or VLM_MODEL_NAME
+
         if device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
-        
-        print(f"Using device: {self.device}")
-        
-        self.processor = AutoProcessor.from_pretrained(VLM_MODEL_NAME, trust_remote_code=True)
-        
+
+        print(f"Using device: {self.device} for model: {self.model_name}")
+
+        self.processor = AutoProcessor.from_pretrained(self.model_name, trust_remote_code=True)
+
         self.model = AutoModelForImageTextToText.from_pretrained(
-            VLM_MODEL_NAME,
+            self.model_name,
             torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
             device_map="auto",
             trust_remote_code=True

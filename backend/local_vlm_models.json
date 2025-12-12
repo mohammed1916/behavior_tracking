@@ -5,5 +5,11 @@
       "name": "BLIP - Salesforce/blip-image-captioning-large",
       "task": "image-to-text"
     }
+    ,
+    {
+      "id": "qwen_local",
+      "name": "Qwen-2 VL style",
+      "task": "image-to-text"
+    }
   ]
 }

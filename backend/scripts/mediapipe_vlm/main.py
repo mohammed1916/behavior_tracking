@@ -23,7 +23,7 @@ from config import (
 class ActivityTrackingSystem:
     """Main system that orchestrates activity tracking with object detection"""
     
-    def __init__(self, video_source=0, enable_yolo=True):
+    def __init__(self, video_source=0, enable_yolo=True, vlm_model_name: str = None):
         """Initialize the activity tracking system
         
         Args:
@@ -38,16 +38,19 @@ class ActivityTrackingSystem:
         self.vlm_use_two_models = VLM_USE_TWO_MODELS
         self.vlm_alternate_half_interval = VLM_ALTERNATE_HALF_INTERVAL
 
+        # Allow passing a specific VLM model name (overrides config default)
+        self.vlm_model_name = vlm_model_name
+
         if self.vlm_use_two_models:
             print("Initializing two VLM model instances for alternating inference...")
-            self.vlm_classifier_1 = VLMActivityClassifier()
-            self.vlm_classifier_2 = VLMActivityClassifier()
+            self.vlm_classifier_1 = VLMActivityClassifier(model_name=self.vlm_model_name)
+            self.vlm_classifier_2 = VLMActivityClassifier(model_name=self.vlm_model_name)
             self.vlm_model_index = 0
             # If alternating halves the classify interval, adjust effective interval
             eff_interval = VLM_CLASSIFY_INTERVAL / 2.0 if self.vlm_alternate_half_interval else VLM_CLASSIFY_INTERVAL
             self.vlm_classify_interval = eff_interval
         else:
-            self.vlm_classifier = VLMActivityClassifier()
+            self.vlm_classifier = VLMActivityClassifier(model_name=self.vlm_model_name)
             self.vlm_classifier_1 = None
             self.vlm_classifier_2 = None
             self.vlm_model_index = 0
