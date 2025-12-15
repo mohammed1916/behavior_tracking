@@ -6,7 +6,7 @@ cd frontend;npm run dev
 
 ## 1.2 Backend
 
-cd backend;python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+python -m uvicorn backend.server:app --host 0.0.0.0 --port 8001 --reload
 
 ### Git Bash:
 

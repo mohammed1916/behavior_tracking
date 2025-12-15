@@ -6,7 +6,7 @@
 			"script": "start:server",
 			"problemMatcher": [],
 			"label": "Backend Python",
-			"detail": "cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload"
+			"detail": "python -m uvicorn backend.server:app --host 0.0.0.0 --port 8001 --reload"
 		},
 		{
 			"type": "npm",
