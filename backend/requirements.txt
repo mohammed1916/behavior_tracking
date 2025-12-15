@@ -13,3 +13,4 @@ pytest
 pytest-asyncio
 httpx
 pytest-mock
+faiss-gpu
