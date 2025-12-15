@@ -12,9 +12,9 @@ cd backend;python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 python -m uvicorn backend.server:app --host 0.0.0.0 --port 8001 --reload
 
-Common pitfall:-
+Common pitfall :-
 
-Becase the following might not identify backend module as it is already in backend: (scipts inside it have backend `<dot>` import):
+Do not use the following, becase the following might not identify backend module as it is already in backend: (scipts inside it have backend `<dot>` import):
 
 cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
