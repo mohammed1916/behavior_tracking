@@ -111,7 +111,6 @@ CLASSIFY_PROMPT_TEMPLATE = llm_mod.CLASSIFY_PROMPT_TEMPLATE
 # DURATION_PROMPT_TEMPLATE = llm_mod.DURATION_PROMPT_TEMPLATE
 TASK_COMPLETION_PROMPT_TEMPLATE = llm_mod.TASK_COMPLETION_PROMPT_TEMPLATE
 
-
 UPLOAD_DIR = "uploads"
 PROCESSED_DIR = "processed"
 VLM_UPLOAD_DIR = "vlm_uploads"
@@ -413,21 +412,22 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 # Update subtask counts if compare_timings enabled
                 if compare_timings and subtask_id:
                     try:
-                        subtask = get_subtask_from_db(subtask_id)
-                        if subtask and collected_work:
-                            expected_duration = subtask['duration_sec']
-                            # try:
-                            work_ranges = compute_ranges(collected_work, collected_samples, fps)
-                            merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
-                            actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
-                            # except Exception:
-                            #     min_frame = min(collected_work)
-                            #     max_frame = max(collected_work)
-                            #     actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
-                            if actual_work_time <= expected_duration:
-                                update_subtask_counts(subtask_id, 1, 0)
-                            else:
-                                update_subtask_counts(subtask_id, 0, 1)
+                        # Use server-side aggregation combining LLM + timing
+                        try:
+                            inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
+                            logging.info(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
+                        except Exception:
+                            # fallback to timing-only update if aggregation fails
+                            subtask = get_subtask_from_db(subtask_id)
+                            if subtask and collected_work:
+                                work_ranges = compute_ranges(collected_work, collected_samples, fps if fps else 30.0)
+                                merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                expected_duration = subtask.get('duration_sec')
+                                if actual_work_time <= expected_duration:
+                                    update_subtask_counts(subtask_id, 1, 0)
+                                else:
+                                    update_subtask_counts(subtask_id, 0, 1)
                     except Exception as e:
                         logging.exception(f'Failed to update subtask counts for {subtask_id}')
                 
@@ -667,21 +667,20 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                             expected_duration = subtask['duration_sec']
                             # Calculate actual work time from contiguous merged ranges
                             if collected_work:
-                                work_ranges = compute_ranges(collected_work, collected_samples, fps)
-                                merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
-                                actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
-                                logging.info(f'Subtask {subtask_id}: expected={expected_duration}s, actual={actual_work_time}s, work_frames={len(collected_work)}')
-                                if actual_work_time <= expected_duration:
-                                    completed_in_time_increment = 1
-                                    completed_with_delay_increment = 0
-                                    logging.info(f'Incrementing completed_in_time for subtask {subtask_id}')
-                                else:
-                                    completed_in_time_increment = 0
-                                    completed_with_delay_increment = 1
-                                    logging.info(f'Incrementing completed_with_delay for subtask {subtask_id}')
-                                # Update counts in database
-                                update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
-                                logging.info(f'Updated subtask {subtask_id} counts: +{completed_in_time_increment} in_time, +{completed_with_delay_increment} with_delay')
+                                # Use server-side aggregation combining LLM + timing
+                                try:
+                                    inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=fps, llm=llm_mod.get_local_text_llm())
+                                    logging.info(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
+                                except Exception:
+                                    # fallback to timing-only
+                                    work_ranges = compute_ranges(collected_work, collected_samples, fps)
+                                    merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                    actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                    logging.info(f'Subtask {subtask_id}: expected={expected_duration}s, actual={actual_work_time}s, work_frames={len(collected_work)}')
+                                    if actual_work_time <= expected_duration:
+                                        update_subtask_counts(subtask_id, 1, 0)
+                                    else:
+                                        update_subtask_counts(subtask_id, 0, 1)
                             else:
                                 logging.info(f'No work frames found for subtask {subtask_id}')
                     except Exception as e:

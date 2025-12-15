@@ -346,6 +346,136 @@ def update_subtask_counts(subtask_id, completed_in_time_increment, completed_wit
     return True
 
 
+def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps, llm=None, policy='default', window_sec=5.0, padding_sec=1.0, min_segment_sec=0.5, merge_gap_sec=1.0):
+    """Aggregate LLM + timing signals for a specific subtask and update counts.
+
+    Returns (completed_in_time_increment, completed_with_delay_increment, reason)
+    """
+    # fetch subtask
+    it = vector_store.get('subtasks', subtask_id)
+    if not it:
+        return (0, 0, 'subtask_not_found')
+    meta = it.get('metadata', {})
+    expected = meta.get('duration_sec')
+    if expected is None:
+        return (0, 0, 'no_expected_duration')
+
+    # compute work ranges from provided frames and samples
+    try:
+        ranges = compute_ranges(collected_work or [], collected_samples or [], fps or 30.0)
+    except Exception:
+        ranges = []
+
+    # merge and filter ranges
+    def _merge_ranges(rs):
+        if not rs:
+            return []
+        rs_sorted = sorted(rs, key=lambda r: r.get('startTime', 0))
+        merged = []
+        cur = rs_sorted[0].copy()
+        for r in rs_sorted[1:]:
+            gap = r.get('startTime', 0) - cur.get('endTime', 0)
+            if gap <= merge_gap_sec:
+                cur['endTime'] = max(cur.get('endTime', 0), r.get('endTime', 0))
+                cur['endFrame'] = max(cur.get('endFrame', cur.get('endFrame', 0)), r.get('endFrame', r.get('endFrame', 0)))
+            else:
+                dur = cur.get('endTime', 0) - cur.get('startTime', 0)
+                if dur >= min_segment_sec:
+                    merged.append(cur.copy())
+                cur = r.copy()
+        dur = cur.get('endTime', 0) - cur.get('startTime', 0)
+        if dur >= min_segment_sec:
+            merged.append(cur.copy())
+        return merged
+
+    merged = _merge_ranges(ranges)
+    actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged)
+
+    # prepare LLM
+    prompt_template = None
+    if llm is None:
+        try:
+            from llm import get_local_text_llm, TASK_COMPLETION_PROMPT_TEMPLATE
+            llm = get_local_text_llm()
+            prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
+        except Exception:
+            llm = None
+            prompt_template = None
+    else:
+        try:
+            from llm import TASK_COMPLETION_PROMPT_TEMPLATE
+            prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
+        except Exception:
+            prompt_template = None
+
+    # collect captions within windows around each merged range (or fallback to all captions)
+    captions_for_llm = ''
+    if merged:
+        pieces = []
+        for r in merged:
+            start_w = max(0.0, r.get('startTime', 0) - padding_sec)
+            end_w = r.get('endTime', 0) + padding_sec
+            # gather captions within window
+            caps = [s.get('caption') for s in (collected_samples or []) if s.get('time_sec') is not None and start_w <= s.get('time_sec') <= end_w and s.get('caption')]
+            if caps:
+                pieces.append('\n'.join(caps))
+        captions_for_llm = '\n\n'.join(pieces)
+    else:
+        # no merged ranges: fallback to all captions
+        captions_for_llm = '\n'.join([s.get('caption') for s in (collected_samples or []) if s.get('caption')])
+
+    llm_decision = None
+    llm_output = None
+    if llm is not None and prompt_template is not None and captions_for_llm:
+        try:
+            prompt = prompt_template.format(task=meta.get('subtask_info') or '', captions=captions_for_llm)
+            resp = llm(prompt)
+            if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
+                llm_output = resp[0].get('generated_text', '').strip()
+            else:
+                llm_output = str(resp)
+            txt = (llm_output or '').strip().lower()
+            if txt.startswith('y') or txt == 'yes' or txt == 'true':
+                llm_decision = True
+            elif txt.startswith('n') or txt == 'no' or txt == 'false':
+                llm_decision = False
+            else:
+                llm_decision = None
+        except Exception:
+            llm_decision = None
+
+    # aggregation policy (default)
+    completed_in = 0
+    completed_delay = 0
+    reason = 'none'
+    if llm_decision is True:
+        if actual_work_time <= float(expected):
+            completed_in = 1
+            reason = 'llm_yes_in_time'
+        else:
+            completed_delay = 1
+            reason = 'llm_yes_with_delay'
+    elif llm_decision is False:
+        # LLM says not completed -> fall back to timing if within expected
+        if actual_work_time <= float(expected):
+            completed_in = 1
+            reason = 'llm_no_but_timing_in_time'
+        else:
+            reason = 'llm_no_timing_exceeds'
+    else:
+        # LLM uncertain -> fallback to timing
+        if actual_work_time <= float(expected):
+            completed_in = 1
+            reason = 'llm_uncertain_timing_in_time'
+        else:
+            reason = 'llm_uncertain_timing_exceeds'
+
+    if completed_in or completed_delay:
+        update_subtask_counts(subtask_id, completed_in, completed_delay)
+
+    return (completed_in, completed_delay, reason)
+
+
 def migrate_tasks_and_subtasks_to_vector_store():
     """If the existing analyses DB still contains legacy `tasks`/`subtasks` tables,
     copy their rows into the vector store. This is a best-effort helper and will
