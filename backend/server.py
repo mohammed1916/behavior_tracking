@@ -750,13 +750,33 @@ async def vlm_local_models():
 
     models_out = []
     for e in entries:
+        mid = e.get('id')
+        mid_l = (mid or '').lower()
+        # consider model available if it's present in the captioner cache
+        cached = None
+        try:
+            cached = _captioner_cache.get(mid) or _captioner_cache.get(mid_l) or None
+        except Exception:
+            cached = None
+        available = bool(cached)
+        # Ensure device is JSON-serializable (e.g., torch.device -> str)
+        device_raw = None
+        try:
+            device_raw = getattr(cached, 'device', None) if cached is not None else None
+        except Exception:
+            device_raw = None
+        device_val = None
+        try:
+            device_val = str(device_raw) if device_raw is not None else None
+        except Exception:
+            device_val = None
         models_out.append({
-            "id": e.get('id'),
+            "id": mid,
             "name": e.get('name'),
             "task": e.get('task', 'image-to-text'),
-            # We don't probe availability here to avoid loading models.
-            "available": False,
-            "probed": False,
+            "available": available,
+            "probed": available,
+            "device": device_val,
         })
 
     return {"available": False, "models": models_out, "probed": False}

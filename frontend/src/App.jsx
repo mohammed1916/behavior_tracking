@@ -21,8 +21,9 @@ function App() {
   const [preloadedDevices, setPreloadedDevices] = useState({});
   const [llmAvailable, setLlmAvailable] = useState(false);
   const [vlmStatusModels, setVlmStatusModels] = useState([]);
+  const [statusLastFetched, setStatusLastFetched] = useState(null);
   const [modelLoading, setModelLoading] = useState(false);
-  const [vlmLoadDevice, setVlmLoadDevice] = useState('auto');
+  const [vlmLoadDevice, setVlmLoadDevice] = useState('cuda:0');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advSubtaskId, setAdvSubtaskId] = useState('');
   const [tasksList, setTasksList] = useState([]);
@@ -237,22 +238,24 @@ function App() {
     }
   };
 
+  // Fetch backend status (LLM availability and VLM models)
+  const fetchBackendStatus = async () => {
+    try {
+      const resp = await fetch('http://localhost:8001/backend/status');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      setLlmAvailable(!!data.llm_available);
+      setVlmStatusModels(data.vlm_models || []);
+      setStatusLastFetched(Date.now());
+    } catch (e) {
+      console.warn('Failed to fetch backend status', e);
+    }
+  };
+
   useEffect(() => {
     fetchLocalModels();
     fetchPreloadedModels();
-      fetchBackendStatus();
-
-      const fetchBackendStatus = async () => {
-        try {
-          const resp = await fetch('http://localhost:8001/backend/status');
-          if (!resp.ok) return;
-          const data = await resp.json();
-          setLlmAvailable(!!data.llm_available);
-          setVlmStatusModels(data.vlm_models || []);
-        } catch (e) {
-          console.warn('Failed to fetch backend status', e);
-        }
-      };
+    fetchBackendStatus();
     // fetch available rule sets and classifiers
     (async () => {
       try {
@@ -274,12 +277,17 @@ function App() {
 
   const fetchPreloadedModels = async () => {
     try {
-      const resp = await fetch('http://localhost:8001/backend/preloaded_models');
+      // backend exposes `vlm_local_models` with an array of model descriptors
+      const resp = await fetch('http://localhost:8001/backend/vlm_local_models');
       if (!resp.ok) return setPreloadedDevices({});
       const data = await resp.json();
-      const models = data.models || {};
-      // models is a map id -> {type, loaded, device}
-      setPreloadedDevices(models);
+      const modelsArr = data.models || [];
+      // convert to a map keyed by id to keep compatibility with UI expectations
+      const modelsMap = {};
+      modelsArr.forEach(m => {
+        modelsMap[m.id] = { type: m.task || 'image-to-text', loaded: !!m.available, probed: !!m.probed, device: m.device || null };
+      });
+      setPreloadedDevices(modelsMap);
     } catch (e) {
       console.warn('Could not fetch preloaded models', e);
       setPreloadedDevices({});
@@ -550,13 +558,15 @@ function App() {
                     return (
                       <>
                               {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
-                              <span style={{ marginLeft: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? '#dff0d8' : '#f8d7da'), color: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? '#3c763d' : '#721c24') , fontSize: 12 }}>
-                                {vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? 'VLM ready' : 'VLM not loaded'}
-                              </span>
-                              <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, backgroundColor: (llmAvailable ? '#dff0d8' : '#f8d7da'), color: (llmAvailable ? '#3c763d' : '#721c24'), fontSize: 12 }}>
-                                {llmAvailable ? 'LLM available' : 'LLM missing'}
-                              </span>
-                              {statusMsg ? <div style={{ color: '#a00', marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
+                                        <span style={{ marginLeft: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? '#dff0d8' : '#f8d7da'), color: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? '#3c763d' : '#721c24') , fontSize: 12 }}>
+                                          {vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? 'VLM ready' : 'VLM not loaded'}
+                                        </span>
+                                        <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, backgroundColor: (llmAvailable ? '#dff0d8' : '#f8d7da'), color: (llmAvailable ? '#3c763d' : '#721c24'), fontSize: 12 }}>
+                                          {llmAvailable ? 'LLM available' : 'LLM missing'}
+                                        </span>
+                                        <button onClick={fetchBackendStatus} style={{ marginLeft: 8 }}>Refresh status</button>
+                                        <small style={{ marginLeft: 8, color: '#666' }}>{statusLastFetched ? `Last fetched: ${new Date(statusLastFetched).toLocaleString()}` : 'Last fetched: never'}</small>
+                                        {statusMsg ? <div style={{ color: '#a00', marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
                       </>
                     );
                   })()

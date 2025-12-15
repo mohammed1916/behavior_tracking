@@ -40,7 +40,15 @@ def get_local_captioner() -> Optional[Any]:
 
     device = 0 if torch is not None and getattr(torch, 'cuda', None) is not None and torch.cuda.is_available() else -1
     p = pipeline('image-to-text', model='Salesforce/blip-image-captioning-large', device=device)
+    # Cache under a few common keys so callers probing different ids match
     _captioner_cache['blip'] = p
+    try:
+        # canonical transformers id used when creating the pipeline
+        canonical = 'Salesforce/blip-image-captioning-large'
+        _captioner_cache[canonical] = p
+        _captioner_cache[canonical.lower()] = p
+    except Exception:
+        pass
     logging.info('Loaded local BLIP captioner (Salesforce/blip-image-captioning-large)')
     return p
 
@@ -71,7 +79,12 @@ def get_captioner_for_model(model_id: Optional[str], device_override: Optional[s
             # model_path = os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model')
             # adapter = QwenVLMAdapter(model_path, device=device)
             adapter = QwenVLMAdapter("Qwen/Qwen2-VL-2B-Instruct", device=device)
+            # Cache adapter under both original and lowercased keys to help probes
             _captioner_cache[model_id] = adapter
+            try:
+                _captioner_cache[model_id.lower()] = adapter
+            except Exception:
+                pass
             logging.info('Loaded QwenVLMAdapter for %s (device=%s) via JSON config', model_id, device)
             return adapter
         if prov == 'salesforce' or 'blip' in mid:
