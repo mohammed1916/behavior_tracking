@@ -832,17 +832,10 @@ async def update_subtask(subtask_id: str, subtask_info: str = Form(...), duratio
     s = get_subtask_from_db(subtask_id)
     if s is None:
         raise HTTPException(status_code=404, detail='subtask not found')
-    # Get task_id from existing
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('SELECT task_id FROM subtasks WHERE id=?', (subtask_id,))
-    r = cur.fetchone()
-    conn.close()
-    if not r:
-        raise HTTPException(status_code=404, detail='subtask not found')
-    task_id = r[0]
-    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time or s['completed_in_time'], completed_with_delay or s['completed_with_delay'])
+    task_id = s.get('task_id')
+    if not task_id:
+        raise HTTPException(status_code=400, detail='subtask missing task reference')
+    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time or s.get('completed_in_time', 0), completed_with_delay or s.get('completed_with_delay', 0))
     return {'message': 'updated'}
 
 
@@ -851,12 +844,9 @@ async def delete_subtask(subtask_id: str):
     s = get_subtask_from_db(subtask_id)
     if s is None:
         raise HTTPException(status_code=404, detail='subtask not found')
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('DELETE FROM subtasks WHERE id=?', (subtask_id,))
-    conn.commit()
-    conn.close()
+    deleted = db_mod.delete_subtask_from_db(subtask_id)
+    if not deleted:
+        raise HTTPException(status_code=500, detail='failed to delete subtask')
     return {'message': 'deleted'}
 
 
@@ -886,13 +876,9 @@ async def delete_task_endpoint(task_id: str):
     t = get_task_from_db(task_id)
     if not t:
         raise HTTPException(status_code=404, detail='task not found')
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('DELETE FROM subtasks WHERE task_id=?', (task_id,))
-    cur.execute('DELETE FROM tasks WHERE id=?', (task_id,))
-    conn.commit()
-    conn.close()
+    deleted = db_mod.delete_task_from_db(task_id)
+    if not deleted:
+        raise HTTPException(status_code=500, detail='failed to delete task')
     return {'message': 'deleted'}
 
 

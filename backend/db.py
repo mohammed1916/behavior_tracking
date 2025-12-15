@@ -208,6 +208,7 @@ def get_subtask_from_db(subtask_id):
     task_name = (task.get('metadata', {}).get('name')) if task else None
     return {
         'id': it.get('id'),
+        'task_id': meta.get('task_id'),
         'task_name': task_name,
         'subtask_info': meta.get('subtask_info'),
         'duration_sec': meta.get('duration_sec'),
@@ -215,6 +216,19 @@ def get_subtask_from_db(subtask_id):
         'completed_with_delay': meta.get('completed_with_delay'),
         'created_at': meta.get('created_at'),
     }
+
+
+def delete_subtask_from_db(subtask_id):
+    return vector_store.delete('subtasks', subtask_id)
+
+
+def delete_task_from_db(task_id):
+    # delete subtasks referencing this task, then delete the task
+    subs = vector_store.list('subtasks')
+    for it in subs:
+        if it.get('metadata', {}).get('task_id') == task_id:
+            vector_store.delete('subtasks', it.get('id'))
+    return vector_store.delete('tasks', task_id)
 
 def compute_ranges(frames, samples, fps):
     if not frames or (hasattr(frames, '__len__') and len(frames) == 0):
