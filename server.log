@@ -1,0 +1,6 @@
+2025-12-15 17:08:23,535 ERROR Error loading model test_model
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\tests\..\server.py", line 908, in load_vlm_model
+    p = get_captioner_for_model(model, device_override=device)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: test_load_vlm_model_with_mock.<locals>.<lambda>() got an unexpected keyword argument 'device_override'
