@@ -332,13 +332,14 @@ function App() {
                 <option value="cuda:0">GPU (cuda:0)</option>
               </select>
               <div style={{  margin: 30 }}/>
-              <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
-              <button type="button" onClick={() => { fetchLocalModels(); fetchPreloadedModels(); }} style={{ marginLeft: 8 }}>Refresh models</button>
-              
+              <div  style={{ display: 'flex', alignItems: 'center' }}>
+                <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
+                <button type="button" onClick={() => { fetchLocalModels(); fetchPreloadedModels(); } } style={{ marginLeft: 'auto' }}>Refresh models</button>
+              </div>
             </label>
 
-              <div style={{ margin: 16 }}>
-                <button onClick={() => setShowAdvanced(s => !s)}>{showAdvanced ? 'Hide Advanced' : 'Show Advanced'}</button>
+              <div style={{ margin: 8 }}>
+                <button onClick={() => setShowAdvanced(s => !s)}>{showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}</button>
                 {showAdvanced && (
                   <div style={{ marginTop: 8, padding: 8, border: '1px dashed var(--panel-border)', borderRadius: 6 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
