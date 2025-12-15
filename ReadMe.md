@@ -10,6 +10,12 @@ cd backend;python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 ### Git Bash:
 
+python -m uvicorn backend.server:app --host 0.0.0.0 --port 8001 --reload
+
+Common pitfall:-
+
+Becase the following might not identify backend module as it is already in backend: (scipts inside it have backend `<dot>` import):
+
 cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 ### TaskKill all 8001 process: (git Bash):

@@ -21,15 +21,15 @@ import base64
 import io
 from datetime import datetime
 import threading
-import rules as rules_mod
+import backend.rules as rules_mod
 
 app = FastAPI()
 
 app.state.webcam_event = threading.Event()
 
-import captioner as captioner_mod
-import llm as llm_mod
-import db as db_mod
+import backend.captioner as captioner_mod
+import backend.llm as llm_mod
+import backend.db as db_mod
 
 
 get_local_captioner = captioner_mod.get_local_captioner
@@ -417,9 +417,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         if subtask and collected_work:
                             expected_duration = subtask['duration_sec']
                             # try:
-                                work_ranges = compute_ranges(collected_work, collected_samples, fps)
-                                merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
-                                actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                            work_ranges = compute_ranges(collected_work, collected_samples, fps)
+                            merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                            actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                             # except Exception:
                             #     min_frame = min(collected_work)
                             #     max_frame = max(collected_work)

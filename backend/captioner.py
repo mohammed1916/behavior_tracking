@@ -6,7 +6,7 @@ from typing import Any, Optional
 import torch
 from transformers import pipeline
 
-from vlm_qwen import QwenVLMAdapter
+from backend.vlm_qwen import QwenVLMAdapter
 
 
 _captioner_cache: dict = {}
