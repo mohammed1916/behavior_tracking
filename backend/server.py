@@ -42,11 +42,6 @@ _normalize_caption_output = captioner_mod._normalize_caption_output
 _captioner_cache = getattr(captioner_mod, '_captioner_cache', {})
 _captioner_status = getattr(captioner_mod, '_captioner_status', {})
 
-CLASSIFY_PROMPT_TEMPLATE = getattr(llm_mod, 'CLASSIFY_PROMPT_TEMPLATE', globals().get('CLASSIFY_PROMPT_TEMPLATE'))
-DURATION_PROMPT_TEMPLATE = getattr(llm_mod, 'DURATION_PROMPT_TEMPLATE', globals().get('DURATION_PROMPT_TEMPLATE'))
-TASK_COMPLETION_PROMPT_TEMPLATE = getattr(llm_mod, 'TASK_COMPLETION_PROMPT_TEMPLATE', globals().get('TASK_COMPLETION_PROMPT_TEMPLATE'))
-get_local_text_llm = getattr(llm_mod, 'get_local_text_llm', None)
-
 DB_PATH = db_mod.DB_PATH
 init_db = db_mod.init_db
 save_analysis_to_db = db_mod.save_analysis_to_db
@@ -82,10 +77,9 @@ if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', '')
     fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
     logger.addHandler(fh)
 
-CLASSIFY_PROMPT_TEMPLATE = globals().get('CLASSIFY_PROMPT_TEMPLATE') if 'CLASSIFY_PROMPT_TEMPLATE' in globals() else getattr(llm_mod, 'CLASSIFY_PROMPT_TEMPLATE', None)
-DURATION_PROMPT_TEMPLATE = globals().get('DURATION_PROMPT_TEMPLATE') if 'DURATION_PROMPT_TEMPLATE' in globals() else getattr(llm_mod, 'DURATION_PROMPT_TEMPLATE', None)
-TASK_COMPLETION_PROMPT_TEMPLATE = globals().get('TASK_COMPLETION_PROMPT_TEMPLATE') if 'TASK_COMPLETION_PROMPT_TEMPLATE' in globals() else getattr(llm_mod, 'TASK_COMPLETION_PROMPT_TEMPLATE', None)
-get_local_text_llm = getattr(llm_mod, 'get_local_text_llm', None)
+CLASSIFY_PROMPT_TEMPLATE = llm_mod.CLASSIFY_PROMPT_TEMPLATE
+DURATION_PROMPT_TEMPLATE = llm_mod.DURATION_PROMPT_TEMPLATE
+TASK_COMPLETION_PROMPT_TEMPLATE = llm_mod.TASK_COMPLETION_PROMPT_TEMPLATE
 
 
 UPLOAD_DIR = "uploads"
@@ -271,7 +265,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         label, cls_text = rules_mod.determine_label(
                             caption,
                             use_llm=use_llm,
-                            text_llm=get_local_text_llm(),
+                            text_llm=llm_mod.get_local_text_llm(),
                             prompt=prompt,
                             classify_prompt_template=CLASSIFY_PROMPT_TEMPLATE,
                         )
@@ -555,7 +549,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     label, cls_text = rules_mod.determine_label(
                         caption,
                         use_llm=use_llm,
-                        text_llm=get_local_text_llm(),
+                        text_llm=llm_mod.get_local_text_llm(),
                         prompt=prompt,
                         classify_prompt_template=classify_prompt_template or CLASSIFY_PROMPT_TEMPLATE,
                         rule_set=rule_set,
