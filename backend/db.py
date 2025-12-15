@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 import uuid
 import logging
+from vector_store import STORE as vector_store
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'analyses.db')
 _db_initialized = False
@@ -30,33 +31,7 @@ def init_db():
         created_at TEXT
     )
     ''')
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        created_at TEXT
-    )
-    ''')
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS subtasks (
-        id TEXT PRIMARY KEY,
-        task_id TEXT NOT NULL,
-        subtask_info TEXT,
-        duration_sec INTEGER NOT NULL,
-        completed_in_time INTEGER DEFAULT 0,
-        completed_with_delay INTEGER DEFAULT 0,
-        created_at TEXT,
-        FOREIGN KEY (task_id) REFERENCES tasks(id)
-    )
-    ''')
-    try:
-        cur.execute('ALTER TABLE subtasks ADD COLUMN completed_in_time INTEGER DEFAULT 0;')
-    except sqlite3.OperationalError:
-        pass
-    try:
-        cur.execute('ALTER TABLE subtasks ADD COLUMN completed_with_delay INTEGER DEFAULT 0;')
-    except sqlite3.OperationalError:
-        pass
+    # Tasks and subtasks are stored in the vector store (backend/vector_store.py)
     cur.execute('''
     CREATE TABLE IF NOT EXISTS samples (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,62 +142,79 @@ def delete_analysis_from_db(aid):
     conn.close()
 
 def save_task_to_db(task_id, name):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    # Persist a task into the vector store. 'name' is stored as text and also used
+    # to derive a deterministic pseudo-embedding.
     created = datetime.utcnow().isoformat() + 'Z'
-    cur.execute('''INSERT OR REPLACE INTO tasks (id, name, created_at) VALUES (?, ?, ?)''', (task_id, name, created))
-    conn.commit()
-    conn.close()
+    metadata = {'name': name, 'created_at': created}
+    vector_store.upsert('tasks', task_id, text=name, metadata=metadata)
 
 def list_tasks_from_db():
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('SELECT id, name, created_at FROM tasks ORDER BY created_at DESC')
-    rows = cur.fetchall()
-    conn.close()
-    return [{'id': r[0], 'name': r[1], 'created_at': r[2]} for r in rows]
+    # Return all tasks from the vector store sorted by created_at desc
+    items = vector_store.list('tasks')
+    out = []
+    for it in items:
+        meta = it.get('metadata', {})
+        out.append({'id': it.get('id'), 'name': meta.get('name'), 'created_at': meta.get('created_at')})
+    out.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+    return out
 
 def get_task_from_db(task_id):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('SELECT id, name, created_at FROM tasks WHERE id=?', (task_id,))
-    r = cur.fetchone()
-    conn.close()
-    if not r:
+    it = vector_store.get('tasks', task_id)
+    if not it:
         return None
-    return {'id': r[0], 'name': r[1], 'created_at': r[2]}
+    meta = it.get('metadata', {})
+    return {'id': it.get('id'), 'name': meta.get('name'), 'created_at': meta.get('created_at')}
 
 def save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time=0, completed_with_delay=0):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    # Save subtask into vector store; include task_id reference in metadata
     created = datetime.utcnow().isoformat() + 'Z'
-    cur.execute('''INSERT OR REPLACE INTO subtasks (id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)''', (subtask_id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created))
-    conn.commit()
-    conn.close()
+    metadata = {
+        'task_id': task_id,
+        'subtask_info': subtask_info,
+        'duration_sec': duration_sec,
+        'completed_in_time': completed_in_time,
+        'completed_with_delay': completed_with_delay,
+        'created_at': created,
+    }
+    text = subtask_info or ''
+    vector_store.upsert('subtasks', subtask_id, text=text, metadata=metadata)
 
 def list_subtasks_from_db():
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('''SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.completed_in_time, s.completed_with_delay, s.created_at FROM subtasks s JOIN tasks t ON s.task_id = t.id ORDER BY s.created_at DESC''')
-    rows = cur.fetchall()
-    conn.close()
-    return [{'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'completed_in_time': r[4], 'completed_with_delay': r[5], 'created_at': r[6]} for r in rows]
+    # List subtasks and include parent task name where available
+    items = vector_store.list('subtasks')
+    out = []
+    for it in items:
+        meta = it.get('metadata', {})
+        task = vector_store.get('tasks', meta.get('task_id')) if meta.get('task_id') else None
+        task_name = (task.get('metadata', {}).get('name')) if task else None
+        out.append({
+            'id': it.get('id'),
+            'task_name': task_name,
+            'subtask_info': meta.get('subtask_info'),
+            'duration_sec': meta.get('duration_sec'),
+            'completed_in_time': meta.get('completed_in_time'),
+            'completed_with_delay': meta.get('completed_with_delay'),
+            'created_at': meta.get('created_at'),
+        })
+    out.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+    return out
 
 def get_subtask_from_db(subtask_id):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('''SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.completed_in_time, s.completed_with_delay, s.created_at FROM subtasks s JOIN tasks t ON s.task_id = t.id WHERE s.id = ?''', (subtask_id,))
-    r = cur.fetchone()
-    conn.close()
-    if not r:
+    it = vector_store.get('subtasks', subtask_id)
+    if not it:
         return None
-    return {'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'completed_in_time': r[4], 'completed_with_delay': r[5], 'created_at': r[6]}
+    meta = it.get('metadata', {})
+    task = vector_store.get('tasks', meta.get('task_id')) if meta.get('task_id') else None
+    task_name = (task.get('metadata', {}).get('name')) if task else None
+    return {
+        'id': it.get('id'),
+        'task_name': task_name,
+        'subtask_info': meta.get('subtask_info'),
+        'duration_sec': meta.get('duration_sec'),
+        'completed_in_time': meta.get('completed_in_time'),
+        'completed_with_delay': meta.get('completed_with_delay'),
+        'created_at': meta.get('created_at'),
+    }
 
 def compute_ranges(frames, samples, fps):
     if not frames or (hasattr(frames, '__len__') and len(frames) == 0):
@@ -262,9 +254,51 @@ def compute_ranges(frames, samples, fps):
     return ranges
 
 def update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment):
+    it = vector_store.get('subtasks', subtask_id)
+    if not it:
+        return False
+    meta = it.get('metadata', {})
+    meta['completed_in_time'] = int(meta.get('completed_in_time', 0)) + int(completed_in_time_increment)
+    meta['completed_with_delay'] = int(meta.get('completed_with_delay', 0)) + int(completed_with_delay_increment)
+    # persist updated metadata
+    vector_store.upsert('subtasks', subtask_id, text=it.get('text'), metadata=meta, vector=it.get('vector'))
+    return True
+
+
+def migrate_tasks_and_subtasks_to_vector_store():
+    """If the existing analyses DB still contains legacy `tasks`/`subtasks` tables,
+    copy their rows into the vector store. This is a best-effort helper and will
+    skip if tables don't exist.
+    """
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('UPDATE subtasks SET completed_in_time = completed_in_time + ?, completed_with_delay = completed_with_delay + ? WHERE id = ?', (completed_in_time_increment, completed_with_delay_increment, subtask_id))
-    conn.commit()
+    try:
+        cur.execute('SELECT id, name, created_at FROM tasks')
+        tasks = cur.fetchall()
+        for t in tasks:
+            task_id, name, created = t[0], t[1], t[2]
+            metadata = {'name': name, 'created_at': created}
+            vector_store.upsert('tasks', task_id, text=name, metadata=metadata)
+    except sqlite3.OperationalError:
+        # table missing -> nothing to migrate
+        pass
+
+    try:
+        cur.execute('SELECT id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created_at FROM subtasks')
+        subs = cur.fetchall()
+        for s in subs:
+            sub_id, task_id, info, duration, in_time, with_delay, created = s
+            metadata = {
+                'task_id': task_id,
+                'subtask_info': info,
+                'duration_sec': duration,
+                'completed_in_time': in_time,
+                'completed_with_delay': with_delay,
+                'created_at': created,
+            }
+            vector_store.upsert('subtasks', sub_id, text=info or '', metadata=metadata)
+    except sqlite3.OperationalError:
+        pass
     conn.close()
+    return True
