@@ -139,7 +139,7 @@ async def download_video(filename: str):
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary')):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary')):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
@@ -410,26 +410,55 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     evals = []
 
                 # Update subtask counts if compare_timings enabled
-                if compare_timings and subtask_id:
+                if compare_timings and (subtask_id or task_id):
                     try:
-                        # Use server-side aggregation combining LLM + timing
-                        try:
-                            inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
-                            logging.info(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
-                        except Exception:
-                            # fallback to timing-only update if aggregation fails
-                            subtask = get_subtask_from_db(subtask_id)
-                            if subtask and collected_work:
-                                work_ranges = compute_ranges(collected_work, collected_samples, fps if fps else 30.0)
-                                merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
-                                actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
-                                expected_duration = subtask.get('duration_sec')
-                                if actual_work_time <= expected_duration:
-                                    update_subtask_counts(subtask_id, 1, 0)
-                                else:
-                                    update_subtask_counts(subtask_id, 0, 1)
+                        # If a task_id is provided, evaluate all subtasks under that task
+                        if task_id:
+                            try:
+                                subs = db_mod.list_subtasks_from_db()
+                                subs_for_task = [s for s in subs if s.get('task_id') == task_id or s.get('task_name') == task_id]
+                                for s in subs_for_task:
+                                    sid = s.get('id')
+                                    if evaluation_mode == 'llm_only':
+                                        db_mod.aggregate_and_update_subtask(sid, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
+                                    else:
+                                        # combined (default)
+                                        db_mod.aggregate_and_update_subtask(sid, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
+                            except Exception:
+                                logging.exception('Failed to aggregate for task_id, falling back to timing-only per-subtask')
+                                # best-effort timing-only per-subtask
+                                subs = db_mod.list_subtasks_from_db()
+                                subs_for_task = [s for s in subs if s.get('task_id') == task_id or s.get('task_name') == task_id]
+                                for s in subs_for_task:
+                                    sid = s.get('id')
+                                    subtask = get_subtask_from_db(sid)
+                                    if subtask and collected_work:
+                                        work_ranges = compute_ranges(collected_work, collected_samples, 30.0)
+                                        merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                        actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                        expected_duration = subtask.get('duration_sec')
+                                        if actual_work_time <= expected_duration:
+                                            update_subtask_counts(sid, 1, 0)
+                                        else:
+                                            update_subtask_counts(sid, 0, 1)
+                        else:
+                            # single subtask behavior (backwards compatible)
+                            try:
+                                inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
+                                logging.info(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
+                            except Exception:
+                                subtask = get_subtask_from_db(subtask_id)
+                                if subtask and collected_work:
+                                    work_ranges = compute_ranges(collected_work, collected_samples, 30.0)
+                                    merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                    actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                    expected_duration = subtask.get('duration_sec')
+                                    if actual_work_time <= expected_duration:
+                                        update_subtask_counts(subtask_id, 1, 0)
+                                    else:
+                                        update_subtask_counts(subtask_id, 0, 1)
                     except Exception as e:
-                        logging.exception(f'Failed to update subtask counts for {subtask_id}')
+                        logging.exception(f'Failed to update subtask counts for {subtask_id or task_id}')
                 
                 out = {"stage": "finished", "message": "live processing complete", "stored_analysis_id": aid}
                 if evals:
@@ -742,6 +771,29 @@ async def list_rules():
     except Exception as e:
         logging.exception('Failed to list rule sets: %s', e)
         return make_alert_json('Failed to list rule sets', status_code=500)
+
+
+@app.get('/backend/status')
+async def backend_status():
+    """Return simple health/status info for frontend hints: LLM availability and VLM models."""
+    try:
+        llm_avail = False
+        try:
+            llm_avail = llm_mod.get_local_text_llm() is not None
+        except Exception:
+            llm_avail = False
+
+        # reuse vlm_local_models to get model descriptors
+        try:
+            vlm = await vlm_local_models()
+            vlm_models = vlm.get('models') if isinstance(vlm, dict) else []
+        except Exception:
+            vlm_models = []
+
+        return {'llm_available': bool(llm_avail), 'vlm_models': vlm_models}
+    except Exception as e:
+        logging.exception('Failed to get backend status: %s', e)
+        return {'llm_available': False, 'vlm_models': []}
 
 
 @app.post("/backend/caption")

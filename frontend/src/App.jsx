@@ -19,10 +19,16 @@ function App() {
   const [vlmModel, setVlmModel] = useState('qwen_local');
   const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
   const [preloadedDevices, setPreloadedDevices] = useState({});
+  const [llmAvailable, setLlmAvailable] = useState(false);
+  const [vlmStatusModels, setVlmStatusModels] = useState([]);
   const [modelLoading, setModelLoading] = useState(false);
   const [vlmLoadDevice, setVlmLoadDevice] = useState('auto');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advSubtaskId, setAdvSubtaskId] = useState('');
+  const [tasksList, setTasksList] = useState([]);
+  const [subtasksList, setSubtasksList] = useState([]);
+  const [selectedTaskIdFrontend, setSelectedTaskIdFrontend] = useState('');
+  const [evaluationMode, setEvaluationMode] = useState('combined');
   const [advCompareTimings, setAdvCompareTimings] = useState(false);
   const [advJpegQuality, setAdvJpegQuality] = useState(80);
   const [advMaxWidth, setAdvMaxWidth] = useState('');
@@ -130,7 +136,19 @@ function App() {
       const upj = await up.json();
       const filename = upj.filename;
 
-      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${enableMediapipe ? '&enable_mediapipe=true' : ''}${enableYolo ? '&enable_yolo=true' : ''}${selectedSubtasks.length > 0 ? `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}&compare_timings=true` : ''}`;
+      let url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}`;
+      if (enableMediapipe) url += '&enable_mediapipe=true';
+      if (enableYolo) url += '&enable_yolo=true';
+      // attach task/subtask selection and compare/eval mode
+      if (selectedTaskIdFrontend) {
+        url += `&task_id=${encodeURIComponent(selectedTaskIdFrontend)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      } else if (selectedSubtasks.length > 0) {
+        url += `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      } else if (advSubtaskId) {
+        url += `&subtask_id=${encodeURIComponent(advSubtaskId)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      } else {
+        url += `&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      }
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
       setVlmStream(es);
@@ -222,6 +240,19 @@ function App() {
   useEffect(() => {
     fetchLocalModels();
     fetchPreloadedModels();
+      fetchBackendStatus();
+
+      const fetchBackendStatus = async () => {
+        try {
+          const resp = await fetch('http://localhost:8001/backend/status');
+          if (!resp.ok) return;
+          const data = await resp.json();
+          setLlmAvailable(!!data.llm_available);
+          setVlmStatusModels(data.vlm_models || []);
+        } catch (e) {
+          console.warn('Failed to fetch backend status', e);
+        }
+      };
     // fetch available rule sets and classifiers
     (async () => {
       try {
@@ -237,6 +268,8 @@ function App() {
         console.warn('Failed to fetch rule sets', e);
       }
     })();
+    fetchTasks();
+    fetchSubtasks();
   }, []);
 
   const fetchPreloadedModels = async () => {
@@ -250,6 +283,30 @@ function App() {
     } catch (e) {
       console.warn('Could not fetch preloaded models', e);
       setPreloadedDevices({});
+    }
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const resp = await fetch('http://localhost:8001/backend/tasks');
+      if (!resp.ok) return setTasksList([]);
+      const data = await resp.json();
+      setTasksList(data || []);
+    } catch (e) {
+      console.warn('Failed to fetch tasks', e);
+      setTasksList([]);
+    }
+  };
+
+  const fetchSubtasks = async () => {
+    try {
+      const resp = await fetch('http://localhost:8001/backend/subtasks');
+      if (!resp.ok) return setSubtasksList([]);
+      const data = await resp.json();
+      setSubtasksList(data || []);
+    } catch (e) {
+      console.warn('Failed to fetch subtasks', e);
+      setSubtasksList([]);
     }
   };
 
@@ -344,8 +401,18 @@ function App() {
                   <div style={{ marginTop: 8, padding: 8, border: '1px dashed var(--panel-border)', borderRadius: 6 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       <div>
-                        <label>Subtask ID (optional):</label>
-                        <input style={{ width: '100%' }} value={advSubtaskId} onChange={(e) => setAdvSubtaskId(e.target.value)} placeholder="subtask uuid" />
+                        <label>Task (optional):</label>
+                        <select style={{ width: '100%' }} value={selectedTaskIdFrontend} onChange={(e) => setSelectedTaskIdFrontend(e.target.value)}>
+                          <option value="">(none)</option>
+                          {tasksList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label>Evaluation Mode:</label>
+                        <div>
+                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="combined" checked={evaluationMode==='combined'} onChange={(e) => setEvaluationMode(e.target.value)} /> Combined (LLM + timing)</label>
+                          <label><input type="radio" name="evalmode" value="llm_only" checked={evaluationMode==='llm_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> LLM only</label>
+                        </div>
                       </div>
                       <div>
                         <label>Compare Timings:</label>
@@ -372,6 +439,22 @@ function App() {
                         <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} />
                       </div>
                     </div>
+
+                    {selectedTaskIdFrontend && (
+                      <div style={{ marginTop: 8 }}>
+                        <strong>Subtasks for selected task</strong>
+                        <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid #eee', padding: 8, marginTop: 6 }}>
+                          {subtasksList.filter(s => s.task_id === selectedTaskIdFrontend).map(s => (
+                            <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ flex: 1 }}>{s.subtask_info} <small style={{ color: '#666' }}>({s.duration_sec}s)</small></div>
+                              <div>
+                                <button onClick={() => { setSelectedSubtasks([{ id: s.id, completed: false }]); }} style={{ marginLeft: 8 }}>Select</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -466,8 +549,14 @@ function App() {
                     const statusMsg = meta && meta.device_status_message;
                     return (
                       <>
-                        {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
-                        {statusMsg ? <div style={{ color: '#a00', marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
+                              {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
+                              <span style={{ marginLeft: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? '#dff0d8' : '#f8d7da'), color: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? '#3c763d' : '#721c24') , fontSize: 12 }}>
+                                {vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? 'VLM ready' : 'VLM not loaded'}
+                              </span>
+                              <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, backgroundColor: (llmAvailable ? '#dff0d8' : '#f8d7da'), color: (llmAvailable ? '#3c763d' : '#721c24'), fontSize: 12 }}>
+                                {llmAvailable ? 'LLM available' : 'LLM missing'}
+                              </span>
+                              {statusMsg ? <div style={{ color: '#a00', marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
                       </>
                     );
                   })()
