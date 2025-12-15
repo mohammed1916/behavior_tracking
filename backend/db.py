@@ -267,6 +267,73 @@ def compute_ranges(frames, samples, fps):
         r['captions'] = captions
     return ranges
 
+
+def evaluate_subtasks_completion(captions, llm=None, top_k=5):
+    """Evaluate likely subtask completion using the local text LLM and FAISS-backed subtasks.
+
+    captions: list of caption strings (or single string)
+    llm: optional callable (prompt -> [{'generated_text': ...}])
+    Returns: list of dicts: {subtask_id, task_id, subtask_info, completed (bool), llm_output}
+    """
+    # normalize captions input
+    if not captions:
+        return []
+    if isinstance(captions, (list, tuple)):
+        combined = '\n'.join([str(c) for c in captions])
+    else:
+        combined = str(captions)
+
+    # choose llm
+    if llm is None:
+        try:
+            from llm import get_local_text_llm, TASK_COMPLETION_PROMPT_TEMPLATE
+            llm = get_local_text_llm()
+            prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
+        except Exception:
+            llm = None
+            prompt_template = None
+    else:
+        try:
+            from llm import TASK_COMPLETION_PROMPT_TEMPLATE
+            prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
+        except Exception:
+            prompt_template = None
+
+    # find candidate subtasks via vector search
+    try:
+        candidates = vector_store.search('subtasks', query_text=combined, top_k=top_k)
+    except Exception:
+        candidates = []
+
+    results = []
+    for cand in candidates:
+        cid = cand.get('id')
+        meta = cand.get('metadata', {})
+        task_id = meta.get('task_id')
+        info = meta.get('subtask_info') or meta.get('name') or ''
+        llm_out = None
+        completed = False
+        if llm is not None and prompt_template is not None:
+            try:
+                prompt = prompt_template.format(task=info, captions=combined)
+                resp = llm(prompt)
+                if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
+                    llm_out = resp[0].get('generated_text', '').strip()
+                else:
+                    llm_out = str(resp)
+                txt = (llm_out or '').strip().lower()
+                if txt.startswith('y') or txt == 'yes' or txt == 'true':
+                    completed = True
+                else:
+                    completed = False
+            except Exception:
+                llm_out = None
+                completed = False
+
+        results.append({'subtask_id': cid, 'task_id': task_id, 'subtask_info': info, 'completed': completed, 'llm_output': llm_out})
+
+    return results
+
 def update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment):
     it = vector_store.get('subtasks', subtask_id)
     if not it:

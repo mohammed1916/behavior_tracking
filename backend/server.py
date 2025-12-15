@@ -362,6 +362,13 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 video_url = f"/backend/download/{filename_for_db}" if saved_basename else None
                 save_analysis_to_db(aid, filename_for_db, model or 'default', prompt, video_url, vid_info, collected_samples, subtask_id=subtask_id)
                 
+                # Evaluate subtasks completion from collected captions using vector store + LLM
+                try:
+                    captions = [s.get('caption') for s in collected_samples if s.get('caption')]
+                    evals = db_mod.evaluate_subtasks_completion(captions)
+                except Exception:
+                    evals = []
+
                 # Update subtask counts if compare_timings enabled
                 if compare_timings and subtask_id:
                     try:
@@ -379,6 +386,8 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         logging.exception(f'Failed to update subtask counts for {subtask_id}')
                 
                 out = {"stage": "finished", "message": "live processing complete", "stored_analysis_id": aid}
+                if evals:
+                    out['subtask_evaluations'] = evals
                 if video_url:
                     out['video_url'] = video_url
                 yield _sse_event(out)
@@ -592,6 +601,13 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 vid_info = {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height, 'duration': duration}
                 aid = str(uuid.uuid4())
                 save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id)
+                # Evaluate subtasks completion from collected captions using vector store + LLM
+                try:
+                    captions = [s.get('caption') for s in collected_samples if s.get('caption')]
+                    evals = db_mod.evaluate_subtasks_completion(captions)
+                except Exception:
+                    evals = []
+
                 # Update subtask counts if compare_timings is enabled and subtask_id provided
                 if compare_timings and subtask_id:
                     try:
@@ -619,7 +635,10 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                 logging.info(f'No work frames found for subtask {subtask_id}')
                     except Exception as e:
                         logging.exception(f'Failed to update subtask counts for {subtask_id}')
-                yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid})
+                out = {"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid}
+                if evals:
+                    out['subtask_evaluations'] = evals
+                yield _sse_event(out)
             except Exception:
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})
         except Exception as e:
