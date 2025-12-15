@@ -27,10 +27,6 @@ app = FastAPI()
 
 app.state.webcam_event = threading.Event()
 
-captioner_mod = None
-llm_mod = None
-db_mod = None
-
 import captioner as captioner_mod
 import llm as llm_mod
 import db as db_mod
@@ -78,7 +74,7 @@ if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', '')
     logger.addHandler(fh)
 
 CLASSIFY_PROMPT_TEMPLATE = llm_mod.CLASSIFY_PROMPT_TEMPLATE
-DURATION_PROMPT_TEMPLATE = llm_mod.DURATION_PROMPT_TEMPLATE
+# DURATION_PROMPT_TEMPLATE = llm_mod.DURATION_PROMPT_TEMPLATE
 TASK_COMPLETION_PROMPT_TEMPLATE = llm_mod.TASK_COMPLETION_PROMPT_TEMPLATE
 
 
@@ -214,10 +210,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     except Exception as e:
                         logging.exception('Failed to create VideoWriter: %s', e)
                         # notify client and disable recording for this session
-                        try:
-                            yield _sse_event({"stage": "alert", "message": f"Failed to create recorder: {e}"})
-                        except Exception:
-                            pass
+                        yield _sse_event({"stage": "alert", "message": f"Failed to create recorder: {e}"})
                         writer = None
                         record_enabled = False
                         # remove any partial file
@@ -227,31 +220,24 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         except Exception:
                             pass
                 # If writer is active, write the raw frame (BGR)
-                try:
-                    if writer is not None:
-                        if writer_type == 'ffmpeg' and ffmpeg_proc is not None and ffmpeg_proc.stdin:
-                            # Ensure contiguous bytes and write to ffmpeg stdin
+                if writer is not None:
+                    if writer_type == 'ffmpeg' and ffmpeg_proc is not None and ffmpeg_proc.stdin:
+                        # Ensure contiguous bytes and write to ffmpeg stdin
+                        try:
+                            data = frame.tobytes()
+                            ffmpeg_proc.stdin.write(data)
+                        except BrokenPipeError:
+                            logging.exception('ffmpeg stdin broken pipe during write')
+                            # disable recording on error
                             try:
-                                data = frame.tobytes()
-                                ffmpeg_proc.stdin.write(data)
-                            except BrokenPipeError:
-                                logging.exception('ffmpeg stdin broken pipe during write')
-                                # disable recording on error
-                                try:
-                                    ffmpeg_proc.stdin.close()
-                                except Exception:
-                                    pass
-                                ffmpeg_proc = None
-                                writer = None
-                                writer_type = None
-                        else:
-                            # OpenCV writer
-                            try:
-                                writer.write(frame)
+                                ffmpeg_proc.stdin.close()
                             except Exception:
                                 pass
-                except Exception:
-                    pass
+                            ffmpeg_proc = None
+                            writer = None
+                            writer_type = None
+                    else:
+                        writer.write(frame)
                 frame_counter += 1
                 elapsed_time = time.time() - start_time
                 
@@ -397,10 +383,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     out['video_url'] = video_url
                 yield _sse_event(out)
             except Exception as e:
-                yield _sse_event({"stage": "finished", "message": "live processing complete"})
-            except Exception as e:
                 yield _sse_event({"stage": "alert", "message": str(e)})
         finally:
+            yield _sse_event({"stage": "finished", "message": "live processing complete"})
             # Clear the event so other callers know streaming stopped
             app.state.webcam_event.clear()
     # # Add explicit CORS headers to resolve OpaqueResponseBlocking

@@ -9,13 +9,13 @@ CLASSIFY_PROMPT_TEMPLATE = (
     "Context: {prompt}\nCaption: {caption}\n"
 )
 
-# Prompt for duration estimation: ask the LLM to return a single integer (seconds)
-DURATION_PROMPT_TEMPLATE = (
-    "You are an assistant that estimates how long a described manual task typically takes.\n"
-    "Given the task description below, respond with a single integer representing the estimated time in seconds.\n"
-    "Do NOT add any explanation or text — only the integer number of seconds.\n\n"
-    "Task: {task}\n"
-)
+# # Prompt for duration estimation: ask the LLM to return a single integer (seconds)
+# DURATION_PROMPT_TEMPLATE = (
+#     "You are an assistant that estimates how long a described manual task typically takes.\n"
+#     "Given the task description below, respond with a single integer representing the estimated time in seconds.\n"
+#     "Do NOT add any explanation or text — only the integer number of seconds.\n\n"
+#     "Task: {task}\n"
+# )
 
 # Prompt for task completion evaluation
 TASK_COMPLETION_PROMPT_TEMPLATE = (
