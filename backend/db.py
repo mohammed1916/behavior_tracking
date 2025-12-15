@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 import uuid
 import logging
-from vector_store import STORE as vector_store
+from .vector_store import STORE as vector_store
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'analyses.db')
 _db_initialized = False

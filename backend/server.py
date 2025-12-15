@@ -52,6 +52,40 @@ list_subtasks_from_db = db_mod.list_subtasks_from_db
 get_subtask_from_db = db_mod.get_subtask_from_db
 compute_ranges = db_mod.compute_ranges
 update_subtask_counts = db_mod.update_subtask_counts
+# Timing/segmenting defaults (tunable)
+MIN_SEGMENT_SEC = 0.5  # ignore segments shorter than this
+MERGE_GAP_SEC = 1.0    # merge segments separated by <= this gap
+
+
+def merge_and_filter_ranges(ranges, min_segment_sec=MIN_SEGMENT_SEC, merge_gap_sec=MERGE_GAP_SEC):
+    """Merge nearby ranges and drop very short segments.
+
+    ranges: list of dicts with 'startTime' and 'endTime'
+    Returns a new list of merged, filtered ranges.
+    """
+    if not ranges:
+        return []
+    # Sort by start
+    rs = sorted(ranges, key=lambda r: r.get('startTime', 0))
+    merged = []
+    cur = rs[0].copy()
+    for r in rs[1:]:
+        gap = r.get('startTime', 0) - cur.get('endTime', 0)
+        if gap <= merge_gap_sec:
+            # extend current
+            cur['endTime'] = max(cur.get('endTime', 0), r.get('endTime', 0))
+            cur['endFrame'] = max(cur.get('endFrame', cur.get('endFrame', 0)), r.get('endFrame', r.get('endFrame', 0)))
+        else:
+            # finalize current if long enough
+            dur = cur.get('endTime', 0) - cur.get('startTime', 0)
+            if dur >= min_segment_sec:
+                merged.append(cur.copy())
+            cur = r.copy()
+    # last segment
+    dur = cur.get('endTime', 0) - cur.get('startTime', 0)
+    if dur >= min_segment_sec:
+        merged.append(cur.copy())
+    return merged
 
 app.add_middleware(
     CORSMiddleware,
@@ -264,7 +298,14 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 assign = get_subtask_from_db(subtask_id)
                                 if assign is not None and assign.get('duration_sec') is not None:
                                     expected = assign.get('duration_sec')
-                                    actual_work_time = cumulative_work_frames / 30.0  # Assume 30 FPS for live stream
+                                    # derive work duration from collected_samples using compute_ranges
+                                    # try:
+                                    fps_assume = 30.0
+                                    work_ranges = compute_ranges(collected_work, collected_samples, fps_assume)
+                                    merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                    actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                    # except Exception:
+                                        # actual_work_time = cumulative_work_frames / 30.0
                                     if actual_work_time > expected:
                                         subtask_overrun = True
                                     else:
@@ -375,9 +416,14 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         subtask = get_subtask_from_db(subtask_id)
                         if subtask and collected_work:
                             expected_duration = subtask['duration_sec']
-                            min_frame = min(collected_work)
-                            max_frame = max(collected_work)
-                            actual_work_time = (max_frame - min_frame) / 30.0  # Assume 30 FPS
+                            # try:
+                                work_ranges = compute_ranges(collected_work, collected_samples, fps)
+                                merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                            # except Exception:
+                            #     min_frame = min(collected_work)
+                            #     max_frame = max(collected_work)
+                            #     actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
                             if actual_work_time <= expected_duration:
                                 update_subtask_counts(subtask_id, 1, 0)
                             else:
@@ -552,15 +598,20 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
 
                     time_sec = fi / (fps if fps > 0 else 30.0)
 
-                    # If monitoring a subtask, compute cumulative work time and emit a flag event when exceeded
+                    # If monitoring a subtask, compute actual work time from contiguous ranges
                     subtask_overrun = None
-                    if subtask_id and label == 'work':
-                        cumulative_work_frames += 1
+                    if subtask_id:
                         try:
                             assign = get_subtask_from_db(subtask_id)
-                            if assign is not None and assign.get('expected_duration_sec') is not None:
-                                expected = assign.get('expected_duration_sec')
-                                actual_work_time = cumulative_work_frames / (fps if fps > 0 else 30.0)
+                            if assign is not None and assign.get('duration_sec') is not None:
+                                expected = assign.get('duration_sec')
+                                # Build temporary samples/work lists that include this current sample
+                                temp_sample = {'frame_index': fi, 'time_sec': time_sec, 'caption': caption, 'label': label, 'llm_output': cls_text}
+                                temp_samples = (collected_samples or []) + [temp_sample]
+                                temp_work = (collected_work or []) + ([fi] if label == 'work' else [])
+                                work_ranges = compute_ranges(temp_work, temp_samples, fps)
+                                merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                 if actual_work_time > expected:
                                     subtask_overrun = True
                                 else:
@@ -614,11 +665,11 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         subtask = get_subtask_from_db(subtask_id)
                         if subtask:
                             expected_duration = subtask['duration_sec']
-                            # Calculate actual work time from collected_work (time span from first to last work frame)
+                            # Calculate actual work time from contiguous merged ranges
                             if collected_work:
-                                min_frame = min(collected_work)
-                                max_frame = max(collected_work)
-                                actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
+                                work_ranges = compute_ranges(collected_work, collected_samples, fps)
+                                merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                 logging.info(f'Subtask {subtask_id}: expected={expected_duration}s, actual={actual_work_time}s, work_frames={len(collected_work)}')
                                 if actual_work_time <= expected_duration:
                                     completed_in_time_increment = 1
