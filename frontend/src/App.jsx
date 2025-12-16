@@ -9,12 +9,6 @@ import Tasks from './components/Tasks';
 import Subtasks from './components/Subtasks';
 
 function App() {
-  // const [file, setFile] = useState(null);
-  // const [status, setStatus] = useState('');
-  // const [result, setResult] = useState(null);
-  // const [loading, setLoading] = useState(false);
-  // const [showPose, setShowPose] = useState(false);
-  // const [mode, setMode] = useState('upload');
 
   // VLM state
   const [vlmModel, setVlmModel] = useState('qwen_local');
@@ -57,11 +51,6 @@ function App() {
   const [viewAnalysisId, setViewAnalysisId] = useState(null);
   const [enableMediapipe, setEnableMediapipe] = useState(false);
   const [enableYolo, setEnableYolo] = useState(false);
-  // LLM length check state
-  const [llmText, setLlmText] = useState('');
-  const [llmMaxContext, setLlmMaxContext] = useState(2048);
-  const [llmResult, setLlmResult] = useState(null);
-  const [llmLoading, setLlmLoading] = useState(false);
   const vlmVideoRef = useRef(null);
   const pauseTimerRef = useRef(null);
 
@@ -106,17 +95,6 @@ function App() {
     v.play().catch(() => {});
     pauseTimerRef.current = setTimeout(() => { try { v.pause(); } catch (e) {} pauseTimerRef.current = null; }, Math.ceil(dur * 1000) + 150);
   }
-
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-    setStatus('');
-    setResult(null);
-  };
-
-  const handleVlmVideoChange = (e) => {
-    setVlmVideo(e.target.files[0] || null);
-    setVlmResult(null);
-  };
 
   const [activeView, setActiveView] = useState('vlm');
   const [activeTab, setActiveTab] = useState('upload');
@@ -411,25 +389,6 @@ function App() {
   useEffect(() => {
     console.log("selectedVlmModelName changed:", selectedVlmModelName);
   }, [selectedVlmModelName]);
-  // const handleUpload = async () => {
-  //   if (!file) return alert('Please select a file first!');
-  //   setLoading(true);
-  //   setStatus('Uploading and processing...');
-  //   const formData = new FormData();
-  //   formData.append('file', file);
-  //   try {
-  //     const response = await fetch('http://localhost:8001/backend/analyze_video', { method: 'POST', body: formData });
-  //     if (!response.ok) throw new Error(`Error: ${response.statusText}`);
-  //     const data = await response.json();
-  //     setResult(data);
-  //     setStatus('Processing complete!');
-  //   } catch (error) {
-  //     console.error('Error uploading file:', error);
-  //     setStatus(`Failed: ${error.message}`);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
 
   return (
     <div className="App">
