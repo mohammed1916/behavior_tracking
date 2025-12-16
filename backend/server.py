@@ -120,21 +120,21 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 
 
-@app.get("/backend/download/{filename}")
-async def download_video(filename: str):
-    file_path = os.path.join(PROCESSED_DIR, filename)
-    if os.path.exists(file_path):
-        # Choose media type by extension
-        ext = os.path.splitext(filename)[1].lower()
-        media_type = "application/octet-stream"
-        if ext == '.mp4':
-            media_type = 'video/mp4'
-        elif ext == '.avi':
-            media_type = 'video/x-msvideo'
-        elif ext in ('.mov', '.qt'):
-            media_type = 'video/quicktime'
-        return FileResponse(file_path, media_type=media_type, filename=filename, headers={"Accept-Ranges": "bytes"})
-    return make_alert_json('File not found', status_code=404)
+# @app.get("/backend/download/{filename}")
+# async def download_video(filename: str):
+#     file_path = os.path.join(PROCESSED_DIR, filename)
+#     if os.path.exists(file_path):
+#         # Choose media type by extension
+#         ext = os.path.splitext(filename)[1].lower()
+#         media_type = "application/octet-stream"
+#         if ext == '.mp4':
+#             media_type = 'video/mp4'
+#         elif ext == '.avi':
+#             media_type = 'video/x-msvideo'
+#         elif ext in ('.mov', '.qt'):
+#             media_type = 'video/quicktime'
+#         return FileResponse(file_path, media_type=media_type, filename=filename, headers={"Accept-Ranges": "bytes"})
+#     return make_alert_json('File not found', status_code=404)
 
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
@@ -447,9 +447,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                         actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                         expected_duration = subtask.get('duration_sec')
                                         if actual_work_time <= expected_duration:
-                                            update_subtask_counts(sid, 1, 0)
+                                            db_mod.update_subtask_counts(sid, 1, 0)
                                         else:
-                                            update_subtask_counts(sid, 0, 1)
+                                            db_mod.update_subtask_counts(sid, 0, 1)
                         else:
                             # single subtask behavior (backwards compatible)
                             try:
@@ -463,9 +463,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                     actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                     expected_duration = subtask.get('duration_sec')
                                     if actual_work_time <= expected_duration:
-                                        update_subtask_counts(subtask_id, 1, 0)
+                                        db_mod.update_subtask_counts(subtask_id, 1, 0)
                                     else:
-                                        update_subtask_counts(subtask_id, 0, 1)
+                                        db_mod.update_subtask_counts(subtask_id, 0, 1)
                     except Exception as e:
                         logging.exception(f'Failed to update subtask counts for {subtask_id or task_id}')
                 
@@ -745,9 +745,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                         actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                         expected_duration = subtask.get('duration_sec')
                                         if actual_work_time <= expected_duration:
-                                            update_subtask_counts(sid, 1, 0)
+                                            db_mod.update_subtask_counts(sid, 1, 0)
                                         else:
-                                            update_subtask_counts(sid, 0, 1)
+                                            db_mod.update_subtask_counts(sid, 0, 1)
                         else:
                             # single subtask behavior (backwards compatible)
                             try:
@@ -761,9 +761,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                     actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                     expected_duration = subtask.get('duration_sec')
                                     if actual_work_time <= expected_duration:
-                                        update_subtask_counts(subtask_id, 1, 0)
+                                        db_mod.update_subtask_counts(subtask_id, 1, 0)
                                     else:
-                                        update_subtask_counts(subtask_id, 0, 1)
+                                        db_mod.update_subtask_counts(subtask_id, 0, 1)
                     except Exception as e:
                         logging.exception(f'Failed to update subtask counts for {subtask_id or task_id}')
                 out = {"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid}
@@ -1104,10 +1104,3 @@ async def delete_analysis(analysis_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('UPDATE subtasks SET completed_in_time = completed_in_time + ?, completed_with_delay = completed_with_delay + ? WHERE id = ?', (completed_in_time_increment, completed_with_delay_increment, subtask_id))
-    conn.commit()
-    conn.close()

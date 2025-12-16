@@ -476,40 +476,40 @@ def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, 
     return (completed_in, completed_delay, reason)
 
 
-def migrate_tasks_and_subtasks_to_vector_store():
-    """If the existing analyses DB still contains legacy `tasks`/`subtasks` tables,
-    copy their rows into the vector store. This is a best-effort helper and will
-    skip if tables don't exist.
-    """
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    try:
-        cur.execute('SELECT id, name, created_at FROM tasks')
-        tasks = cur.fetchall()
-        for t in tasks:
-            task_id, name, created = t[0], t[1], t[2]
-            metadata = {'name': name, 'created_at': created}
-            vector_store.upsert('tasks', task_id, text=name, metadata=metadata)
-    except sqlite3.OperationalError:
-        # table missing -> nothing to migrate
-        pass
+# def migrate_tasks_and_subtasks_to_vector_store():
+#     """If the existing analyses DB still contains legacy `tasks`/`subtasks` tables,
+#     copy their rows into the vector store. This is a best-effort helper and will
+#     skip if tables don't exist.
+#     """
+#     init_db()
+#     conn = sqlite3.connect(DB_PATH)
+#     cur = conn.cursor()
+#     try:
+#         cur.execute('SELECT id, name, created_at FROM tasks')
+#         tasks = cur.fetchall()
+#         for t in tasks:
+#             task_id, name, created = t[0], t[1], t[2]
+#             metadata = {'name': name, 'created_at': created}
+#             vector_store.upsert('tasks', task_id, text=name, metadata=metadata)
+#     except sqlite3.OperationalError:
+#         # table missing -> nothing to migrate
+#         pass
 
-    try:
-        cur.execute('SELECT id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created_at FROM subtasks')
-        subs = cur.fetchall()
-        for s in subs:
-            sub_id, task_id, info, duration, in_time, with_delay, created = s
-            metadata = {
-                'task_id': task_id,
-                'subtask_info': info,
-                'duration_sec': duration,
-                'completed_in_time': in_time,
-                'completed_with_delay': with_delay,
-                'created_at': created,
-            }
-            vector_store.upsert('subtasks', sub_id, text=info or '', metadata=metadata)
-    except sqlite3.OperationalError:
-        pass
-    conn.close()
-    return True
+#     try:
+#         cur.execute('SELECT id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created_at FROM subtasks')
+#         subs = cur.fetchall()
+#         for s in subs:
+#             sub_id, task_id, info, duration, in_time, with_delay, created = s
+#             metadata = {
+#                 'task_id': task_id,
+#                 'subtask_info': info,
+#                 'duration_sec': duration,
+#                 'completed_in_time': in_time,
+#                 'completed_with_delay': with_delay,
+#                 'created_at': created,
+#             }
+#             vector_store.upsert('subtasks', sub_id, text=info or '', metadata=metadata)
+#     except sqlite3.OperationalError:
+#         pass
+#     conn.close()
+#     return True
