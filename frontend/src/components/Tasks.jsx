@@ -84,11 +84,11 @@ function Tasks({}) {
               style={{ width: '100%', padding: 8, border: '1px solid var(--panel-border)', borderRadius: 4, backgroundColor: 'var(--surface)', color: 'var(--text)' }}
             />
           </label>
-          <button 
-            onClick={createTask} 
-            disabled={creating} 
-            style={{ padding: 10, backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: 4, cursor: creating ? 'not-allowed' : 'pointer' }}
-          >
+                          <button 
+                            onClick={createTask} 
+                            disabled={creating} 
+                            style={{ padding: 10, backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: 4, cursor: creating ? 'not-allowed' : 'pointer' }}
+                          >
             {creating ? 'Creating...' : 'Create Task'}
           </button>
         </div>
@@ -129,7 +129,7 @@ function Tasks({}) {
                           </button>
                           <button 
                             onClick={() => setEditing(null)} 
-                            style={{ padding: 6, backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                            style={{ padding: 6, backgroundColor: 'var(--muted)', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                           >
                             Cancel
                           </button>
@@ -138,13 +138,13 @@ function Tasks({}) {
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                           <button 
                             onClick={() => { setEditing(t.id); setEditName(t.name); }} 
-                            style={{ padding: 6, backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                            style={{ padding: 6, backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => deleteTask(t.id)} 
-                            style={{ padding: 6, backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                            style={{ padding: 6, backgroundColor: 'var(--danger, #ef4444)', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                           >
                             Delete
                           </button>

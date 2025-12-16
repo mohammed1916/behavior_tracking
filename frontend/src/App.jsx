@@ -364,14 +364,20 @@ function App() {
       return {
         surface: css.getPropertyValue('--surface').trim() || '#fff',
         text: css.getPropertyValue('--text').trim() || '#000',
+        muted: css.getPropertyValue('--muted').trim() || '#6b7280',
         panelBorder: css.getPropertyValue('--panel-border').trim() || '#e6e9ef',
         accent: css.getPropertyValue('--accent').trim() || '#646cff',
         accentStrong: css.getPropertyValue('--accent-strong').trim() || '#4f54e6',
         accentGhost: css.getPropertyValue('--accent-ghost').trim() || 'rgba(100,108,255,0.08)',
-        cardBg: css.getPropertyValue('--card-bg').trim() || '#fff'
+        cardBg: css.getPropertyValue('--card-bg').trim() || '#fff',
+        // semantic badges (may not be present in CSS; fallbacks kept minimal)
+        successBg: css.getPropertyValue('--badge-success-bg').trim() || '#dff0d8',
+        dangerBg: css.getPropertyValue('--badge-danger-bg').trim() || '#f8d7da',
+        successText: css.getPropertyValue('--badge-success-text').trim() || '#3c763d',
+        dangerText: css.getPropertyValue('--badge-danger-text').trim() || '#721c24'
       };
     } catch (e) {
-      return { surface: '#fff', text: '#000', panelBorder: '#e6e9ef', accent: '#646cff', accentStrong: '#4f54e6', accentGhost: 'rgba(100,108,255,0.08)', cardBg: '#fff' };
+      return { surface: '#fff', text: '#000', muted: '#6b7280', panelBorder: '#e6e9ef', accent: '#646cff', accentStrong: '#4f54e6', accentGhost: 'rgba(100,108,255,0.08)', cardBg: '#fff', successBg: '#dff0d8', dangerBg: '#f8d7da', successText: '#3c763d', dangerText: '#721c24' };
     }
   }, [darkMode]);
 
@@ -483,10 +489,10 @@ function App() {
                               ...theme,
                               colors: {
                                 ...theme.colors,
-                                primary: darkMode ? '#2684FF' : theme.colors.primary,
-                                primary25: darkMode ? '#3b3b3b' : theme.colors.primary25,
-                                neutral0: darkMode ? '#222' : theme.colors.neutral0,
-                                neutral80: darkMode ? '#fff' : theme.colors.neutral80
+                                primary: cssVars.accentStrong,
+                                primary25: cssVars.accentGhost,
+                                neutral0: cssVars.surface,
+                                neutral80: cssVars.text
                               }
                             })}
                           />
@@ -528,10 +534,10 @@ function App() {
                     {selectedTaskIds.length === 1 ? (
                       <div style={{ marginTop: 8 }}>
                         <strong>Subtasks for selected task</strong>
-                        <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid #eee', padding: 8, marginTop: 6 }}>
+                        <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid ' + cssVars.panelBorder, padding: 8, marginTop: 6 }}>
                           {subtasksList.filter(s => s.task_id === selectedTaskIds[0]).map(s => (
                             <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <div style={{ flex: 1 }}>{s.subtask_info} <small style={{ color: '#666' }}>({s.duration_sec}s)</small></div>
+                              <div style={{ flex: 1 }}>{s.subtask_info} <small style={{ color: cssVars.muted }}>({s.duration_sec}s)</small></div>
                               <div>
                                 <button onClick={() => { setSelectedSubtasks([{ id: s.id, completed: false }]); }} style={{ marginLeft: 8 }}>Select</button>
                               </div>
@@ -539,10 +545,10 @@ function App() {
                           ))}
                         </div>
                       </div>
-                    ) : selectedTaskIds.length > 1 ? (
+                      ) : selectedTaskIds.length > 1 ? (
                       <div style={{ marginTop: 8 }}>
                         <strong>Multiple tasks selected — subtasks list hidden</strong>
-                        <div style={{ color: '#666', marginTop: 6 }}>Subtasks preview is available when exactly one task is selected.</div>
+                        <div style={{ color: cssVars.muted, marginTop: 6 }}>Subtasks preview is available when exactly one task is selected.</div>
                       </div>
                     ) : null}
                   </div>
@@ -622,7 +628,7 @@ function App() {
             </div>
 
             {selectedSubtasks.length > 0 && (
-              <div style={{ marginTop: 10, padding: 10, backgroundColor: '#f0f9ff', borderRadius: 4 }}>
+              <div style={{ marginTop: 10, padding: 10, backgroundColor: cssVars.accentGhost, borderRadius: 4 }}>
                 <strong>Selected Subtasks:</strong> {selectedSubtasks.map(t => `${t.id} (${t.completed ? 'Completed' : 'Pending'})`).join(', ')}
                 <button onClick={() => setSelectedSubtasks([])} style={{ marginLeft: 8 }}>Clear</button>
               </div>
@@ -630,7 +636,7 @@ function App() {
 
 
             <div style={{ marginTop: 6 }}>
-              <small style={{ color: '#666' }}>
+              <small style={{ color: cssVars.muted }}>
                 {vlmAvailableModels.length > 0 ? (
                   (() => {
                     const meta = preloadedDevices && preloadedDevices[vlmModel];
@@ -640,15 +646,15 @@ function App() {
                     return (
                       <>
                               {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
-                                        <span style={{ marginLeft: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? '#dff0d8' : '#f8d7da'), color: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? '#3c763d' : '#721c24') , fontSize: 12 }}>
+                                        <span style={{ marginLeft: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? cssVars.successBg : cssVars.dangerBg), color: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? cssVars.successText : cssVars.dangerText) , fontSize: 12 }}>
                                           {vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? 'VLM ready' : 'VLM not loaded'}
                                         </span>
-                                        <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, backgroundColor: (llmAvailable ? '#dff0d8' : '#f8d7da'), color: (llmAvailable ? '#3c763d' : '#721c24'), fontSize: 12 }}>
+                                        <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, backgroundColor: (llmAvailable ? cssVars.successBg : cssVars.dangerBg), color: (llmAvailable ? cssVars.successText : cssVars.dangerText), fontSize: 12 }}>
                                           {llmAvailable ? 'LLM available' : 'LLM missing'}
                                         </span>
                                         <button onClick={fetchBackendStatus} style={{ marginLeft: 8 }}>Refresh status</button>
-                                        <small style={{ marginLeft: 8, color: '#666' }}>{statusLastFetched ? `Last fetched: ${new Date(statusLastFetched).toLocaleString()}` : 'Last fetched: never'}</small>
-                                        {statusMsg ? <div style={{ color: '#a00', marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
+                                        <small style={{ marginLeft: 8, color: cssVars.muted }}>{statusLastFetched ? `Last fetched: ${new Date(statusLastFetched).toLocaleString()}` : 'Last fetched: never'}</small>
+                                        {statusMsg ? <div style={{ color: cssVars.dangerText, marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
                       </>
                     );
                   })()
@@ -664,7 +670,7 @@ function App() {
               <div className="vlm-result" style={{ marginTop: 12 }}>
                 <h4>VLM Result</h4>
                 {vlmResult.error ? (
-                  <pre style={{ color: 'red' }}>{vlmResult.error}</pre>
+                  <pre style={{ color: cssVars.dangerText }}>{vlmResult.error}</pre>
                 ) : (
                   <>
                     <div style={{ marginBottom: 8 }}><strong>Analysis</strong><pre className="vlm-result">{JSON.stringify(vlmResult.analysis, null, 2)}</pre></div>
@@ -692,7 +698,7 @@ function App() {
                                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                           <div style={{ flex: 1 }}>
                                             <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                            <div style={{ fontSize: 12, color: '#444' }}>{captions.length ? captions.join(' | ') : ''}</div>
+                                            <div style={{ fontSize: 12, color: cssVars.muted }}>{captions.length ? captions.join(' | ') : ''}</div>
                                           </div>
                                           <div>
                                             <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
@@ -702,7 +708,7 @@ function App() {
                                     })
                                   })()}
                                 </div>
-                              ) : (<div style={{ color: '#666' }}>No idle frames detected.</div>)}
+                              ) : (<div style={{ color: cssVars.muted }}>No idle frames detected.</div>)}
                           </div>
 
                           <div style={{ flex: 1, textAlign: 'left' }}>
@@ -718,7 +724,7 @@ function App() {
                                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                         <div style={{ flex: 1 }}>
                                           <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                          <div style={{ fontSize: 12, color: '#444' }}>{captions.length ? captions.join(' | ') : ''}</div>
+                                          <div style={{ fontSize: 12, color: cssVars.muted }}>{captions.length ? captions.join(' | ') : ''}</div>
                                         </div>
                                         <div>
                                           <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
@@ -728,7 +734,7 @@ function App() {
                                   })
                                 })()}
                               </div>
-                            ) : (<div style={{ color: '#666' }}>No work frames detected.</div>)}
+                            ) : (<div style={{ color: cssVars.muted }}>No work frames detected.</div>)}
                           </div>
                         </div>
                       </div>
@@ -760,7 +766,7 @@ function App() {
           <Subtasks onSubtaskSelect={onSubtaskSelect} refreshTrigger={subtasksRefreshTrigger} />
         )}
       </div>
-                    {/* <button onClick={() => setDarkMode(d => !d)} style={{ marginLeft: 8 }}>{darkMode ? 'Light Mode' : 'Dark Mode'}</button> */}
+                    <button onClick={() => setDarkMode(d => !d)} style={{ marginLeft: 8 }}>{darkMode ? 'Light Mode' : 'Dark Mode'}</button>
 
     </div>
   );

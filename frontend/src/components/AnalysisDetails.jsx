@@ -34,7 +34,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
   if (!analysisId) return null;
 
   return (
-    <div className="analysis-details" style={{ padding: 12, borderLeft: '1px solid #ddd' }}>
+    <div className="analysis-details" style={{ padding: 12, borderLeft: '1px solid var(--panel-border)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>Analysis Details</h3>
         <div>
@@ -42,7 +42,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
         </div>
       </div>
       {loading && <div>Loading...</div>}
-      {error && <div style={{ color: 'red' }}>{error}</div>}
+      {error && <div style={{ color: 'var(--danger, red)' }}>{error}</div>}
       {analysis && (
         <div style={{ marginTop: 8 }}>
           {analysis.error && <div style={{ color: 'red', marginBottom: 8 }}>Error: {analysis.error}</div>}
@@ -68,7 +68,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                 <div style={{ flex: 1 }}>
                                   <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                  <div style={{ fontSize: 12, color: '#444' }}>{r.captions && r.captions.length ? r.captions.join(' | ') : ''}</div>
+                                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r.captions && r.captions.length ? r.captions.join(' | ') : ''}</div>
                                 </div>
                                 <div>
                                   <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
@@ -76,7 +76,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                               </div>
                             ))}
                           </div>
-                        ) : (<div style={{ color: '#666' }}>No idle frames detected.</div>)}
+                        ) : (<div style={{ color: 'var(--muted)' }}>No idle frames detected.</div>)}
                     </div>
 
                     <div style={{ flex: 1, textAlign: 'left' }}>
@@ -87,7 +87,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                               <div style={{ flex: 1 }}>
                                 <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                <div style={{ fontSize: 12, color: '#444' }}>{r.captions && r.captions.length ? r.captions.join(' | ') : ''}</div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r.captions && r.captions.length ? r.captions.join(' | ') : ''}</div>
                               </div>
                               <div>
                                 <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
@@ -95,13 +95,13 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                             </div>
                           ))}
                         </div>
-                      ) : (<div style={{ color: '#666' }}>No work frames detected.</div>)}
+                      ) : (<div style={{ color: 'var(--muted)' }}>No work frames detected.</div>)}
                     </div>
                   </div>
                 </div>
               </div>
             ) : (
-              <div style={{ color: '#666' }}>No video available.</div>
+              <div style={{ color: 'var(--muted)' }}>No video available.</div>
             )}
           </div>
 
@@ -112,7 +112,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                 <div>ID: {analysis.assignment_id}</div>
               </div>
             ) : (
-              <div style={{ color: '#666' }}>None</div>
+              <div style={{ color: 'var(--muted)' }}>None</div>
             )}
           </div>
 
@@ -131,7 +131,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                 </thead>
                 <tbody>
                   {(analysis.samples || []).map((s, i) => (
-                    <tr key={i} style={{ borderTop: '1px solid #eee' }}>
+                    <tr key={i} style={{ borderTop: '1px solid var(--panel-border)' }}>
                       <td style={{ padding: 6 }}>{s.frame_index}</td>
                       <td style={{ padding: 6 }}>{s.time_sec ? s.time_sec.toFixed(2) : ''}</td>
                       <td style={{ padding: 6 }}>{s.label}</td>

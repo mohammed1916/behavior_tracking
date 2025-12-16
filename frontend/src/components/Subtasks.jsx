@@ -217,7 +217,7 @@ function Subtasks({ onSubtaskSelect, refreshTrigger }) {
                           </button>
                           <button 
                             onClick={() => setEditing(null)} 
-                            style={{ padding: 6, backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                            style={{ padding: 6, backgroundColor: 'var(--muted)', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                           >
                             Cancel
                           </button>
@@ -226,13 +226,13 @@ function Subtasks({ onSubtaskSelect, refreshTrigger }) {
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                           <button 
                             onClick={() => { setEditing(a.id); setEditInfo(a.subtask_info || ''); setEditDuration(a.duration_sec); }} 
-                            style={{ padding: 6, backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                            style={{ padding: 6, backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => deleteSubtask(a.id)} 
-                            style={{ padding: 6, backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                            style={{ padding: 6, backgroundColor: 'var(--danger, #ef4444)', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                           >
                             Delete
                           </button>
