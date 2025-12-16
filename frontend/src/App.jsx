@@ -300,6 +300,11 @@ function App() {
     }
   };
 
+  // Keep selectedTaskIds in sync with fetched tasks: remove any ids that no longer exist
+  useEffect(() => {
+    setSelectedTaskIds(prev => (prev || []).filter(id => (tasksList || []).some(t => t.id === id)));
+  }, [tasksList]);
+
   const loadModel = async () => {
     if (!vlmModel) return alert('Select a model first');
     setModelLoading(true);
@@ -456,6 +461,7 @@ function App() {
                               }
                             })}
                           />
+                          <button type="button" onClick={fetchTasks} style={{ marginLeft: 8, marginTop: 6 }}>Refresh tasks</button>
                         </div>
                       </div>
                       <div>
