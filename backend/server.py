@@ -139,7 +139,7 @@ async def download_video(filename: str):
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary')):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), sample_interval_sec: Optional[float] = Query(None)):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
@@ -164,6 +164,11 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             collected_work = []
             cumulative_work_frames = 0
             start_time = time.time()
+            # Determine sampling interval for live inference (seconds)
+            try:
+                sample_interval = float(sample_interval_sec) if sample_interval_sec is not None and float(sample_interval_sec) > 0 else 2.0
+            except Exception:
+                sample_interval = 2.0
             
             writer = None
             writer_type = None
@@ -274,7 +279,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 frame_counter += 1
                 elapsed_time = time.time() - start_time
                 
-                if time.time() - last_inference_time >= 2.0:
+                if time.time() - last_inference_time >= sample_interval:
                     try:
                         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                         # Allow optional prompt to be passed into captioners that support it.
@@ -533,7 +538,7 @@ def make_alert_json(message: str, status_code: int = 400):
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary')):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), sample_interval_sec: Optional[float] = Query(None)):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -559,8 +564,27 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             yield _sse_event({"stage": "video_info", "fps": fps, "frame_count": frame_count, "width": width, "height": height, "duration": duration})
 
             # Build sample indices (safe-guard)
-            max_samples = min(30, max(1, frame_count))
-            indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
+            # If `sample_interval_sec` provided, sample frames every N seconds;
+            # otherwise fall back to evenly spaced up to 30 samples.
+            if sample_interval_sec is not None and sample_interval_sec > 0:
+                try:
+                    # include time 0 and up to duration inclusive
+                    step = float(sample_interval_sec)
+                    times = []
+                    t = 0.0
+                    while t <= duration:
+                        times.append(t)
+                        t += step
+                    # convert times to nearest frame indices, clamp to valid range
+                    indices = sorted(list({min(frame_count - 1, max(0, int(round(tt * fps)))) for tt in times}))
+                    if not indices:
+                        indices = [0]
+                except Exception:
+                    max_samples = min(30, max(1, frame_count))
+                    indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
+            else:
+                max_samples = min(30, max(1, frame_count))
+                indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
 
             captioner = get_captioner_for_model(model)
             if captioner is None:
