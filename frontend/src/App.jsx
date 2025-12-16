@@ -437,7 +437,12 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Behavior Tracking Analysis</h1>
+      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+        <div style={{ marginRight: 'auto' }}></div>
+        <button onClick={() => setDarkMode(d => !d)} style={{ marginLeft: 8 }}>{darkMode ? 'Light Mode' : 'Dark Mode'}</button>
+      </div>
+      <h1 style={{ margin: 0, flex: 1 }}>Behavior Tracking Analysis</h1>
+
 
       <nav className="navbar">
         <button className={activeView === 'vlm' ? 'active' : ''} onClick={() => setActiveView('vlm')}>VLM</button>
@@ -766,8 +771,6 @@ function App() {
           <Subtasks onSubtaskSelect={onSubtaskSelect} refreshTrigger={subtasksRefreshTrigger} />
         )}
       </div>
-                    <button onClick={() => setDarkMode(d => !d)} style={{ marginLeft: 8 }}>{darkMode ? 'Light Mode' : 'Dark Mode'}</button>
-
     </div>
   );
 }

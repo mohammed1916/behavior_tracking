@@ -13,9 +13,33 @@
   --accent-ghost: rgba(100,108,255,0.08);
 }
 
+/* Manual dark mode override: applies when `.dark` is present on the root element */
+.dark {
+  --bg: #0b1020;
+  --surface: #0f1724;
+  --text: #e6eef8;
+  --muted: #9aa6bf;
+  --accent: #7b8bff;
+  --accent-strong: #5f6df0;
+  --panel-border: rgba(255,255,255,0.04);
+  --panel-shadow: 0 6px 18px rgba(2,6,23,0.6);
+  --card-bg: #0b1220;
+  --code-bg: #071024;
+  --accent-ghost: rgba(123,139,255,0.06);
+}
+
+/* Strong override when the "dark" class is applied to the root <html> element.
+   Some styles may be set elsewhere; this ensures the high-level background and
+   text color follow the CSS variables immediately. */
+html.dark body, html.dark .App {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+}
+
 /* Dark mode via prefers-color-scheme and a .dark class for manual override */
 @media (prefers-color-scheme: dark) {
-  :root, .dark {
+  /* Default variables when the system prefers dark */
+  :root {
     --bg: #0b1020;
     --surface: #0f1724;
     --text: #e6eef8;
@@ -27,6 +51,23 @@
     --card-bg: #0b1220;
     --code-bg: #071024;
     --accent-ghost: rgba(123,139,255,0.06);
+  }
+
+  /* If the user has NOT enabled the `.dark` class, force the light variables
+     so the toggle can override the system preference. `html:not(.dark)` has
+     higher specificity than `:root` so it will win inside this media query. */
+  html:not(.dark) {
+    --bg: #f5f7fb;
+    --surface: #ffffff;
+    --text: #0f1724;
+    --muted: #6b7280;
+    --accent: #646cff;
+    --accent-strong: #4f54e6;
+    --panel-border: #e6e9ef;
+    --panel-shadow: 0 2px 6px rgba(8,15,31,0.04);
+    --card-bg: #ffffff;
+    --code-bg: #fafafa;
+    --accent-ghost: rgba(100,108,255,0.08);
   }
 }
 
