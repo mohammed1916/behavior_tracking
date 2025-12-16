@@ -72,7 +72,7 @@ body{
 
 .navbar button.active {
   background: var(--accent);
-  color: white;
+  color: var(--text);
   border-color: var(--accent-strong);
 }
 
@@ -170,7 +170,7 @@ body{
 .mode-toggle { display: inline-flex; gap: 6px; background:var(--accent-ghost); padding:6px; border-radius:8px; }
 .mode-toggle input { display:none; }
 .mode-toggle label { padding:8px 12px; border-radius:6px; cursor:pointer; user-select:none; color:var(--text); }
-.mode-toggle input:checked + label, .mode-toggle label:hover { background:var(--accent); color:white; }
+.mode-toggle input:checked + label, .mode-toggle label:hover { background:var(--accent); color: var(--text); }
 
 .vlm-section label { display:block; margin:8px 0; text-align:left; color:var(--text); }
 .vlm-section select, .vlm-section textarea, .vlm-section input[type=file] { width:100%; background:var(--card-bg); color:var(--text); border:1px solid var(--panel-border); padding:8px; border-radius:6px; }
