@@ -120,12 +120,10 @@ function App() {
 
   const [activeView, setActiveView] = useState('vlm');
   const [activeTab, setActiveTab] = useState('upload');
-  const [selectedSubtasks, setSelectedSubtasks] = useState([]);
+  // selection of subtasks removed from Subtasks tab
   const [subtasksRefreshTrigger, setSubtasksRefreshTrigger] = useState(0);
 
-  const onSubtaskSelect = useCallback((subtasks) => {
-    setSelectedSubtasks(subtasks);
-  }, []);
+  
 
   const handleVlmSubmit = async () => {
     if (!vlmPrompt && !vlmVideo) {
@@ -151,8 +149,6 @@ function App() {
       // attach task/subtask selection and compare/eval mode
       if (selectedTaskIds && selectedTaskIds.length > 0) {
         url += `&task_id=${encodeURIComponent(selectedTaskIds.join(','))}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
-      } else if (selectedSubtasks.length > 0) {
-        url += `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else if (advSubtaskId) {
         url += `&subtask_id=${encodeURIComponent(advSubtaskId)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else {
@@ -543,9 +539,6 @@ function App() {
                           {subtasksList.filter(s => s.task_id === selectedTaskIds[0]).map(s => (
                             <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                               <div style={{ flex: 1 }}>{s.subtask_info} <small style={{ color: cssVars.muted }}>({s.duration_sec}s)</small></div>
-                              <div>
-                                <button onClick={() => { setSelectedSubtasks([{ id: s.id, completed: false }]); }} style={{ marginLeft: 8 }}>Select</button>
-                              </div>
                             </div>
                           ))}
                         </div>
@@ -619,7 +612,7 @@ function App() {
                     classifier={vlmClassifier}
                     classifierMode={vlmClassifierMode}
                     classifierPrompt={vlmClassifierPrompt}
-                    selectedSubtask={selectedSubtasks.length > 0 ? selectedSubtasks[0].id : ''}
+                    selectedSubtask={''}
                     subtaskId={advSubtaskId}
                     compareTimings={advCompareTimings}
                     jpegQuality={advJpegQuality}
@@ -632,12 +625,7 @@ function App() {
               </div>
             </div>
 
-            {selectedSubtasks.length > 0 && (
-              <div style={{ marginTop: 10, padding: 10, backgroundColor: cssVars.accentGhost, borderRadius: 4 }}>
-                <strong>Selected Subtasks:</strong> {selectedSubtasks.map(t => `${t.id} (${t.completed ? 'Completed' : 'Pending'})`).join(', ')}
-                <button onClick={() => setSelectedSubtasks([])} style={{ marginLeft: 8 }}>Clear</button>
-              </div>
-            )}
+            
 
 
             <div style={{ marginTop: 6 }}>
@@ -768,7 +756,7 @@ function App() {
         )}
 
         {activeView === 'subtasks' && (
-          <Subtasks onSubtaskSelect={onSubtaskSelect} refreshTrigger={subtasksRefreshTrigger} />
+          <Subtasks refreshTrigger={subtasksRefreshTrigger} />
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-function Subtasks({ onSubtaskSelect, refreshTrigger }) {
+function Subtasks({ refreshTrigger }) {
   const [subtasks, setSubtasks] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [newSubtaskInfo, setNewSubtaskInfo] = useState('');
@@ -18,7 +18,7 @@ function Subtasks({ onSubtaskSelect, refreshTrigger }) {
       const resp = await fetch('http://localhost:8001/backend/subtasks');
       if (!resp.ok) throw new Error(await resp.text());
       const data = await resp.json();
-      setSubtasks(data.map(a => ({ ...a, selected: false })));
+      setSubtasks(data);
     } catch (e) {
       console.error('Failed to fetch subtasks', e);
     } finally {
@@ -85,9 +85,7 @@ function Subtasks({ onSubtaskSelect, refreshTrigger }) {
     }
   };
 
-  const handleSelect = (id, selected) => {
-    setSubtasks(subtasks.map(a => a.id === id ? { ...a, selected } : a));
-  };
+  
 
   useEffect(() => {
     fetchSubtasks();
@@ -100,9 +98,7 @@ function Subtasks({ onSubtaskSelect, refreshTrigger }) {
     }
   }, [refreshTrigger]);
 
-  useEffect(() => {
-    onSubtaskSelect(subtasks.filter(a => a.selected).map(a => ({ id: a.id, completed: (a.completed_in_time + a.completed_with_delay) > 0 })));
-  }, [subtasks, onSubtaskSelect]);
+  // selection feature removed: no callback to parent
 
   return (
     <div style={{ padding: 20, backgroundColor: 'var(--surface)', borderRadius: 8, boxShadow: 'var(--panel-shadow)' }}>
@@ -158,7 +154,6 @@ function Subtasks({ onSubtaskSelect, refreshTrigger }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--card-bg)', borderRadius: 6, overflow: 'hidden' }}>
                 <thead>
                   <tr style={{ backgroundColor: 'var(--accent-ghost)' }}>
-                    <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Select</th>
                     <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Task</th>
                     <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Subtask Info</th>
                     <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Duration (s)</th>
@@ -170,9 +165,6 @@ function Subtasks({ onSubtaskSelect, refreshTrigger }) {
               <tbody>
                 {subtasks.map((a, index) => (
                   <tr key={a.id} style={{ backgroundColor: index % 2 === 0 ? 'var(--surface)' : 'var(--card-bg)' }}>
-                    <td style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>
-                      <input type="checkbox" checked={a.selected} onChange={(e) => handleSelect(a.id, e.target.checked)} />
-                    </td>
                     <td style={{ border: '1px solid var(--panel-border)', padding: 12 }}>
                       {a.task_name}
                     </td>
