@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Select from 'react-select';
 import './App.css';
 import StoredAnalyses from './components/StoredAnalyses';
 import AnalysisDetails from './components/AnalysisDetails';
@@ -28,7 +29,14 @@ function App() {
   const [advSubtaskId, setAdvSubtaskId] = useState('');
   const [tasksList, setTasksList] = useState([]);
   const [subtasksList, setSubtasksList] = useState([]);
-  const [selectedTaskIdFrontend, setSelectedTaskIdFrontend] = useState('');
+  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('darkMode');
+      if (saved !== null) return saved === '1';
+    } catch (e) {}
+    return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const [evaluationMode, setEvaluationMode] = useState('combined');
   const [advCompareTimings, setAdvCompareTimings] = useState(false);
   const [advJpegQuality, setAdvJpegQuality] = useState(80);
@@ -141,8 +149,8 @@ function App() {
       if (enableMediapipe) url += '&enable_mediapipe=true';
       if (enableYolo) url += '&enable_yolo=true';
       // attach task/subtask selection and compare/eval mode
-      if (selectedTaskIdFrontend) {
-        url += `&task_id=${encodeURIComponent(selectedTaskIdFrontend)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      if (selectedTaskIds && selectedTaskIds.length > 0) {
+        url += `&task_id=${encodeURIComponent(selectedTaskIds.join(','))}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else if (selectedSubtasks.length > 0) {
         url += `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else if (advSubtaskId) {
@@ -345,6 +353,59 @@ function App() {
   // derive selected local model's display name
   const selectedVlmModelName = (vlmAvailableModels || []).find(m => m.id === vlmModel)?.name || (vlmAvailableModels && vlmAvailableModels[0] && vlmAvailableModels[0].name) || '';
 
+  // task select options for react-select
+  const taskOptions = (tasksList || []).map(t => ({ value: t.id, label: t.name }));
+  const selectedTaskOptions = taskOptions.filter(o => selectedTaskIds.includes(o.value));
+
+  // react-select custom styles derived from CSS variables so the CSS theme remains authoritative
+  const cssVars = React.useMemo(() => {
+    try {
+      const css = getComputedStyle(document.documentElement);
+      return {
+        surface: css.getPropertyValue('--surface').trim() || '#fff',
+        text: css.getPropertyValue('--text').trim() || '#000',
+        panelBorder: css.getPropertyValue('--panel-border').trim() || '#e6e9ef',
+        accent: css.getPropertyValue('--accent').trim() || '#646cff',
+        accentStrong: css.getPropertyValue('--accent-strong').trim() || '#4f54e6',
+        accentGhost: css.getPropertyValue('--accent-ghost').trim() || 'rgba(100,108,255,0.08)',
+        cardBg: css.getPropertyValue('--card-bg').trim() || '#fff'
+      };
+    } catch (e) {
+      return { surface: '#fff', text: '#000', panelBorder: '#e6e9ef', accent: '#646cff', accentStrong: '#4f54e6', accentGhost: 'rgba(100,108,255,0.08)', cardBg: '#fff' };
+    }
+  }, [darkMode]);
+
+  const selectStyles = {
+    control: (base, state) => ({
+      ...base,
+      backgroundColor: cssVars.surface,
+      borderColor: cssVars.panelBorder || base.borderColor,
+      boxShadow: state.isFocused ? '0 0 0 1px rgba(38,132,255,0.12)' : base.boxShadow,
+      color: cssVars.text
+    }),
+    menu: (base) => ({ ...base, backgroundColor: cssVars.surface, color: cssVars.text }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isSelected ? cssVars.accentStrong : (state.isFocused ? cssVars.accentGhost : cssVars.surface),
+      color: cssVars.text
+    }),
+    multiValue: (base) => ({ ...base, backgroundColor: cssVars.panelBorder, color: cssVars.text }),
+    placeholder: (base) => ({ ...base, color: cssVars.text }),
+    singleValue: (base) => ({ ...base, color: cssVars.text }),
+    input: (base) => ({ ...base, color: cssVars.text }),
+    dropdownIndicator: (base) => ({ ...base, color: cssVars.text }),
+    indicatorSeparator: (base) => ({ ...base, backgroundColor: cssVars.panelBorder })
+  };
+
+  // keep the document root .dark class in sync and persist preference
+  React.useEffect(() => {
+    try {
+      if (darkMode) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+      localStorage.setItem('darkMode', darkMode ? '1' : '0');
+    } catch (e) {}
+  }, [darkMode]);
+
   useEffect(() => {
     console.log("selectedVlmModelName changed:", selectedVlmModelName);
   }, [selectedVlmModelName]);
@@ -377,6 +438,7 @@ function App() {
         <button className={activeView === 'stored' ? 'active' : ''} onClick={() => setActiveView('stored')}>Stored Analyses</button>
         <button className={activeView === 'tasks' ? 'active' : ''} onClick={() => setActiveView('tasks')}>Tasks</button>
         <button className={activeView === 'subtasks' ? 'active' : ''} onClick={() => setActiveView('subtasks')}>Subtasks</button>
+        <button onClick={() => setDarkMode(d => !d)} style={{ marginLeft: 8 }}>{darkMode ? 'Light Mode' : 'Dark Mode'}</button>
       </nav>
 
       <div className="content">
@@ -409,11 +471,27 @@ function App() {
                   <div style={{ marginTop: 8, padding: 8, border: '1px dashed var(--panel-border)', borderRadius: 6 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       <div>
-                        <label>Task (optional):</label>
-                        <select style={{ width: '100%' }} value={selectedTaskIdFrontend} onChange={(e) => setSelectedTaskIdFrontend(e.target.value)}>
-                          <option value="">(none)</option>
-                          {tasksList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
+                        <label>Task(s) (optional, multi-select):</label>
+                        <div style={{ marginTop: 6 }}>
+                          <Select
+                            isMulti
+                            options={taskOptions}
+                            value={selectedTaskOptions}
+                            onChange={(vals) => setSelectedTaskIds(vals ? vals.map(v => v.value) : [])}
+                            placeholder="Select task(s)..."
+                            styles={{ container: (base) => ({ ...base, width: '100%' }), ...selectStyles }}
+                            theme={(theme) => ({
+                              ...theme,
+                              colors: {
+                                ...theme.colors,
+                                primary: darkMode ? '#2684FF' : theme.colors.primary,
+                                primary25: darkMode ? '#3b3b3b' : theme.colors.primary25,
+                                neutral0: darkMode ? '#222' : theme.colors.neutral0,
+                                neutral80: darkMode ? '#fff' : theme.colors.neutral80
+                              }
+                            })}
+                          />
+                        </div>
                       </div>
                       <div>
                         <label>Evaluation Mode:</label>
@@ -448,11 +526,11 @@ function App() {
                       </div>
                     </div>
 
-                    {selectedTaskIdFrontend && (
+                    {selectedTaskIds.length === 1 ? (
                       <div style={{ marginTop: 8 }}>
                         <strong>Subtasks for selected task</strong>
                         <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid #eee', padding: 8, marginTop: 6 }}>
-                          {subtasksList.filter(s => s.task_id === selectedTaskIdFrontend).map(s => (
+                          {subtasksList.filter(s => s.task_id === selectedTaskIds[0]).map(s => (
                             <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                               <div style={{ flex: 1 }}>{s.subtask_info} <small style={{ color: '#666' }}>({s.duration_sec}s)</small></div>
                               <div>
@@ -462,7 +540,12 @@ function App() {
                           ))}
                         </div>
                       </div>
-                    )}
+                    ) : selectedTaskIds.length > 1 ? (
+                      <div style={{ marginTop: 8 }}>
+                        <strong>Multiple tasks selected — subtasks list hidden</strong>
+                        <div style={{ color: '#666', marginTop: 6 }}>Subtasks preview is available when exactly one task is selected.</div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
