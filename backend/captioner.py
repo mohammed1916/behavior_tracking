@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 import torch
 from transformers import pipeline
+from backend.vlm_blip import get_blip_captioner
 
 from backend.vlm_qwen import QwenVLMAdapter
 
@@ -38,18 +39,21 @@ def get_local_captioner() -> Optional[Any]:
     if 'blip' in _captioner_cache:
         return _captioner_cache['blip']
 
-    device = 0 if torch is not None and getattr(torch, 'cuda', None) is not None and torch.cuda.is_available() else -1
-    p = pipeline('image-to-text', model='Salesforce/blip-image-captioning-large', device=device)
+    try:
+        p = get_blip_captioner()
+    except Exception as e:
+        logging.exception('Failed to initialize BLIP captioner: %s', e)
+        return None
+
     # Cache under a few common keys so callers probing different ids match
     _captioner_cache['blip'] = p
     try:
-        # canonical transformers id used when creating the pipeline
         canonical = 'Salesforce/blip-image-captioning-large'
         _captioner_cache[canonical] = p
         _captioner_cache[canonical.lower()] = p
     except Exception:
         pass
-    logging.info('Loaded local BLIP captioner (Salesforce/blip-image-captioning-large)')
+    logging.info('Loaded local BLIP captioner (Salesforce/blip-image-captioning-large) via vlm_blip')
     return p
 
 

@@ -277,7 +277,11 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 if time.time() - last_inference_time >= 2.0:
                     try:
                         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                        out = captioner(img)
+                        # Allow optional prompt to be passed into captioners that support it.
+                        try:
+                            out = captioner(img, prompt=prompt)
+                        except TypeError:
+                            out = captioner(img)
                         caption = _normalize_caption_output(captioner, out)
                         
                         # Determine label (LLM + keyword rules) via centralized helper
@@ -609,7 +613,11 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     except Exception:
                         logging.exception('YOLO processing failed on frame')
 
-                    out = captioner(img)
+                    # Allow optional prompt to be passed into captioners that support it.
+                    try:
+                        out = captioner(img, prompt=prompt)
+                    except TypeError:
+                        out = captioner(img)
                     caption = _normalize_caption_output(captioner, out)
 
                     # Determine label (LLM + keyword rules) via centralized helper

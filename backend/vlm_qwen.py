@@ -71,7 +71,8 @@ class QwenVLMAdapter:
 
         You are an expert activity recognition model.
 
-        Look ONLY at the MAIN PERSON in the image. Ignore all other people or objects.
+        Look ONLY at the MAIN PERSON in the image. Ignore all other people. If there are no people look at the process that is hapenning.
+        The video contains assembling of drone related tasks such as attaching propellors, soldering, fixing wires and so on. Perform analysis on video based on drone and electrical knowledge.
 
         Classify their CURRENT ACTION into exactly ONE label from the following:
 
