@@ -38,7 +38,7 @@ function Subtasks({ refreshTrigger }) {
   };
 
   const createSubtask = async () => {
-    if (!selectedTaskId || !newDuration.trim()) return alert('Select task and enter duration');
+    if (!selectedTaskId || !newSubtaskInfo.trim() || !newDuration.trim()) return alert('Select task and enter duration');
     setCreating(true);
     try {
       const form = new FormData();
@@ -118,7 +118,7 @@ function Subtasks({ refreshTrigger }) {
             </select>
           </label>
           <label>
-            Subtask Info (optional):
+            Sub Task Info:
             <textarea 
               value={newSubtaskInfo} 
               onChange={(e) => setNewSubtaskInfo(e.target.value)} 
@@ -155,7 +155,7 @@ function Subtasks({ refreshTrigger }) {
                 <thead>
                   <tr style={{ backgroundColor: 'var(--accent-ghost)' }}>
                     <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Task</th>
-                    <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Subtask Info</th>
+                    <th style={{ border: '1px solid var(--panel-border)', padding: 12 }}>Sub Task Info</th>
                     <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Duration (s)</th>
                     <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Completed In Time</th>
                     <th style={{ border: '1px solid var(--panel-border)', padding: 12, textAlign: 'center' }}>Completed With Delay</th>

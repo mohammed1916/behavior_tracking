@@ -134,6 +134,11 @@ class FAISSVectorStore:
             item['metadata'] = metadata or item.get('metadata', {})
             if 'created_at' not in item['metadata']:
                 item['metadata']['created_at'] = _now_iso()
+            # record the logical collection so listings/searches can filter
+            try:
+                item['metadata']['collection'] = collection
+            except Exception:
+                pass
             if vector is None and text is not None:
                 vec = _text_to_vector(text, dim=self.dim)
             elif vector is not None:
@@ -149,11 +154,18 @@ class FAISSVectorStore:
             return item
 
     def get(self, collection: str, id: str):
-        return self._meta.get(id)
+        it = self._meta.get(id)
+        if not it:
+            return None
+        meta = it.get('metadata', {})
+        if meta.get('collection') != collection:
+            return None
+        return it
 
     def delete(self, collection: str, id: str):
         with _LOCK:
-            if id in self._meta:
+            it = self._meta.get(id)
+            if it and it.get('metadata', {}).get('collection') == collection:
                 del self._meta[id]
                 self._save_meta()
                 self._rebuild_index()
@@ -161,7 +173,14 @@ class FAISSVectorStore:
             return False
 
     def list(self, collection: str):
-        return list(self._meta.values())
+        out = []
+        for it in self._meta.values():
+            try:
+                if (it.get('metadata') or {}).get('collection') == collection:
+                    out.append(it)
+            except Exception:
+                continue
+        return out
 
     def search(self, collection: str, query_text: str = None, query_vector: list = None, top_k: int = 10):
         # build a query vector if needed
@@ -181,12 +200,22 @@ class FAISSVectorStore:
                 if idx < 0 or idx >= len(keys):
                     continue
                 k = keys[idx]
-                results.append(self._meta.get(k))
-            return results
-        # fallback: substring match
+                it = self._meta.get(k)
+                if it and (it.get('metadata') or {}).get('collection') == collection:
+                    results.append(it)
+            # If we didn't find enough matches for this collection, fall back
+            # to a substring match filtered by collection below.
+            if results:
+                return results[:top_k]
+        # fallback: substring match within the requested collection only
         q = (query_text or '').lower()
         scored = []
         for it in self._meta.values():
+            try:
+                if (it.get('metadata') or {}).get('collection') != collection:
+                    continue
+            except Exception:
+                continue
             text = (it.get('text') or '')
             score = 1 if q and q in text.lower() else 0
             scored.append((score, it))
