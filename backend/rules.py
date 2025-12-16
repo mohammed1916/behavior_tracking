@@ -110,7 +110,7 @@ def determine_label(
                             label = last
                         else:
                             # simple domain heuristics mapping to binary label
-                            if any(sub in last for sub in ('assembl', 'drone', 'screw', 'install', 'repair')):
+                            if any(sub in last for sub in ('assemble', 'drone', 'screw', 'install', 'repair')):
                                 label = 'work'
                             elif 'phone' in last:
                                 label = 'idle'
