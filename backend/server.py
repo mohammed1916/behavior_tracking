@@ -301,12 +301,13 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         caption = _normalize_caption_output(captioner, out)
                         
                         # Determine label (LLM + keyword rules) via centralized helper
+                        classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
                         label, cls_text = rules_mod.determine_label(
                             caption,
                             use_llm=use_llm,
                             text_llm=llm_mod.get_local_text_llm(),
                             prompt=prompt,
-                            classify_prompt_template=CLASSIFY_PROMPT_TEMPLATE,
+                            classify_prompt_template=classify_prompt_template,
                         )
                         
                         # Subtask overrun check (same as vlm_local_stream)
@@ -658,13 +659,14 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
 
                     # Determine label (LLM + keyword rules) via centralized helper
                     # choose classify prompt: explicit override > classifier default > global
-                    classify_prompt_template = classifier_prompt or rules_mod.CLASSIFIER_PROMPTS.get(classifier)
+                    # choose label prompt: explicit override > label-mode template
+                    classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
                     label, cls_text = rules_mod.determine_label(
                         caption,
                         use_llm=use_llm,
                         text_llm=llm_mod.get_local_text_llm(),
                         prompt=prompt,
-                        classify_prompt_template=classify_prompt_template or CLASSIFY_PROMPT_TEMPLATE,
+                        classify_prompt_template=classify_prompt_template,
                         rule_set=rule_set,
                         output_mode=classifier_mode,
                     )
@@ -851,7 +853,7 @@ async def vlm_local_models():
 async def list_rules():
     """Return available rule sets and metadata for frontend selection."""
     try:
-        out = {'rule_sets': rules_mod.list_rule_sets(), 'classifiers': rules_mod.list_classifiers()}
+            out = {'rule_sets': rules_mod.list_rule_sets(), 'label_modes': rules_mod.list_label_modes()}
         return out
     except Exception as e:
         logging.exception('Failed to list rule sets: %s', e)
