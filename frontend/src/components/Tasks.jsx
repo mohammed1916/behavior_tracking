@@ -84,17 +84,27 @@ function Tasks({}) {
               style={{ width: '100%', padding: 8, border: '1px solid var(--panel-border)', borderRadius: 4, backgroundColor: 'var(--surface)', color: 'var(--text)' }}
             />
           </label>
-                          <button 
-                            onClick={createTask} 
-                            disabled={creating} 
-                            style={{ padding: 10, backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: 4, cursor: creating ? 'not-allowed' : 'pointer' }}
-                          >
+              <button 
+                onClick={createTask} 
+                disabled={creating} 
+                style={{ padding: 10, backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: 4, cursor: creating ? 'not-allowed' : 'pointer' }}
+              >
             {creating ? 'Creating...' : 'Create Task'}
           </button>
         </div>
       </div>
       <div>
-        <h4>Existing Tasks</h4>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h4>Existing Tasks</h4>
+          <button
+            onClick={fetchTasks}
+            disabled={loading}
+            style={{ padding: '8px 12px', backgroundColor: 'var(--muted)', color: 'white', border: 'none', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer' }}
+          >
+            {loading ? 'Refreshing...' : 'Refresh Tasks'}
+          </button>
+        </div>
+
         {loading ? <p>Loading tasks...</p> : tasks.length === 0 ? <p>No tasks created yet. Create your first task above.</p> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--card-bg)', borderRadius: 6, overflow: 'hidden' }}>

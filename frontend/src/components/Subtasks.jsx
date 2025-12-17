@@ -102,6 +102,7 @@ function Subtasks({ refreshTrigger }) {
 
   return (
     <div style={{ padding: 20, backgroundColor: 'var(--surface)', borderRadius: 8, boxShadow: 'var(--panel-shadow)' }}>
+      <h3 style={{ marginTop: 0, marginBottom: 0 }}>Subtasks Management</h3>
       <div style={{ marginBottom: 20, padding: 16, backgroundColor: 'var(--card-bg)', borderRadius: 6, border: '1px solid var(--panel-border)' }}>
         <h4 style={{ marginTop: 0 }}>Create New Subtask</h4>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -147,10 +148,10 @@ function Subtasks({ refreshTrigger }) {
         </div>
       </div>
       <div>
-        <h4>Existing Subtasks</h4>
         
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ marginTop: 0, marginBottom: 0 }}>Subtasks Management</h3>
+        <h4>Existing Subtasks</h4>
+
         <button
           onClick={fetchSubtasks}
           disabled={loading}
