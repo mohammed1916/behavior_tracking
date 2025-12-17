@@ -23,6 +23,12 @@ from datetime import datetime
 import threading
 import backend.rules as rules_mod
 
+#if env has set debug then debug mode
+if os.getenv('DEBUG', '0') == '1':
+    import debugpy
+    debugpy.listen(("0.0.0.0", 5678))
+    debugpy.wait_for_client()
+
 app = FastAPI()
 
 app.state.webcam_event = threading.Event()

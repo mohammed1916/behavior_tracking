@@ -293,6 +293,7 @@ function App() {
       const resp = await fetch('http://localhost:8001/backend/subtasks');
       if (!resp.ok) return setSubtasksList([]);
       const data = await resp.json();
+      // console.log('fetched subtasks', data);
       setSubtasksList(data || []);
     } catch (e) {
       console.warn('Failed to fetch subtasks', e);
@@ -501,11 +502,23 @@ function App() {
                       <div style={{ marginTop: 8 }}>
                         <strong>Subtasks for selected task</strong>
                         <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid ' + cssVars.panelBorder, padding: 8, marginTop: 6 }}>
-                          {subtasksList.filter(s => s.task_id === selectedTaskIds[0]).map(s => (
+                          {(() => {
+                            // try { console.debug('subtasksList', subtasksList, 'selectedTaskIds', selectedTaskIds, 'tasksList', tasksList); } catch {}
+                            const selId = selectedTaskIds && selectedTaskIds.length === 1 ? selectedTaskIds[0] : null;
+                            const selTask = selId ? (tasksList || []).find(t => t.id === selId) : null;
+                            return (subtasksList || []).filter(s => {
+                              // if (!selId) return false;
+                              // Primary match: subtask references task by `task_id`
+                              if (s.task_id === selId) return true;
+                              // Fallback: match by task name if backend didn't include task_id
+                              // if (selTask && s.task_name && s.task_name === selTask.name) return true;
+                              return false;
+                            }).map(s => (
                             <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                               <div style={{ flex: 1 }}>{s.subtask_info} <small style={{ color: cssVars.muted }}>({s.duration_sec}s)</small></div>
                             </div>
-                          ))}
+                            ))
+                          })()}
                         </div>
                       </div>
                       ) : selectedTaskIds.length > 1 ? (

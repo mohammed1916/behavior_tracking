@@ -189,6 +189,7 @@ def list_subtasks_from_db():
         task_name = (task.get('metadata', {}).get('name')) if task else None
         out.append({
             'id': it.get('id'),
+            'task_id': meta.get('task_id'),
             'task_name': task_name,
             'subtask_info': meta.get('subtask_info'),
             'duration_sec': meta.get('duration_sec'),
@@ -276,6 +277,7 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
     Returns: list of dicts: {subtask_id, task_id, subtask_info, completed (bool), llm_output}
     """
     # normalize captions input
+    print("Running evaluate_subtasks_completion with captions:", captions)
     if not captions:
         return []
     if isinstance(captions, (list, tuple)):
@@ -313,7 +315,24 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
         info = meta.get('subtask_info') or meta.get('name') or ''
         llm_out = None
         completed = False
-        if llm is not None and prompt_template is not None:
+        # If an LLM is available, use it. Otherwise fall back to a lightweight
+        # heuristic: check whether the subtask text appears in the combined
+        # captions (substring or any word match).
+        if llm is None or prompt_template is None:
+            try:
+                txt_comb = combined.lower()
+                info_txt = (info or '').strip().lower()
+                if info_txt:
+                    # direct substring match or any token overlap
+                    tokens = [t for t in info_txt.split() if len(t) > 2]
+                    if info_txt in txt_comb or any(t in txt_comb for t in tokens):
+                        llm_out = 'heuristic_match'
+                        completed = True
+                    else:
+                        completed = False
+            except Exception:
+                completed = False
+        elif llm is not None and prompt_template is not None:
             try:
                 prompt = prompt_template.format(task=info, captions=combined)
                 resp = llm(prompt)
@@ -322,9 +341,16 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
                 else:
                     llm_out = str(resp)
                 txt = (llm_out or '').strip().lower()
-                if txt.startswith('y') or txt == 'yes' or txt == 'true':
+                # Accept a range of affirmative/negative tokens from different LLMs.
+                # Match tokens anywhere in the output (more permissive than startswith).
+                affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
+                negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
+                if any(a in txt for a in affirmatives):
                     completed = True
+                elif any(n in txt for n in negatives):
+                    completed = False
                 else:
+                    # conservative default: not completed
                     completed = False
             except Exception:
                 llm_out = None
@@ -426,7 +452,25 @@ def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, 
 
     llm_decision = None
     llm_output = None
-    if llm is not None and prompt_template is not None and captions_for_llm:
+    # If no LLM/prompt template is available, run a lightweight heuristic
+    # that looks for the subtask text in the captions. This lets aggregation
+    # still update counts when the local LLM isn't configured.
+    if (llm is None or prompt_template is None) and captions_for_llm:
+        try:
+            txt_comb = (captions_for_llm or '').lower()
+            info_txt = (meta.get('subtask_info') or '').strip().lower()
+            if info_txt:
+                tokens = [t for t in info_txt.split() if len(t) > 2]
+                if info_txt in txt_comb or any(t in txt_comb for t in tokens):
+                    llm_decision = True
+                    llm_output = 'heuristic_match'
+                else:
+                    llm_decision = False
+                    llm_output = 'heuristic_no_match'
+        except Exception:
+            llm_decision = None
+            llm_output = None
+    elif llm is not None and prompt_template is not None and captions_for_llm:
         try:
             prompt = prompt_template.format(task=meta.get('subtask_info') or '', captions=captions_for_llm)
             resp = llm(prompt)
@@ -434,10 +478,20 @@ def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, 
                 llm_output = resp[0].get('generated_text', '').strip()
             else:
                 llm_output = str(resp)
+            # Log raw LLM output and a short preview of captions for debugging
+            try:
+                logging.info('aggregate_and_update_subtask llm_output for subtask %s: %s', subtask_id, (llm_output or '').replace('\n', ' '))
+                logging.debug('aggregate_and_update_subtask captions_preview: %s', (captions_for_llm or '')[:1000])
+            except Exception:
+                pass
             txt = (llm_output or '').strip().lower()
-            if txt.startswith('y') or txt == 'yes' or txt == 'true':
+            # Accept common affirmative/negative labels as well as 'work'/'idle'.
+            # Use substring matching to catch longer, human-like responses.
+            affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
+            negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
+            if any(a in txt for a in affirmatives):
                 llm_decision = True
-            elif txt.startswith('n') or txt == 'no' or txt == 'false':
+            elif any(n in txt for n in negatives):
                 llm_decision = False
             else:
                 llm_decision = None
