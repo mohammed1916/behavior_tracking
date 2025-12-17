@@ -286,21 +286,15 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
     else:
         combined = str(captions)
 
-    # choose llm and prompt template (use backend.llm helpers)
-    # Initialize LLM and prompt template. In debug mode we want to surface
-    # initialization errors early rather than silently falling back.
+    # Require a functioning local LLM during development - fail fast.
     if llm is None:
         llm = get_local_text_llm()
         if llm is None:
             raise RuntimeError('Local text LLM not available; ensure the environment provides a working LLM (e.g. ollama)')
-    # TASK_COMPLETION_PROMPT_TEMPLATE is expected to be defined in backend.llm
     prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
 
     # find candidate subtasks via vector search
-    try:
-        candidates = vector_store.search('subtasks', query_text=combined, top_k=top_k)
-    except Exception:
-        candidates = []
+    candidates = vector_store.search('subtasks', query_text=combined, top_k=top_k)
 
     results = []
     for cand in candidates:
@@ -308,45 +302,25 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
         meta = cand.get('metadata', {})
         task_id = meta.get('task_id')
         info = meta.get('subtask_info') or meta.get('name') or ''
-        llm_out = None
-        completed = False
-        # If an LLM is available, use it. Otherwise fall back to a lightweight
-        # heuristic: check whether the subtask text appears in the combined
-        # captions (substring or any word match).
-        txt_comb = combined.lower()
-        info_txt = (info or '').strip().lower()
-        # lightweight heuristic first
-        if info_txt:
-            tokens = [t for t in info_txt.split() if len(t) > 2]
-            if info_txt in txt_comb or any(t in txt_comb for t in tokens):
-                llm_out = 'heuristic_match'
-                completed = True
-            else:
-                completed = False
 
-        # If an LLM and prompt template are available, ask the model for a judgement
-        if llm is not None and prompt_template is not None:
-            try:
-                prompt = prompt_template.format(task=info, captions=combined)
-                resp = llm(prompt)
-                if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
-                    llm_out = resp[0].get('generated_text', '').strip()
-                else:
-                    llm_out = str(resp)
-                txt = (llm_out or '').strip().lower()
-                affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
-                negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
-                if any(a in txt for a in affirmatives):
-                    completed = True
-                elif any(n in txt for n in negatives):
-                    completed = False
-                else:
-                    # keep heuristic decision if present, otherwise conservative default
-                    completed = bool(completed)
-            except Exception:
-                # if LLM fails, fall back to heuristic result
-                pass
+        # Build prompt and require LLM to return an explicit decision.
+        prompt = prompt_template.format(task=info, captions=combined)
+        resp = llm(prompt)
+        if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
+            llm_out = resp[0].get('generated_text', '').strip()
+        else:
+            llm_out = str(resp)
 
+        txt = (llm_out or '').strip().lower()
+        affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
+        negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
+        if any(a in txt for a in affirmatives):
+            completed = True
+        elif any(n in txt for n in negatives):
+            completed = False
+        else:
+            # Ambiguous result from LLM -> raise to surface during development
+            raise RuntimeError(f'LLM returned ambiguous decision for subtask {cid}: "{llm_out}"')
 
         results.append({'subtask_id': cid, 'task_id': task_id, 'subtask_info': info, 'completed': completed, 'llm_output': llm_out})
 
@@ -435,51 +409,30 @@ def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, 
 
     llm_decision = None
     llm_output = None
-    # If no LLM/prompt template is available, run a lightweight heuristic
-    # that looks for the subtask text in the captions. This lets aggregation
-    # still update counts when the local LLM isn't configured.
-    if (llm is None or prompt_template is None) and captions_for_llm:
-        try:
-            txt_comb = (captions_for_llm or '').lower()
-            info_txt = (meta.get('subtask_info') or '').strip().lower()
-            if info_txt:
-                tokens = [t for t in info_txt.split() if len(t) > 2]
-                if info_txt in txt_comb or any(t in txt_comb for t in tokens):
-                    llm_decision = True
-                    llm_output = 'heuristic_match'
-                else:
-                    llm_decision = False
-                    llm_output = 'heuristic_no_match'
-        except Exception:
-            llm_decision = None
-            llm_output = None
-    elif llm is not None and prompt_template is not None and captions_for_llm:
-        try:
-            prompt = prompt_template.format(task=meta.get('subtask_info') or '', captions=captions_for_llm)
-            resp = llm(prompt)
-            if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
-                llm_output = resp[0].get('generated_text', '').strip()
-            else:
-                llm_output = str(resp)
-            # Log raw LLM output and a short preview of captions for debugging
-            try:
-                logging.info('aggregate_and_update_subtask llm_output for subtask %s: %s', subtask_id, (llm_output or '').replace('\n', ' '))
-                logging.debug('aggregate_and_update_subtask captions_preview: %s', (captions_for_llm or '')[:1000])
-            except Exception:
-                pass
-            txt = (llm_output or '').strip().lower()
-            # Accept common affirmative/negative labels as well as 'work'/'idle'.
-            # Use substring matching to catch longer, human-like responses.
-            affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
-            negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
-            if any(a in txt for a in affirmatives):
-                llm_decision = True
-            elif any(n in txt for n in negatives):
-                llm_decision = False
-            else:
-                llm_decision = None
-        except Exception:
-            llm_decision = None
+    # Require LLM/prompt template; do not fall back to heuristics in development.
+    if not captions_for_llm:
+        raise RuntimeError('No captions available for LLM evaluation')
+
+    prompt = prompt_template.format(task=meta.get('subtask_info') or '', captions=captions_for_llm)
+    resp = llm(prompt)
+    if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
+        llm_output = resp[0].get('generated_text', '').strip()
+    else:
+        llm_output = str(resp)
+    # Log raw LLM output and a short preview of captions for debugging
+    logging.info('aggregate_and_update_subtask llm_output for subtask %s: %s', subtask_id, (llm_output or '').replace('\n', ' '))
+    logging.debug('aggregate_and_update_subtask captions_preview: %s', (captions_for_llm or '')[:1000])
+    txt = (llm_output or '').strip().lower()
+    # Accept common affirmative/negative labels as well as 'work'/'idle'.
+    affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
+    negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
+    if any(a in txt for a in affirmatives):
+        llm_decision = True
+    elif any(n in txt for n in negatives):
+        llm_decision = False
+    else:
+        # Ambiguous LLM response: raise to surface issue during development
+        raise RuntimeError(f'LLM returned ambiguous decision for subtask {subtask_id}: "{llm_output}"')
 
     # aggregation policy (default)
     completed_in = 0
