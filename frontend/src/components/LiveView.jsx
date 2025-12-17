@@ -10,9 +10,6 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
   const [useLLM, setUseLLM] = useState(!!propUseLLM);
   const [savedVideoUrl, setSavedVideoUrl] = useState('');
   const [classifiers, setClassifiers] = useState({});
-  const [classifierMode, setClassifierMode] = useState(propClassifierMode || 'binary');
-  const [classifier, setClassifier] = useState(propClassifier || '');
-  const [classifierPrompt, setClassifierPrompt] = useState(propClassifierPrompt || '');
 
   // Live metadata
   const [captionText, setCaptionText] = useState('');
@@ -24,9 +21,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
     // Keep state in sync if parent props change
     setModel(propModel || '');
     setUseLLM(!!propUseLLM);
-    if (propClassifier) setClassifier(propClassifier);
-    if (propClassifierMode) setClassifierMode(propClassifierMode);
-    if (propClassifierPrompt) setClassifierPrompt(propClassifierPrompt);
+    // LiveView is now fully controlled: parent passes `classifierMode` and `classifierPrompt`.
       // fetch available label modes
     (async () => {
       try {
@@ -35,7 +30,6 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
         const j = await resp.json();
         const labelModes = j.label_modes || {};
         setClassifiers(labelModes);
-        if (!classifierMode && Object.keys(labelModes || {}).length) setClassifierMode(Object.keys(labelModes)[0]);
       } catch (e) {
           console.warn('Failed to fetch label modes', e);
       }
@@ -61,10 +55,9 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
     if (saveRecording) params.set('save_video', 'true');
     if (enableMediapipe) params.set('enable_mediapipe', 'true');
     if (enableYolo) params.set('enable_yolo', 'true');
-    // prefer props from parent when provided
-    const cm = propClassifierMode || classifierMode;
-    const cp = propClassifierPrompt || classifierPrompt;
-    // Removed rule_set parameter to keep it implicit on server
+    // Use parent-controlled classifier mode/prompt (fallback to sensible defaults)
+    const cm = propClassifierMode || 'binary';
+    const cp = propClassifierPrompt || '';
     if (cm) params.set('classifier_mode', cm);
     if (cp) params.set('classifier_prompt', cp);
     return base + '/backend/stream_pose' + (Array.from(params).length ? ('?' + params.toString()) : '');
@@ -156,18 +149,8 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
           <div style={{ color: 'var(--muted)' }}><strong>Model:</strong> {model || '(default)'}</div>
           <div style={{ color: 'var(--muted)' }}><strong>Use LLM:</strong> {useLLM ? 'Yes' : 'No'}</div>
-          {/* Rule Set removed — server uses default implicitly */}
-          <div>
-            <label style={{ color: 'var(--muted)' }}>Mode:
-              <select value={classifierMode} onChange={(e) => setClassifierMode(e.target.value)} style={{ marginLeft: 6 }}>
-                {Object.keys(classifiers).length > 0 ? Object.keys(classifiers).map(k => <option key={k} value={k}>{k}</option>) : (
-                  <>
-                    <option value="binary">binary</option>
-                    <option value="multi">multi</option>
-                  </>
-                )}
-              </select>
-            </label>
+          <div style={{ marginLeft: 12 }}>
+            <div style={{ color: 'var(--muted)' }}><strong>Mode:</strong> {propClassifierMode || 'binary'}</div>
           </div>
         </div>
 
@@ -189,10 +172,10 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
               </div>
             )}
           </div>
-          <div style={{ width: 320 }}>
+            <div style={{ width: 320 }}>
             <div style={{ marginBottom: 8 }}>
               <label style={{ display: 'block' }}>Label Prompt (optional):</label>
-              <textarea value={classifierPrompt} onChange={(e) => setClassifierPrompt(e.target.value)} rows={3} style={{ width: '100%' }} placeholder="Override prompt template" />
+              <textarea value={propClassifierPrompt || ''} readOnly rows={3} style={{ width: '100%' }} placeholder="Override prompt template (controlled by parent)" />
             </div>
             <div style={{ fontWeight: 600 }}>Caption</div>
             <div style={{ padding: 8, minHeight: 80, border: '1px solid var(--panel-border)', borderRadius: 6 }}>{captionText || '—'}</div>
