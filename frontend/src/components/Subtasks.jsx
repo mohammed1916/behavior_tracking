@@ -102,7 +102,6 @@ function Subtasks({ refreshTrigger }) {
 
   return (
     <div style={{ padding: 20, backgroundColor: 'var(--surface)', borderRadius: 8, boxShadow: 'var(--panel-shadow)' }}>
-      <h3 style={{ marginTop: 0 }}>Subtasks Management</h3>
       <div style={{ marginBottom: 20, padding: 16, backgroundColor: 'var(--card-bg)', borderRadius: 6, border: '1px solid var(--panel-border)' }}>
         <h4 style={{ marginTop: 0 }}>Create New Subtask</h4>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -149,6 +148,17 @@ function Subtasks({ refreshTrigger }) {
       </div>
       <div>
         <h4>Existing Subtasks</h4>
+        
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ marginTop: 0, marginBottom: 0 }}>Subtasks Management</h3>
+        <button
+          onClick={fetchSubtasks}
+          disabled={loading}
+          style={{ padding: '8px 12px', backgroundColor: 'var(--muted)', color: 'white', border: 'none', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer' }}
+        >
+          {loading ? 'Refreshing...' : 'Refresh Subtasks'}
+        </button>
+      </div>
         {loading ? <p>Loading subtasks...</p> : subtasks.length === 0 ? <p>No subtasks created yet. Create your first subtask above.</p> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--card-bg)', borderRadius: 6, overflow: 'hidden' }}>
