@@ -101,38 +101,38 @@ def vlm_infer(frame):
     # -------- CLASSIFICATION PROMPT --------
     if MODE == "classify":
         prompt = """<|vision_start|><|image_pad|><|vision_end|>
-You are an expert model for recognizing DRONE ASSEMBLY activities.
+        You are an expert model for recognizing DRONE ASSEMBLY activities.
 
-Focus on the MAIN PERSON's hands.
+        Focus on the MAIN PERSON's hands.
 
-Choose ONE label only:
-assembling_drone | idle | using_phone | unknown
+        Choose ONE label only:
+        assembling_drone | idle | using_phone | unknown
 
-Rules:
-- Prefer assembling_drone when hands interact with tools, wires, or drone parts
-- Output ONLY the label
+        Rules:
+        - Prefer assembling_drone when hands interact with tools, wires, or drone parts
+        - Output ONLY the label
 
-Answer:
-<|endoftext|>
-"""
+        Answer:
+        <|endoftext|>
+        """
 
     # -------- DESCRIPTION PROMPT --------
     else:
         prompt = """<|vision_start|><|image_pad|><|vision_end|>
-Describe what the MAIN PERSON is doing in ONE short factual sentence.
+        Describe what the MAIN PERSON is doing in ONE short factual sentence.
 
-Focus on:
-- hands
-- tools
-- drone or electronic components
+        Focus on:
+        - hands
+        - tools
+        - drone or electronic components
 
-Do not speculate.
-Do not explain.
-No labels.
+        Do not speculate.
+        Do not explain.
+        No labels.
 
-Answer:
-<|endoftext|>
-"""
+        Answer:
+        <|endoftext|>
+        """
 
     inputs = processor(
         text=prompt,
