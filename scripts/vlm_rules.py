@@ -96,50 +96,25 @@ def classify_activity(frame):
 
     prompt = """<|vision_start|><|image_pad|><|vision_end|>
 
-    You are a vision-language model specialized in recognizing HANDS-ON ELECTRONICS and DRONE ASSEMBLY tasks.
+    You are an expert activity recognition model.
 
-    Focus ONLY on the MAIN PERSON and their HAND actions.
+    Look ONLY at the MAIN PERSON in the image. Ignore all other people or objects.
 
-    Look specifically for:
-    - soldering wires
-    - connecting motors or ESCs
-    - assembling drone frames
-    - attaching propellers
-    - holding tools (soldering iron, screwdriver, pliers)
-    - placing electronic components on a workbench
+    Classify their CURRENT ACTION into exactly ONE label from the following:
 
-    Ignore:
-    - background people
-    - screens unless actively used
-    - minor head or body motion without hand interaction
-
-    Choose EXACTLY ONE label from the list below:
-
-    assembling_drone : active hands-on drone building, wiring, soldering, or component attachment  
-    idle : sitting or standing with little or no hand motion  
-    using_phone : holding or interacting with a mobile phone  
-    unknown : action cannot be determined clearly  
+    1. assembling_drone → The person is working with tools, touching a drone, handling drone parts, connecting wires, tightening screws, or performing assembly actions.
+    2. idle → The person is standing or sitting without doing any task, arms resting, not interacting with objects.
+    3. using_phone → The person is clearly holding or interacting with a phone.
+    4. unknown → If the activity cannot be confidently identified.
 
     Rules:
-    - Prefer assembling_drone if hands interact with wires, tools, or drone parts
-    - Do NOT invent actions
-    - Output ONLY the label
-    - No explanations
+    - Do NOT guess.
+    - Only output exactly one label: assembling_drone, idle, using_phone, or unknown.
+    - Do not add any extra text, explanations, or repeats.
+    - End your answer with "<|endoftext|>"
 
     Answer:
-    <|endoftext|>
     """
-
-#     prompt = """<|vision_start|><|image_pad|><|vision_end|>
-# You are an expert activity recognition model.
-
-# Classify ONLY the MAIN PERSON action as:
-# assembling_drone | idle | using_phone | unknown
-
-# Output ONLY ONE LABEL.
-# End with <|endoftext|>
-# Answer:
-# """
 
     inputs = processor(
         text=prompt,

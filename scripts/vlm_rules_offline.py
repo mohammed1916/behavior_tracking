@@ -101,7 +101,7 @@ def vlm_infer(frame):
     # -------- CLASSIFICATION PROMPT --------
     if MODE == "classify":
         prompt = """<|vision_start|><|image_pad|><|vision_end|>
-        You are an expert model for recognizing DRONE ASSEMBLY activities.
+kz        You are an expert model for recognizing DRONE ASSEMBLY activities.
 
         Focus on the MAIN PERSON's hands.
 

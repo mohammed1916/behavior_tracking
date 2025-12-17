@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Select from 'react-select';
 import './App.css';
 import StoredAnalyses from './components/StoredAnalyses';
@@ -122,6 +122,9 @@ function App() {
       let url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}`;
       if (enableMediapipe) url += '&enable_mediapipe=true';
       if (enableYolo) url += '&enable_yolo=true';
+      // include classifier mode and optional prompt so server can use same label mode as live view
+      if (vlmClassifierMode) url += `&classifier_mode=${encodeURIComponent(vlmClassifierMode)}`;
+      if (vlmClassifierPrompt) url += `&classifier_prompt=${encodeURIComponent(vlmClassifierPrompt)}`;
       // attach task/subtask selection and compare/eval mode
       if (selectedTaskIds && selectedTaskIds.length > 0) {
         url += `&task_id=${encodeURIComponent(selectedTaskIds.join(','))}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
