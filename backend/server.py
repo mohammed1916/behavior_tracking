@@ -851,13 +851,13 @@ async def vlm_local_models():
 
 @app.get('/backend/rules')
 async def list_rules():
-    """Return available rule sets and metadata for frontend selection."""
+    """Return available label modes for frontend selection."""
     try:
-            out = {'rule_sets': rules_mod.list_rule_sets(), 'label_modes': rules_mod.list_label_modes()}
+            out = {'label_modes': rules_mod.list_label_modes()}
         return out
     except Exception as e:
-        logging.exception('Failed to list rule sets: %s', e)
-        return make_alert_json('Failed to list rule sets', status_code=500)
+        logging.exception('Failed to list label modes: %s', e)
+        return make_alert_json('Failed to list label modes', status_code=500)
 
 
 @app.get('/backend/status')

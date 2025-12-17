@@ -43,9 +43,7 @@ function App() {
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
   const [vlmUseLLM, setVlmUseLLM] = useState(true);
-  const [ruleSets, setRuleSets] = useState({});
   const [classifiers, setClassifiers] = useState({});
-  const [vlmRuleSet, setVlmRuleSet] = useState('default');
   const [vlmClassifierMode, setVlmClassifierMode] = useState('binary');
   const [vlmClassifierPrompt, setVlmClassifierPrompt] = useState('');
   const [viewAnalysisId, setViewAnalysisId] = useState(null);
@@ -241,21 +239,18 @@ function App() {
     fetchLocalModels();
     fetchPreloadedModels();
     fetchBackendStatus();
-    // fetch available rule sets and label modes
+    // fetch available label modes
     (async () => {
       try {
         const resp = await fetch('http://localhost:8001/backend/rules');
         if (!resp.ok) return;
         const j = await resp.json();
-        setRuleSets(j.rule_sets || {});
-        // backend now exposes `label_modes` (binary/multi) rather than named classifiers
+        // backend exposes `label_modes` (binary/multi)
         const labelModes = j.label_modes || {};
         setClassifiers(labelModes);
-        // keep defaults if current selections aren't present
-        if (!vlmRuleSet && Object.keys(j.rule_sets || {}).length) setVlmRuleSet(Object.keys(j.rule_sets)[0]);
         if (!vlmClassifierMode && Object.keys(labelModes || {}).length) setVlmClassifierMode(Object.keys(labelModes)[0]);
       } catch (e) {
-        console.warn('Failed to fetch rule sets', e);
+        console.warn('Failed to fetch label modes', e);
       }
     })();
     fetchTasks();
@@ -547,12 +542,6 @@ function App() {
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
             </label> */}
               <div style={{ marginTop: 8 }}>
-                <label style={{ display: 'block' }}>Rule Set:
-                  <select value={vlmRuleSet} onChange={(e) => setVlmRuleSet(e.target.value)}>
-                    {Object.keys(ruleSets).length > 0 ? Object.keys(ruleSets).map(k => <option key={k} value={k}>{k}</option>) : <option value="default">default</option>}
-                  </select>
-                </label>
-
                 <label style={{ display: 'block', marginTop: 6 }}>Mode:
                   <select value={vlmClassifierMode} onChange={(e) => setVlmClassifierMode(e.target.value)}>
                     {Object.keys(classifiers).length > 0 ? Object.keys(classifiers).map(k => <option key={k} value={k}>{k}</option>) : (
@@ -591,7 +580,6 @@ function App() {
                     model={vlmModel}
                     prompt={vlmPrompt}
                     useLLM={vlmUseLLM}
-                    ruleSet={vlmRuleSet}
                     classifierMode={vlmClassifierMode}
                     classifierPrompt={vlmClassifierPrompt}
                     selectedSubtask={''}

@@ -24,10 +24,6 @@ RULE_SETS: Dict[str, Dict[str, Any]] = {
         'description': 'Default keyword-based detection',
         'work_keywords': WORK_KEYWORDS,
     },
-    'strict': {
-        'description': 'Strict matching (fewer keywords)',
-        'work_keywords': ['assemble', 'screw', 'weld', 'repair', 'install'],
-    },
 }
 
 # Import shared prompt templates for VLM/label instructions
