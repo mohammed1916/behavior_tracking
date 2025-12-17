@@ -5,6 +5,7 @@ from datetime import datetime
 import uuid
 import logging
 from backend.vector_store import STORE as vector_store
+from backend.llm import get_local_text_llm, TASK_COMPLETION_PROMPT_TEMPLATE
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'analyses.db')
 _db_initialized = False
@@ -285,21 +286,15 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
     else:
         combined = str(captions)
 
-    # choose llm
+    # choose llm and prompt template (use backend.llm helpers)
+    # Initialize LLM and prompt template. In debug mode we want to surface
+    # initialization errors early rather than silently falling back.
     if llm is None:
-        try:
-            from llm import get_local_text_llm, TASK_COMPLETION_PROMPT_TEMPLATE
-            llm = get_local_text_llm()
-            prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
-        except Exception:
-            llm = None
-            prompt_template = None
-    else:
-        try:
-            from llm import TASK_COMPLETION_PROMPT_TEMPLATE
-            prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
-        except Exception:
-            prompt_template = None
+        llm = get_local_text_llm()
+        if llm is None:
+            raise RuntimeError('Local text LLM not available; ensure the environment provides a working LLM (e.g. ollama)')
+    # TASK_COMPLETION_PROMPT_TEMPLATE is expected to be defined in backend.llm
+    prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
 
     # find candidate subtasks via vector search
     try:
@@ -318,21 +313,19 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
         # If an LLM is available, use it. Otherwise fall back to a lightweight
         # heuristic: check whether the subtask text appears in the combined
         # captions (substring or any word match).
-        if llm is None or prompt_template is None:
-            try:
-                txt_comb = combined.lower()
-                info_txt = (info or '').strip().lower()
-                if info_txt:
-                    # direct substring match or any token overlap
-                    tokens = [t for t in info_txt.split() if len(t) > 2]
-                    if info_txt in txt_comb or any(t in txt_comb for t in tokens):
-                        llm_out = 'heuristic_match'
-                        completed = True
-                    else:
-                        completed = False
-            except Exception:
+        txt_comb = combined.lower()
+        info_txt = (info or '').strip().lower()
+        # lightweight heuristic first
+        if info_txt:
+            tokens = [t for t in info_txt.split() if len(t) > 2]
+            if info_txt in txt_comb or any(t in txt_comb for t in tokens):
+                llm_out = 'heuristic_match'
+                completed = True
+            else:
                 completed = False
-        elif llm is not None and prompt_template is not None:
+
+        # If an LLM and prompt template are available, ask the model for a judgement
+        if llm is not None and prompt_template is not None:
             try:
                 prompt = prompt_template.format(task=info, captions=combined)
                 resp = llm(prompt)
@@ -341,8 +334,6 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
                 else:
                     llm_out = str(resp)
                 txt = (llm_out or '').strip().lower()
-                # Accept a range of affirmative/negative tokens from different LLMs.
-                # Match tokens anywhere in the output (more permissive than startswith).
                 affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
                 negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
                 if any(a in txt for a in affirmatives):
@@ -350,11 +341,12 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
                 elif any(n in txt for n in negatives):
                     completed = False
                 else:
-                    # conservative default: not completed
-                    completed = False
+                    # keep heuristic decision if present, otherwise conservative default
+                    completed = bool(completed)
             except Exception:
-                llm_out = None
-                completed = False
+                # if LLM fails, fall back to heuristic result
+                pass
+
 
         results.append({'subtask_id': cid, 'task_id': task_id, 'subtask_info': info, 'completed': completed, 'llm_output': llm_out})
 
@@ -418,21 +410,12 @@ def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, 
     actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged)
 
     # prepare LLM
-    prompt_template = None
+    # Require a functioning local LLM during debug; fail fast if missing.
     if llm is None:
-        try:
-            from llm import get_local_text_llm, TASK_COMPLETION_PROMPT_TEMPLATE
-            llm = get_local_text_llm()
-            prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
-        except Exception:
-            llm = None
-            prompt_template = None
-    else:
-        try:
-            from llm import TASK_COMPLETION_PROMPT_TEMPLATE
-            prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
-        except Exception:
-            prompt_template = None
+        llm = get_local_text_llm()
+        if llm is None:
+            raise RuntimeError('Local text LLM not available; ensure the environment provides a working LLM (e.g. ollama)')
+    prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
 
     # collect captions within windows around each merged range (or fallback to all captions)
     captions_for_llm = ''

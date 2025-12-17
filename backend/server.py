@@ -431,7 +431,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         if task_id:
                             try:
                                 subs = db_mod.list_subtasks_from_db()
-                                subs_for_task = [s for s in subs if s.get('task_id') == task_id or s.get('task_name') == task_id]
+                                # task_id may be a single id or a comma-separated list from the frontend
+                                task_ids = [t.strip() for t in (task_id or '').split(',') if t.strip()]
+                                subs_for_task = [s for s in subs if (s.get('task_id') in task_ids) or (s.get('task_name') in task_ids)]
                                 for s in subs_for_task:
                                     sid = s.get('id')
                                     if evaluation_mode == 'llm_only':
@@ -443,7 +445,8 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 logging.exception('Failed to aggregate for task_id, falling back to timing-only per-subtask')
                                 # best-effort timing-only per-subtask
                                 subs = db_mod.list_subtasks_from_db()
-                                subs_for_task = [s for s in subs if s.get('task_id') == task_id or s.get('task_name') == task_id]
+                                task_ids = [t.strip() for t in (task_id or '').split(',') if t.strip()]
+                                subs_for_task = [s for s in subs if (s.get('task_id') in task_ids) or (s.get('task_name') in task_ids)]
                                 for s in subs_for_task:
                                     sid = s.get('id')
                                     subtask = get_subtask_from_db(sid)
@@ -733,7 +736,8 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         if task_id:
                             try:
                                 subs = db_mod.list_subtasks_from_db()
-                                subs_for_task = [s for s in subs if s.get('task_id') == task_id or s.get('task_name') == task_id]
+                                task_ids = [t.strip() for t in (task_id or '').split(',') if t.strip()]
+                                subs_for_task = [s for s in subs if (s.get('task_id') in task_ids) or (s.get('task_name') in task_ids)]
                                 for s in subs_for_task:
                                     sid = s.get('id')
                                     # combined (default) or llm_only handled inside aggregate
