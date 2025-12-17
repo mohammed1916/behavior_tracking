@@ -6,6 +6,7 @@ the server can treat BLIP similarly to other adapter-style VLMs (e.g. Qwen).
 import logging
 import torch
 from transformers import pipeline
+from .llm import VLM_PROMPT_TEMPLATE
 
 
 def get_blip_captioner(device_override: str = None):
@@ -42,27 +43,28 @@ def get_blip_captioner(device_override: str = None):
     # `prompt` keyword (frontend may supply extra context). We try a few
     # different call styles to remain compatible with transformers versions.
     def captioner(image, prompt: str = None, **kwargs):
-        if prompt:
-            # Try pipeline variants that may accept prompt/text parameters.
-            try:
-                return p(image, prompt=prompt, **kwargs)
-            except TypeError:
-                try:
-                    return p(images=image, text=prompt, **kwargs)
-                except TypeError:
-                    try:
-                        return p(image, text=prompt, **kwargs)
-                    except Exception:
-                        # Last-resort: ignore prompt and call normally
-                        return p(image, **kwargs)
-        else:
+        # # If caller does not provide a prompt, use the shared VLM prompt template
+        # if not prompt:
+        #     prompt = VLM_PROMPT_TEMPLATE
+
+        # if prompt:
+        #     # Try pipeline variants that may accept prompt/text parameters.
+        #     try:
+        #         return p(image, prompt=prompt, **kwargs)
+        #     except TypeError:
+        #         try:
+        #             return p(images=image, text=prompt, **kwargs)
+        #         except TypeError:
+        #             try:
+        #                 return p(image, text=prompt, **kwargs)
+        #             except Exception:
+        #                 # Last-resort: ignore prompt and call normally
+        #                 return p(image, **kwargs)
+        # else:
             return p(image, **kwargs)
 
     # Provide access to underlying pipeline attributes if needed
-    try:
-        captioner.tokenizer = getattr(p, 'tokenizer', None)
-        captioner.device = getattr(p, 'device', None)
-    except Exception:
-        pass
+    # captioner.tokenizer = getattr(p, 'tokenizer', None)
+    # captioner.device = getattr(p, 'device', None)
 
     return captioner

@@ -9,6 +9,30 @@ CLASSIFY_PROMPT_TEMPLATE = (
     "Context: {prompt}\nCaption: {caption}\n"
 )
 
+# Prompt template used by VLM adapters (Qwen / BLIP) for image->label classification.
+# Centralising this here allows multiple adapters/scripts to reuse the same instructions.
+VLM_PROMPT_TEMPLATE = """<|vision_start|><|image_pad|><|vision_end|>
+
+You are an expert activity recognition model.
+
+Look ONLY at the MAIN PERSON in the image. Ignore all other people or objects.
+
+Classify their CURRENT ACTION into exactly ONE label from the following:
+
+1. assembling_drone → The person is working with tools, touching a drone, handling drone parts, connecting wires, tightening screws, or performing assembly actions.
+2. idle → The person is standing or sitting without doing any task, arms resting, not interacting with objects.
+3. using_phone → The person is clearly holding or interacting with a phone.
+4. unknown → If the activity cannot be confidently identified.
+
+Rules:
+- Do NOT guess.
+- Only output exactly one label: assembling_drone, idle, using_phone, or unknown.
+- Do not add any extra text, explanations, or repeats.
+- End your answer with "<|endoftext|>"
+
+Answer:
+"""
+
 # # Prompt for duration estimation: ask the LLM to return a single integer (seconds)
 # DURATION_PROMPT_TEMPLATE = (
 #     "You are an assistant that estimates how long a described manual task typically takes.\n"

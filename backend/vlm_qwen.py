@@ -8,6 +8,7 @@ import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText
 from PIL import Image
 import cv2
+from .llm import VLM_PROMPT_TEMPLATE
 
 DEFAULT_QWEN_MODEL = os.environ.get('QWEN_MODEL_ID', 'Qwen/Qwen2-VL-2B-Instruct')
 
@@ -67,28 +68,7 @@ class QwenVLMAdapter:
             raise RuntimeError(f"Failed to load model {self.model_id}: {e}")
 
     def _build_prompt(self):
-        return """<|vision_start|><|image_pad|><|vision_end|>
-
-        You are an expert activity recognition model.
-
-        Look ONLY at the MAIN PERSON in the image. Ignore all other people. If there are no people look at the process that is hapenning.
-        The video contains assembling of drone related tasks such as attaching propellors, soldering, fixing wires and so on. Perform analysis on video based on drone and electrical knowledge.
-
-        Classify their CURRENT ACTION into exactly ONE label from the following:
-
-        1. assembling_drone → The person is working with tools, touching a drone, handling drone parts, connecting wires, tightening screws, or performing assembly actions.
-        2. idle → The person is standing or sitting without doing any task, arms resting, not interacting with objects.
-        3. using_phone → The person is clearly holding or interacting with a phone.
-        4. unknown → If the activity cannot be confidently identified.
-
-        Rules:
-        - Do NOT guess.
-        - Only output exactly one label: assembling_drone, idle, using_phone, or unknown.
-        - Do not add any extra text, explanations, or repeats.
-        - End your answer with "<|endoftext|>"
-
-        Answer:
-        """
+        return VLM_PROMPT_TEMPLATE
 
     def __call__(self, image, max_new_tokens=20):
         """Run inference on a PIL.Image (or array).
