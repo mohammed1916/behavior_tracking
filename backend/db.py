@@ -270,6 +270,40 @@ def compute_ranges(frames, samples, fps):
     return ranges
 
 
+def _llm_decision_for_task(info, captions, llm=None, subtask_id=None):
+    """Centralize LLM init, prompt building, call and response parsing.
+
+    Returns: (decision_bool, llm_output_str)
+    Raises RuntimeError on missing LLM or ambiguous output (development-only).
+    """
+    if llm is None:
+        llm = get_local_text_llm()
+        if llm is None:
+            raise RuntimeError('Local text LLM not available; ensure the environment provides a working LLM (e.g. ollama)')
+    prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
+    prompt = prompt_template.format(task=info or '', captions=captions or '')
+    resp = llm(prompt)
+    if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
+        llm_output = resp[0].get('generated_text', '').strip()
+    else:
+        llm_output = str(resp)
+    # Log raw LLM output and captions preview
+    try:
+        logging.info('LLM output for subtask %s: %s', subtask_id or '<anon>', (llm_output or '').replace('\n', ' '))
+        logging.debug('captions_preview: %s', (captions or '')[:1000])
+    except Exception:
+        pass
+    txt = (llm_output or '').strip().lower()
+    affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
+    negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
+    if any(a in txt for a in affirmatives):
+        return True, llm_output
+    if any(n in txt for n in negatives):
+        return False, llm_output
+    # Ambiguous
+    raise RuntimeError(f'LLM returned ambiguous decision for subtask {subtask_id or "<anon>"}: "{llm_output}"')
+
+
 def evaluate_subtasks_completion(captions, llm=None, top_k=5):
     """Evaluate likely subtask completion using the local text LLM and FAISS-backed subtasks.
 
@@ -302,26 +336,8 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
         meta = cand.get('metadata', {})
         task_id = meta.get('task_id')
         info = meta.get('subtask_info') or meta.get('name') or ''
-
-        # Build prompt and require LLM to return an explicit decision.
-        prompt = prompt_template.format(task=info, captions=combined)
-        resp = llm(prompt)
-        if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
-            llm_out = resp[0].get('generated_text', '').strip()
-        else:
-            llm_out = str(resp)
-
-        txt = (llm_out or '').strip().lower()
-        affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
-        negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
-        if any(a in txt for a in affirmatives):
-            completed = True
-        elif any(n in txt for n in negatives):
-            completed = False
-        else:
-            # Ambiguous result from LLM -> raise to surface during development
-            raise RuntimeError(f'LLM returned ambiguous decision for subtask {cid}: "{llm_out}"')
-
+        # Ask LLM for decision (centralized helper will init LLM and parse)
+        completed, llm_out = _llm_decision_for_task(info, combined, llm=llm, subtask_id=cid)
         results.append({'subtask_id': cid, 'task_id': task_id, 'subtask_info': info, 'completed': completed, 'llm_output': llm_out})
 
     return results
@@ -413,26 +429,8 @@ def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, 
     if not captions_for_llm:
         raise RuntimeError('No captions available for LLM evaluation')
 
-    prompt = prompt_template.format(task=meta.get('subtask_info') or '', captions=captions_for_llm)
-    resp = llm(prompt)
-    if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
-        llm_output = resp[0].get('generated_text', '').strip()
-    else:
-        llm_output = str(resp)
-    # Log raw LLM output and a short preview of captions for debugging
-    logging.info('aggregate_and_update_subtask llm_output for subtask %s: %s', subtask_id, (llm_output or '').replace('\n', ' '))
-    logging.debug('aggregate_and_update_subtask captions_preview: %s', (captions_for_llm or '')[:1000])
-    txt = (llm_output or '').strip().lower()
-    # Accept common affirmative/negative labels as well as 'work'/'idle'.
-    affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
-    negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
-    if any(a in txt for a in affirmatives):
-        llm_decision = True
-    elif any(n in txt for n in negatives):
-        llm_decision = False
-    else:
-        # Ambiguous LLM response: raise to surface issue during development
-        raise RuntimeError(f'LLM returned ambiguous decision for subtask {subtask_id}: "{llm_output}"')
+    # Use centralized helper to get LLM decision and output
+    llm_decision, llm_output = _llm_decision_for_task(meta.get('subtask_info') or '', captions_for_llm, llm=llm, subtask_id=subtask_id)
 
     # aggregation policy (default)
     completed_in = 0
@@ -464,42 +462,3 @@ def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, 
         update_subtask_counts(subtask_id, completed_in, completed_delay)
 
     return (completed_in, completed_delay, reason)
-
-
-# def migrate_tasks_and_subtasks_to_vector_store():
-#     """If the existing analyses DB still contains legacy `tasks`/`subtasks` tables,
-#     copy their rows into the vector store. This is a best-effort helper and will
-#     skip if tables don't exist.
-#     """
-#     init_db()
-#     conn = sqlite3.connect(DB_PATH)
-#     cur = conn.cursor()
-#     try:
-#         cur.execute('SELECT id, name, created_at FROM tasks')
-#         tasks = cur.fetchall()
-#         for t in tasks:
-#             task_id, name, created = t[0], t[1], t[2]
-#             metadata = {'name': name, 'created_at': created}
-#             vector_store.upsert('tasks', task_id, text=name, metadata=metadata)
-#     except sqlite3.OperationalError:
-#         # table missing -> nothing to migrate
-#         pass
-
-#     try:
-#         cur.execute('SELECT id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created_at FROM subtasks')
-#         subs = cur.fetchall()
-#         for s in subs:
-#             sub_id, task_id, info, duration, in_time, with_delay, created = s
-#             metadata = {
-#                 'task_id': task_id,
-#                 'subtask_info': info,
-#                 'duration_sec': duration,
-#                 'completed_in_time': in_time,
-#                 'completed_with_delay': with_delay,
-#                 'created_at': created,
-#             }
-#             vector_store.upsert('subtasks', sub_id, text=info or '', metadata=metadata)
-#     except sqlite3.OperationalError:
-#         pass
-#     conn.close()
-#     return True
