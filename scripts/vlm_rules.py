@@ -95,15 +95,51 @@ def classify_activity(frame):
     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
     prompt = """<|vision_start|><|image_pad|><|vision_end|>
-You are an expert activity recognition model.
 
-Classify ONLY the MAIN PERSON action as:
-assembling_drone | idle | using_phone | unknown
+    You are a vision-language model specialized in recognizing HANDS-ON ELECTRONICS and DRONE ASSEMBLY tasks.
 
-Output ONLY ONE LABEL.
-End with <|endoftext|>
-Answer:
-"""
+    Focus ONLY on the MAIN PERSON and their HAND actions.
+
+    Look specifically for:
+    - soldering wires
+    - connecting motors or ESCs
+    - assembling drone frames
+    - attaching propellers
+    - holding tools (soldering iron, screwdriver, pliers)
+    - placing electronic components on a workbench
+
+    Ignore:
+    - background people
+    - screens unless actively used
+    - minor head or body motion without hand interaction
+
+    Choose EXACTLY ONE label from the list below:
+
+    assembling_drone : active hands-on drone building, wiring, soldering, or component attachment  
+    idle : sitting or standing with little or no hand motion  
+    using_phone : holding or interacting with a mobile phone  
+    unknown : action cannot be determined clearly  
+
+    Rules:
+    - Prefer assembling_drone if hands interact with wires, tools, or drone parts
+    - Do NOT invent actions
+    - Output ONLY the label
+    - No explanations
+
+    Answer:
+    <|endoftext|>
+    """
+
+#     prompt = """<|vision_start|><|image_pad|><|vision_end|>
+# You are an expert activity recognition model.
+
+# Classify ONLY the MAIN PERSON action as:
+# assembling_drone | idle | using_phone | unknown
+
+# Output ONLY ONE LABEL.
+# End with <|endoftext|>
+# Answer:
+# """
 
     inputs = processor(
         text=prompt,
