@@ -32,16 +32,17 @@ function App() {
     return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const [evaluationMode, setEvaluationMode] = useState('combined');
-  const [advCompareTimings, setAdvCompareTimings] = useState(false);
+  const [advCompareTimings, setAdvCompareTimings] = useState(true);
   const [advJpegQuality, setAdvJpegQuality] = useState(80);
   const [advMaxWidth, setAdvMaxWidth] = useState('');
   const [advSaveRecording, setAdvSaveRecording] = useState(false);
+  const [processingMode, setProcessingMode] = useState('every_2s');
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
   const [vlmResult, setVlmResult] = useState(null);
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
-  const [vlmUseLLM, setVlmUseLLM] = useState(false);
+  const [vlmUseLLM, setVlmUseLLM] = useState(true);
   const [ruleSets, setRuleSets] = useState({});
   const [classifiers, setClassifiers] = useState({});
   const [vlmRuleSet, setVlmRuleSet] = useState('default');
@@ -131,6 +132,9 @@ function App() {
         url += `&subtask_id=${encodeURIComponent(advSubtaskId)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else {
         url += `&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      }
+      if (processingMode && processingMode !== 'default') {
+        url += `&processing_mode=${encodeURIComponent(processingMode)}`;
       }
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
@@ -475,6 +479,13 @@ function App() {
                       <div>
                         <label>Compare Timings:</label>
                         <input type="checkbox" checked={advCompareTimings} onChange={(e) => setAdvCompareTimings(e.target.checked)} />
+                      </div>
+                      <div>
+                        <label>Processing Mode:</label>
+                        <select value={processingMode} onChange={(e) => setProcessingMode(e.target.value)} style={{ width: '100%' }}>
+                          <option value="fast">Fast sampling with mid from total frame count</option>
+                          <option value="every_2s">Sample every 2s</option>
+                        </select>
                       </div>
                       <div>
                         <label>JPEG Quality: {advJpegQuality}</label>

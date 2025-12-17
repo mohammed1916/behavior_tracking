@@ -706,7 +706,7 @@
       "subtask_info": "Propeller",
       "duration_sec": 1,
       "completed_in_time": 0,
-      "completed_with_delay": 0,
+      "completed_with_delay": 1,
       "created_at": "2025-12-16T10:48:38.809538Z",
       "collection": "subtasks"
     },
@@ -849,7 +849,7 @@
       "subtask_info": "someone is making a model of a flying object with a small propeller",
       "duration_sec": 1,
       "completed_in_time": 0,
-      "completed_with_delay": 4,
+      "completed_with_delay": 5,
       "created_at": "2025-12-16T11:21:45.356678Z",
       "collection": "subtasks"
     },
@@ -1270,7 +1270,7 @@
       "subtask_info": "someone is making a model of a flying object with a small propeller",
       "duration_sec": 1,
       "completed_in_time": 0,
-      "completed_with_delay": 1,
+      "completed_with_delay": 2,
       "created_at": "2025-12-17T05:16:49.147177Z",
       "collection": "subtasks"
     },
@@ -1413,7 +1413,7 @@
       "subtask_info": "someone is making a model of a flying object with a small propeller",
       "duration_sec": 2,
       "completed_in_time": 0,
-      "completed_with_delay": 0,
+      "completed_with_delay": 1,
       "created_at": "2025-12-17T04:32:43.520592Z",
       "collection": "subtasks"
     },

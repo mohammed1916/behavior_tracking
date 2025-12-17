@@ -145,7 +145,7 @@ os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), sample_interval_sec: Optional[float] = Query(None)):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
@@ -170,11 +170,16 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             collected_work = []
             cumulative_work_frames = 0
             start_time = time.time()
-            # Determine sampling interval for live inference (seconds)
-            try:
-                sample_interval = float(sample_interval_sec) if sample_interval_sec is not None and float(sample_interval_sec) > 0 else 2.0
-            except Exception:
+
+            # Determine sampling interval for live inference (seconds).
+            # processing_mode supports 'current_frame' (default) and 'every_2s' (force 2s sampling)
+            if processing_mode == 'every_2s':
                 sample_interval = 2.0
+            else:
+                try:
+                    sample_interval = float(sample_interval_sec) if sample_interval_sec is not None and float(sample_interval_sec) > 0 else 2.0
+                except Exception:
+                    sample_interval = 2.0
             
             writer = None
             writer_type = None
@@ -505,10 +510,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
 async def stop_webcam():
     """Stop the webcam stream."""
     # Clear the shared event to stop any running webcam stream
-    try:
-        app.state.webcam_event.clear()
-    except Exception:
-        pass
+    app.state.webcam_event.clear()
     return {"message": "Webcam stopped"}
 
 
@@ -547,7 +549,7 @@ def make_alert_json(message: str, status_code: int = 400):
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), sample_interval_sec: Optional[float] = Query(None)):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -576,9 +578,10 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             # If `sample_interval_sec` provided, sample frames every N seconds;
             # otherwise fall back to evenly spaced up to 30 samples.
             if sample_interval_sec is not None and sample_interval_sec > 0:
+                # Determine sampling interval for processing samples.
+                # If processing_mode == 'every_2s' force a 2.0s step regardless of provided param.
                 try:
-                    # include time 0 and up to duration inclusive
-                    step = float(sample_interval_sec)
+                    step = 2.0 if processing_mode == 'every_2s' else float(sample_interval_sec)
                     times = []
                     t = 0.0
                     while t <= duration:
