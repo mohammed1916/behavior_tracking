@@ -297,16 +297,33 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 if time.time() - last_inference_time >= sample_interval:
                     try:
                         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                        # Allow optional prompt to be passed into captioners that support it.
+                        # Build a VLM caption prompt depending on classifier source.
+                        # - 'vlm': ask VLM to emit a label using the VLM base + label template + rules
+                        # - 'llm': ask VLM to produce descriptive caption using VLM base prompt
+                        # - 'bow': ask VLM to produce descriptive caption; label rules are applied locally
                         try:
-                            out = captioner(img, prompt=prompt)
+                            if classifier_source_norm == 'vlm':
+                                label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
+                                vlm_prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                            elif classifier_source_norm == 'bow':
+                                vlm_prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                            else:
+                                # 'llm' or default: produce a descriptive caption useful for downstream LLM
+                                vlm_prompt = classifier_prompt or llm_mod.VLM_BASE_PROMPT_TEMPLATE
+                            out = captioner(img, prompt=vlm_prompt)
                         except TypeError:
                             out = captioner(img)
                         caption = _normalize_caption_output(captioner, out)
                         
                         # Determine label (LLM + keyword rules) via centralized helper
-                        # Support VLM adapters that directly emit a label mode (e.g. Qwen label mode).
-                        classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
+                        # choose classify prompt: for VLM-source use VLM+label+rules; for llm use label template; for bow use no LLM prompt
+                        if classifier_source_norm == 'vlm':
+                            label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
+                            classify_prompt_template = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                        elif classifier_source_norm == 'bow':
+                            classify_prompt_template = None
+                        else:
+                            classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
                         label = None
                         cls_text = None
                         # If frontend selected VLM as classifier source, prefer interpreting
@@ -684,9 +701,16 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     except Exception:
                         logging.exception('YOLO processing failed on frame')
 
-                    # Allow optional prompt to be passed into captioners that support it.
+                    # Build a VLM caption prompt depending on classifier source.
                     try:
-                        out = captioner(img, prompt=prompt)
+                        if classifier_source_norm == 'vlm':
+                            label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
+                            vlm_prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                        elif classifier_source_norm == 'bow':
+                            vlm_prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                        else:
+                            vlm_prompt = classifier_prompt or llm_mod.VLM_BASE_PROMPT_TEMPLATE
+                        out = captioner(img, prompt=vlm_prompt)
                     except TypeError:
                         out = captioner(img)
                     caption = _normalize_caption_output(captioner, out)
@@ -694,7 +718,13 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     # Determine label (LLM + keyword rules) via centralized helper
                     # choose classify prompt: explicit override > classifier default > global
                     # choose label prompt: explicit override > label-mode template
-                    classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
+                    if classifier_source_norm == 'vlm':
+                        label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
+                        classify_prompt_template = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                    elif classifier_source_norm == 'bow':
+                        classify_prompt_template = None
+                    else:
+                        classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
                     label = None
                     cls_text = None
                     # If frontend selected VLM as classifier source, prefer interpreting
