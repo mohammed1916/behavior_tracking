@@ -22,6 +22,6 @@ cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 cmd /c "for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8001') do taskkill /PID %%a /F"
 
-or
+or for cmd:
 
-netstat -ano | grep LISTENING | grep :8001 | awk '{print $5}' | xargs -r taskkill //PID //F
+for /f "tokens=5" %p in ('netstat -ano ^| findstr :8001 ^| findstr LISTENING') do taskkill /PID %p /F
