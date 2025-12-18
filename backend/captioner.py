@@ -36,7 +36,7 @@ for entry in cfg.get("models", []):
     LOCAL_VLM_MODELS[model_id] = entry
     LOCAL_VLM_PROVIDERS.add(model_id.split("/")[0])
 
-logging.info(
+print(
     "Loaded local VLM models from %s: %s",
     _MODEL_CFG_PATH,
     list(LOCAL_VLM_MODELS.keys()),
@@ -97,7 +97,7 @@ def get_local_captioner() -> Optional[Any]:
         "Salesforce/blip-image-captioning-large",
     )
 
-    logging.info(
+    print(
         "Loaded local BLIP captioner (Salesforce/blip-image-captioning-large)"
     )
     return captioner
@@ -148,7 +148,7 @@ def get_captioner_for_model(
         # Cache under both requested key and the registry id
         _cache_under_keys(adapter, model_id, cfg.get("id"))
 
-        logging.info(
+        print(
             "Loaded QwenVLMAdapter for %s (device=%s mode=%s)",
             preferred_model_id,
             device,

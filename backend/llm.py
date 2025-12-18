@@ -76,17 +76,17 @@ def get_local_text_llm():
                     out_bytes = p.stdout or b''
                     try:
                         out = out_bytes.decode('utf-8', errors='replace').strip()
-                        logging.info('Ollama decoded output: %s', out)
+                        print('Ollama decoded output: %s', out)
                     except Exception:
-                        logging.info('Ollama output decoding failed, using raw bytes string')
+                        print('Ollama output decoding failed, using raw bytes string')
                         out = str(out_bytes)
-                        logging.info('Ollama raw output string: %s', out)
+                        print('Ollama raw output string: %s', out)
                     return [{'generated_text': out}]
                 except Exception as e:
-                    logging.info('Ollama run failed: %s', e)
+                    print('Ollama run failed: %s', e)
                     return [{'generated_text': ''}]
         _local_text_llm = OllamaWrapper(ollama_model)
-        logging.info('Using Ollama CLI model %s for text LLM', ollama_model)
+        print('Using Ollama CLI model %s for text LLM', ollama_model)
         return _local_text_llm
 
     return None

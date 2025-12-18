@@ -102,14 +102,14 @@ app.add_middleware(
 )
 
 # configure logging so INFO/DEBUG messages are shown
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=print, format='%(asctime)s %(levelname)s %(message)s')
 
 # write logs to a file so the frontend can tail recent activity
 LOG_FILE = "server.log"
 logger = logging.getLogger()
 if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', '') == os.path.abspath(LOG_FILE) for h in logger.handlers):
     fh = logging.FileHandler(LOG_FILE)
-    fh.setLevel(logging.INFO)
+    fh.setLevel(print)
     fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
     logger.addHandler(fh)
 
@@ -358,7 +358,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 ffmpeg_proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
                                 writer_type = 'ffmpeg'
                                 writer = ffmpeg_proc
-                                logging.info('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                                print('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
                             except Exception as e:
                                 logging.warning('ffmpeg recording failed to start: %s', e)
                                 ffmpeg_proc = None
@@ -383,7 +383,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
                             if not getattr(writer, 'isOpened', lambda: False)():
                                 raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
-                            logging.info('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                            print('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
                     except Exception as e:
                         logging.exception('Failed to create VideoWriter: %s', e)
                         # notify client and disable recording for this session
@@ -454,19 +454,11 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         # the VLM output as a label directly when it matches known labels.
                         if classifier_source_norm == 'vlm':
                             try:
-                                candidate = (caption or '').strip().lower()
-                                known_multi = rules_mod.LABEL_SETS.get('multi', [])
-                                if candidate in known_multi:
-                                    label = candidate
-                                    cls_text = candidate
-                                else:
-                                    # Fallback to bag-of-words (no LLM) if VLM output isn't a known label
-                                    label, cls_text = rules_mod.determine_label(
-                                        caption,
-                                        use_llm=False,
-                                        prompt=prompt,
-                                        classify_prompt_template=classify_prompt_template,
-                                    )
+                                # Use centralized label normalization from rules.py
+                                # Validate against the label set selected by the user (binary or multi)
+                                normalized = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
+                                label = normalized
+                                cls_text = normalized
                             except Exception:
                                 label = None
                         else:
@@ -687,7 +679,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             # single subtask behavior (backwards compatible)
                             try:
                                 inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
-                                logging.info(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
+                                print(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
                             except Exception:
                                 subtask = get_subtask_from_db(subtask_id)
                                 if subtask and collected_work:
@@ -748,7 +740,7 @@ async def upload_vlm(video: UploadFile = File(...)):
                 if not chunk:
                     break
                 buffer.write(chunk)
-        logging.info(f"Saved VLM upload to {save_path}")
+        print(f"Saved VLM upload to {save_path}")
         return {"filename": filename}
     except Exception as e:
         logging.exception('Failed to save uploaded VLM video')
@@ -835,9 +827,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             mp_detector = None
             yolo_detector = None
             if enable_mediapipe:
-                logging.info('Mediapipe preprocessing requested but disabled in server configuration')
+                print('Mediapipe preprocessing requested but disabled in server configuration')
             if enable_yolo:
-                logging.info('YOLO preprocessing requested but disabled in server configuration')
+                print('YOLO preprocessing requested but disabled in server configuration')
 
             # Open second capture for seeking samples
             cap2 = cv2.VideoCapture(file_path)
@@ -902,20 +894,11 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     # the VLM output as a label directly when it matches known labels.
                     if classifier_source_norm == 'vlm':
                         try:
-                            candidate = (caption or '').strip().lower()
-                            known_multi = rules_mod.LABEL_SETS.get('multi', [])
-                            if candidate in known_multi:
-                                label = candidate
-                                cls_text = candidate
-                            else:
-                                # Fallback to bag-of-words (no LLM) if VLM output isn't a known label
-                                label, cls_text = rules_mod.determine_label(
-                                    caption,
-                                    use_llm=False,
-                                    prompt=prompt,
-                                    classify_prompt_template=classify_prompt_template,
-                                    rule_set=rule_set,
-                                )
+                            # Use centralized label normalization from rules.py
+                            # Validate against the label set selected by the user (binary or multi)
+                            normalized = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
+                            label = normalized
+                            cls_text = normalized
                         except Exception:
                             label = None
                     else:
@@ -1071,7 +1054,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                             # single subtask behavior (backwards compatible)
                             try:
                                 inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=fps, llm=llm_mod.get_local_text_llm())
-                                logging.info(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
+                                print(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
                             except Exception:
                                 subtask = get_subtask_from_db(subtask_id)
                                 if subtask and collected_work:

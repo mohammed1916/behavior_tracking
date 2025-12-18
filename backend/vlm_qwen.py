@@ -1,12 +1,10 @@
 """
 Self-contained Qwen VLM adapter (independent of mediapipe_vlm).
 
-Supports two modes:
-- mode="caption": returns natural language captions
-- mode="label": returns normalized activity labels
-
-Always returns:
+Always returns raw natural language captions:
     [{'generated_text': ...}]
+
+Label normalization is handled centrally in rules.py via normalize_label_text().
 """
 
 import os
@@ -29,8 +27,6 @@ DEFAULT_QWEN_MODEL = os.environ.get(
     "QWEN_MODEL_ID",
     "Qwen/Qwen2-VL-2B-Instruct",
 )
-
-SUPPORTED_MODES = {"caption", "label"}
 
 
 # -----------------------------------------------------------------------------
@@ -58,30 +54,21 @@ def _to_pil(image):
 class QwenVLMAdapter:
     """
     Adapter around a Qwen-style Image->Text model.
-
-    Usage:
-        QwenVLMAdapter(mode="caption") → caption
-        QwenVLMAdapter(mode="label")   → label
+    Always returns raw natural language captions.
     """
 
     def __init__(
         self,
         model_id: Optional[str] = None,
         device: Optional[str] = None,
-        mode: str = "caption",
     ):
-        if mode not in SUPPORTED_MODES:
-            raise ValueError(f"Unsupported mode '{mode}', must be one of {SUPPORTED_MODES}")
-
-        self.mode = mode
         self.model_id = model_id or DEFAULT_QWEN_MODEL
         self.device = _resolve_device(device)
 
-        logging.info(
-            "Initializing QwenVLMAdapter: model=%s device=%s mode=%s",
+        print(
+            "Initializing QwenVLMAdapter: model=%s device=%s",
             self.model_id,
             self.device,
-            self.mode,
         )
 
         # Processor
@@ -105,22 +92,6 @@ class QwenVLMAdapter:
 
         self.model.eval()
 
-    # ------------------------------------------------------------------
-    # Prompt
-    # ------------------------------------------------------------------
-
-    def _build_prompt(self, user_prompt: Optional[str]) -> str:
-        """
-        Prompt logic:
-        - Caption mode → descriptive VLM prompt
-        - Label mode   → same prompt (rules live in postprocess)
-        """
-        return user_prompt or VLM_BASE_PROMPT_TEMPLATE
-
-    # ------------------------------------------------------------------
-    # Inference
-    # ------------------------------------------------------------------
-
     def __call__(
         self,
         image,
@@ -128,14 +99,14 @@ class QwenVLMAdapter:
         max_new_tokens: int = 64,
     ):
         """
-        Run inference.
+        Run inference and return raw caption.
 
         Returns:
-            [{'generated_text': caption_or_label}]
+            [{'generated_text': caption}]
         """
         try:
             image = _to_pil(image)
-            prompt = self._build_prompt(prompt)
+            prompt = prompt or VLM_BASE_PROMPT_TEMPLATE
 
             inputs = self.processor(
                 text=prompt,
@@ -159,32 +130,11 @@ class QwenVLMAdapter:
                 skip_special_tokens=True,
             ).strip()
 
-            # Mode-specific behavior
-            if self.mode == "label":
-                text = self._postprocess(text)
-
             return [{"generated_text": text}]
 
         except Exception as e:
             logging.exception("QwenVLMAdapter inference failed: %s", e)
             return [{"generated_text": ""}]
-
-    # ------------------------------------------------------------------
-    # Label post-processing (ONLY used in label mode)
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _postprocess(text: str) -> str:
-        txt = text.lower()
-
-        if "phone" in txt:
-            return "using_phone"
-        if "assemble" in txt or "drone" in txt:
-            return "assembling_drone"
-        if "idle" in txt:
-            return "idle"
-
-        return "unknown"
 
     # ------------------------------------------------------------------
     # Cleanup

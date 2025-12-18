@@ -289,7 +289,7 @@ def _llm_decision_for_task(info, captions, llm=None, subtask_id=None):
         llm_output = str(resp)
     # Log raw LLM output and captions preview
     try:
-        logging.info('LLM output for subtask %s: %s', subtask_id or '<anon>', (llm_output or '').replace('\n', ' '))
+        print('LLM output for subtask %s: %s', subtask_id or '<anon>', (llm_output or '').replace('\n', ' '))
         logging.debug('captions_preview: %s', (captions or '')[:1000])
     except Exception:
         pass

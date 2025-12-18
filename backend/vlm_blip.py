@@ -62,7 +62,7 @@ def get_blip_captioner(device_override: Optional[str] = None):
     """
     device = _resolve_device(device_override)
 
-    logging.info(
+    print(
         "Initializing BLIP captioner (Salesforce/blip-image-captioning-large) "
         "on device=%s",
         device,

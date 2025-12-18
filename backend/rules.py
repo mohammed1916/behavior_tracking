@@ -42,6 +42,49 @@ LABEL_SETS: Dict[str, List[str]] = {
 }
 
 
+def normalize_label_text(text: str, output_mode: str = 'multi') -> str:
+    """Centralized label normalization used by VLM adapters in VLM-source mode.
+    
+    Converts raw VLM output text to normalized activity labels.
+    Validates against the appropriate label set for the selected output_mode.
+    
+    Args:
+        text: Raw VLM output text to normalize
+        output_mode: 'multi' or 'binary' - determines which LABEL_SETS to validate against
+    
+    Returns:
+        Normalized label string from the appropriate LABEL_SETS[output_mode]
+    """
+    if not text:
+        return 'unknown'
+    
+    txt = text.lower()
+    expected_labels = LABEL_SETS.get(output_mode, LABEL_SETS['binary'])
+    
+    # Multi-label mode: assembling_drone, idle, using_phone, unknown
+    if output_mode == 'multi':
+        if 'phone' in txt:
+            return 'using_phone'
+        if 'assemble' in txt or 'drone' in txt:
+            return 'assembling_drone'
+        if 'idle' in txt:
+            return 'idle'
+        # Default for multi-label when no pattern matches
+        return 'unknown'
+    
+    # Binary mode: work or idle
+    elif output_mode == 'binary':
+        # Check for work indicators
+        work_kws = ['make', 'assemble', 'work', 'use', 'cut', 'screw', 'weld', 'attach', 'phone', 'drone']
+        if any(kw in txt for kw in work_kws):
+            return 'work'
+        # Default to idle
+        return 'idle'
+    
+    # Fallback: return 'unknown' or 'idle' depending on mode
+    return expected_labels[0] if expected_labels else 'unknown'
+
+
 def _extract_text_from_llm_output(cls_out: Any) -> str:
     """Normalize various LLM return shapes into a single string.
 
@@ -158,6 +201,7 @@ def get_label_template(mode: str) -> Optional[str]:
 
 __all__ = [
     'determine_label',
+    'normalize_label_text',
     'list_rule_sets',
     'list_label_modes',
     'get_label_template',
