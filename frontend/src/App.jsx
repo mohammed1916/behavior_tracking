@@ -7,6 +7,7 @@ import FileUpload from './components/FileUpload';
 import LiveView from './components/LiveView';
 import Tasks from './components/Tasks';
 import Subtasks from './components/Subtasks';
+import SegmentDisplay from './components/SegmentDisplay';
 
 function App() {
 
@@ -42,6 +43,7 @@ function App() {
   const [vlmResult, setVlmResult] = useState(null);
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
+  const [vlmSegments, setVlmSegments] = useState([]);
   const [vlmClassifierSource, setVlmClassifierSource] = useState('llm');
   const [classifiers, setClassifiers] = useState({});
   const [vlmClassifierMode, setVlmClassifierMode] = useState('binary');
@@ -109,6 +111,7 @@ function App() {
 
     setVlmLoading(true);
     setVlmResult(null);
+    setVlmSegments([]);
 
     try {
       // upload first
@@ -151,6 +154,9 @@ function App() {
             analysis.fps = data.fps || analysis.fps;
             analysis.video_info = data;
             setVlmResult({ message: 'streaming', analysis: { ...analysis } });
+          } else if (data.stage === 'segment') {
+            // Append temporal segment to state
+            setVlmSegments(prev => [...prev, data]);
           } else if (data.stage === 'sample') {
             const sample = { frame_index: data.frame_index, time_sec: data.time_sec, caption: data.caption, label: data.label };
             analysis.samples.push(sample);
@@ -708,6 +714,13 @@ function App() {
                             ) : (<div style={{ color: cssVars.muted }}>No work frames detected.</div>)}
                           </div>
                         </div>
+
+                        {vlmSegments.length > 0 && (
+                          <div style={{ marginTop: 16 }}>
+                            <h5>Temporal Segments (LLM)</h5>
+                            <SegmentDisplay segments={vlmSegments} />
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Stored analyses panel is rendered in the left controls now */}

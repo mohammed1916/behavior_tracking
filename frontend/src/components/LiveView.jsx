@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import SegmentDisplay from './SegmentDisplay';
 
 export default function LiveView({ model: propModel = '', prompt: propPrompt = '', classifierSource: propClassifierSource = 'llm', selectedSubtask = '', subtaskId = '', compareTimings = false, jpegQuality = 80, maxWidth = '', saveRecording = false, enableMediapipe = false, enableYolo = false, classifier: propClassifier = null, classifierMode: propClassifierMode = null, classifierPrompt: propClassifierPrompt = null }) {
   const [running, setRunning] = useState(false);
@@ -16,6 +17,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
   const [labelText, setLabelText] = useState('');
   const [llmOutput, setLlmOutput] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [segments, setSegments] = useState([]);
 
   useEffect(() => {
     // Keep state in sync if parent props change
@@ -75,6 +77,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
     setLlmOutput('');
     setStatusMessage('Connecting...');
     setSavedVideoUrl('');
+    setSegments([]);
 
     const es = new EventSource(url);
     eventSourceRef.current = es;
@@ -97,6 +100,10 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
       if (data) {
         if (data.stage) {
           setStatusMessage(data.message || data.stage);
+        }
+        if (data.stage === 'segment') {
+          // Append temporal segment to state
+          setSegments(prev => [...prev, data]);
         }
         if (data.caption) setCaptionText(data.caption);
         if (data.label) setLabelText(data.label);
@@ -195,6 +202,13 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
             <div style={{ marginTop: 6 }}><a target="_blank" rel="noreferrer" href={savedVideoUrl}>{savedVideoUrl}</a></div>
           </div>
         ) : null}
+
+        {segments.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <h5>Temporal Segments (LLM)</h5>
+            <SegmentDisplay segments={segments} />
+          </div>
+        )}
       </div>
     </div>
   );

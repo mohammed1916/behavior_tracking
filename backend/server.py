@@ -188,9 +188,133 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             saved_path = None
             record_enabled = bool(save_video)
 
+            # Temporal aggregation config (event-driven windows with safety cap)
+            agg_min_window = 1.5  # seconds (do not emit windows shorter than this)
+            agg_max_window = 4.0  # seconds (force emit after this many seconds)
+            agg_debounce_count = 3  # require this many samples of a new semantic state
+
+            # Aggregation state
+            seg_start_time = None
+            seg_samples = []
+            seg_signature = None
+            candidate_signature = None
+            candidate_count = 0
+
+            def _tokens_for_caption(caption: str):
+                if not caption:
+                    return set()
+                s = re.sub(r"[^\w\s]", " ", caption.lower())
+                toks = [t for t in s.split() if len(t) > 2]
+                stop = {'the','and','with','using','person','currently','a','an','is','are','in','on','of','their','to'}
+                return set([t for t in toks if t not in stop])
+
+            def _jaccard(a:set, b:set):
+                if not a and not b:
+                    return 1.0
+                if not a or not b:
+                    return 0.0
+                inter = len(a & b)
+                uni = len(a | b)
+                return inter/uni if uni>0 else 0.0
+
+            def _finalize_segment(end_time: float):
+                nonlocal seg_start_time, seg_samples, seg_signature
+                if not seg_start_time or not seg_samples:
+                    return None
+                start = seg_start_time
+                end = end_time
+                # enforce minimum window duration
+                if (end - start) < agg_min_window:
+                    return None
+                # pick dominant caption
+                counts = {}
+                for s in seg_samples:
+                    c = (s.get('caption') or '').strip()
+                    counts[c] = counts.get(c, 0) + 1
+                dominant = max(counts.items(), key=lambda x: x[1])[0] if counts else ''
+                # build aggregated caption text for LLM: list unique captions with timestamps
+                timeline_lines = []
+                for s in seg_samples:
+                    timeline_lines.append(f"<t={s.get('time_sec',0):.2f}> {s.get('caption') or ''}")
+                aggregated_text = "\n".join(timeline_lines)
+                out = {
+                    'stage': 'segment',
+                    'start_time': start,
+                    'end_time': end,
+                    'duration': end - start,
+                    'dominant_caption': dominant,
+                    'captions': [s.get('caption') for s in seg_samples],
+                    'timeline': aggregated_text,
+                }
+                # reset segment
+                seg_start_time = None
+                seg_samples = []
+                seg_signature = None
+                return out
+
             # Normalize classifier source selection (vlm | llm | bow)
             classifier_source_norm = (classifier_source or 'llm').lower()
             effective_use_llm = (classifier_source_norm == 'llm')
+
+            # Temporal aggregation config (event-driven windows with safety cap)
+            agg_min_window = 1.5
+            agg_max_window = 4.0
+            agg_debounce_count = 3
+
+            # Aggregation state
+            seg_start_time = None
+            seg_samples = []
+            seg_signature = None
+            candidate_signature = None
+            candidate_count = 0
+
+            def _tokens_for_caption(caption: str):
+                if not caption:
+                    return set()
+                s = re.sub(r"[^\w\s]", " ", caption.lower())
+                toks = [t for t in s.split() if len(t) > 2]
+                stop = {'the','and','with','using','person','currently','a','an','is','are','in','on','of','their','to'}
+                return set([t for t in toks if t not in stop])
+
+            def _jaccard(a:set, b:set):
+                if not a and not b:
+                    return 1.0
+                if not a or not b:
+                    return 0.0
+                inter = len(a & b)
+                uni = len(a | b)
+                return inter/uni if uni>0 else 0.0
+
+            def _finalize_segment(end_time: float):
+                nonlocal seg_start_time, seg_samples, seg_signature
+                if not seg_start_time or not seg_samples:
+                    return None
+                start = seg_start_time
+                end = end_time
+                if (end - start) < agg_min_window:
+                    return None
+                counts = {}
+                for s in seg_samples:
+                    c = (s.get('caption') or '').strip()
+                    counts[c] = counts.get(c, 0) + 1
+                dominant = max(counts.items(), key=lambda x: x[1])[0] if counts else ''
+                timeline_lines = []
+                for s in seg_samples:
+                    timeline_lines.append(f"<t={s.get('time_sec',0):.2f}> {s.get('caption') or ''}")
+                aggregated_text = "\n".join(timeline_lines)
+                out = {
+                    'stage': 'segment',
+                    'start_time': start,
+                    'end_time': end,
+                    'duration': end - start,
+                    'dominant_caption': dominant,
+                    'captions': [s.get('caption') for s in seg_samples],
+                    'timeline': aggregated_text,
+                }
+                seg_start_time = None
+                seg_samples = []
+                seg_signature = None
+                return out
 
             while app.state.webcam_event.is_set():
                 ret, frame = cap.read()
@@ -407,15 +531,62 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         except Exception as e:
                             logging.debug('Failed to encode frame for SSE image: %s', e)
                         yield _sse_event(payload)
-                        
+
                         # Collect for DB saving
-                        collected_samples.append({
-                            'frame_index': frame_counter, 'time_sec': elapsed_time, 'caption': caption, 'label': label, 'llm_output': cls_text
-                        })
+                        sample = {'frame_index': frame_counter, 'time_sec': elapsed_time, 'caption': caption, 'label': label, 'llm_output': cls_text}
+                        collected_samples.append(sample)
                         if label == 'work':
                             collected_work.append(frame_counter)
                         else:
                             collected_idle.append(frame_counter)
+
+                        # --- temporal aggregation (event-driven windows) ---
+                        if classifier_source_norm == 'llm':
+                            if seg_start_time is None:
+                                seg_start_time = elapsed_time
+                                seg_samples = [sample]
+                                seg_signature = _tokens_for_caption(caption)
+                                candidate_signature = None
+                                candidate_count = 0
+                            else:
+                                toks = _tokens_for_caption(caption)
+                                same_score = _jaccard(seg_signature or set(), toks)
+                                if same_score >= 0.6:
+                                    seg_samples.append(sample)
+                                    seg_signature = (seg_signature or set()) | toks
+                                    candidate_signature = None
+                                    candidate_count = 0
+                                else:
+                                    if candidate_signature is None or _jaccard(candidate_signature, toks) < 0.9:
+                                        candidate_signature = toks
+                                        candidate_count = 1
+                                    else:
+                                        candidate_count += 1
+                                    # finalize if candidate persisted or max window exceeded
+                                    if candidate_count >= agg_debounce_count or (elapsed_time - seg_start_time >= agg_max_window):
+                                        seg_out = _finalize_segment(elapsed_time)
+                                        if seg_out is not None:
+                                            # if LLM-driven temporal classification requested, run on aggregated timeline
+                                            if llm_mod.get_local_text_llm() is not None:
+                                                try:
+                                                    cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                                                    rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_out['timeline'])
+                                                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
+                                                    seg_label, _ = rules_mod.determine_label(seg_out['timeline'], use_llm=True, text_llm=llm_mod.get_local_text_llm(), prompt=prompt, classify_prompt_template=cls_prompt, output_mode=classifier_mode)
+                                                    seg_out['label'] = seg_label
+                                                    try:
+                                                        seg_out['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                                                    except Exception:
+                                                        seg_out['llm_output'] = None
+                                                except Exception:
+                                                    pass
+                                            yield _sse_event(seg_out)
+                                        # start new segment
+                                        seg_start_time = elapsed_time
+                                        seg_samples = [sample]
+                                        seg_signature = toks
+                                        candidate_signature = None
+                                        candidate_count = 0
                         
                         last_inference_time = time.time()
                     except Exception as e:
@@ -798,13 +969,57 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         payload['subtask_overrun'] = subtask_overrun
 
                     # collect
-                    collected_samples.append({
-                        'frame_index': fi, 'time_sec': time_sec, 'caption': caption, 'label': label, 'llm_output': cls_text
-                    })
+                    sample = {'frame_index': fi, 'time_sec': time_sec, 'caption': caption, 'label': label, 'llm_output': cls_text}
+                    collected_samples.append(sample)
                     if label == 'work':
                         collected_work.append(fi)
                     else:
                         collected_idle.append(fi)
+
+                    # temporal aggregation (LLM-only)
+                    if classifier_source_norm == 'llm':
+                        if seg_start_time is None:
+                            seg_start_time = time_sec
+                            seg_samples = [sample]
+                            seg_signature = _tokens_for_caption(caption)
+                            candidate_signature = None
+                            candidate_count = 0
+                        else:
+                            toks = _tokens_for_caption(caption)
+                            same_score = _jaccard(seg_signature or set(), toks)
+                            if same_score >= 0.6:
+                                seg_samples.append(sample)
+                                seg_signature = (seg_signature or set()) | toks
+                                candidate_signature = None
+                                candidate_count = 0
+                            else:
+                                if candidate_signature is None or _jaccard(candidate_signature, toks) < 0.9:
+                                    candidate_signature = toks
+                                    candidate_count = 1
+                                else:
+                                    candidate_count += 1
+                                if candidate_count >= agg_debounce_count or (time_sec - seg_start_time >= agg_max_window):
+                                    seg_out = _finalize_segment(time_sec)
+                                    if seg_out is not None:
+                                        if llm_mod.get_local_text_llm() is not None:
+                                            try:
+                                                cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                                                rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_out['timeline'])
+                                                llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
+                                                seg_label, _ = rules_mod.determine_label(seg_out['timeline'], use_llm=True, text_llm=llm_mod.get_local_text_llm(), prompt=prompt, classify_prompt_template=cls_prompt, output_mode=classifier_mode)
+                                                seg_out['label'] = seg_label
+                                                try:
+                                                    seg_out['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                                                except Exception:
+                                                    seg_out['llm_output'] = None
+                                            except Exception:
+                                                pass
+                                        yield _sse_event(seg_out)
+                                    seg_start_time = time_sec
+                                    seg_samples = [sample]
+                                    seg_signature = toks
+                                    candidate_signature = None
+                                    candidate_count = 0
 
                     yield _sse_event(payload)
                 except Exception as e:
