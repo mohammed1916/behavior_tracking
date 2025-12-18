@@ -1,130 +1,199 @@
-"""Self-contained Qwen VLM adapter (independent of mediapipe_vlm).
-
-Provides `QwenVLMAdapter` with a pipeline-like callable interface
-returning `[{'generated_text': ...}]` so it can be used by `server.py`.
 """
+Self-contained Qwen VLM adapter (independent of mediapipe_vlm).
+
+Supports two modes:
+- mode="caption": returns natural language captions
+- mode="label": returns normalized activity labels
+
+Always returns:
+    [{'generated_text': ...}]
+"""
+
 import os
+import logging
+from typing import Optional
+
 import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText
 from PIL import Image
 import cv2
+
 from .llm import VLM_BASE_PROMPT_TEMPLATE
 
-DEFAULT_QWEN_MODEL = os.environ.get('QWEN_MODEL_ID', 'Qwen/Qwen2-VL-2B-Instruct')
 
+# -----------------------------------------------------------------------------
+# Constants
+# -----------------------------------------------------------------------------
+
+DEFAULT_QWEN_MODEL = os.environ.get(
+    "QWEN_MODEL_ID",
+    "Qwen/Qwen2-VL-2B-Instruct",
+)
+
+SUPPORTED_MODES = {"caption", "label"}
+
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+
+def _resolve_device(device: Optional[str]) -> torch.device:
+    if device:
+        return torch.device(device)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+
+def _to_pil(image):
+    if isinstance(image, Image.Image):
+        return image
+    return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+
+
+# -----------------------------------------------------------------------------
+# Adapter
+# -----------------------------------------------------------------------------
 
 class QwenVLMAdapter:
-    """Adapter around a Qwen-style Image->Text model.
+    """
+    Adapter around a Qwen-style Image->Text model.
 
     Usage:
-        adapter = QwenVLMAdapter(model_id='qwen_local' or HF id)
-        adapter(pil_image) -> [{'generated_text': '...'}]
+        QwenVLMAdapter(mode="caption") → caption
+        QwenVLMAdapter(mode="label")   → label
     """
-    def __init__(self, model_id=None, device=None):
+
+    def __init__(
+        self,
+        model_id: Optional[str] = None,
+        device: Optional[str] = None,
+        mode: str = "caption",
+    ):
+        if mode not in SUPPORTED_MODES:
+            raise ValueError(f"Unsupported mode '{mode}', must be one of {SUPPORTED_MODES}")
+
+        self.mode = mode
         self.model_id = model_id or DEFAULT_QWEN_MODEL
-        if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = _resolve_device(device)
+
+        logging.info(
+            "Initializing QwenVLMAdapter: model=%s device=%s mode=%s",
+            self.model_id,
+            self.device,
+            self.mode,
+        )
+
+        # Processor
+        self.processor = AutoProcessor.from_pretrained(
+            self.model_id,
+            trust_remote_code=True,
+        )
+
+        # Model
+        if self.device.type == "cuda":
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                self.model_id,
+                torch_dtype=torch.float16,
+                trust_remote_code=True,
+            ).to(self.device)
         else:
-            self.device = device
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                self.model_id,
+                trust_remote_code=True,
+            ).to(self.device)
 
-        # Load processor and model. Prefer GPU (fp16) when available, but fall
-        # back gracefully to CPU to avoid crashing systems without GPU.
-        try:
-            self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+        self.model.eval()
 
-        try:
-            if self.device == 'cuda':
-                try:
-                    self.model = AutoModelForImageTextToText.from_pretrained(
-                        self.model_id,
-                        torch_dtype=torch.float16,
-                        device_map='cuda',
-                        trust_remote_code=True
-                    )
-                except Exception:
-                    # Last-resort: load without device_map then move to cuda
-                    self.model = AutoModelForImageTextToText.from_pretrained(
-                        self.model_id,
-                        torch_dtype=torch.float16,
-                        trust_remote_code=True
-                    )
-                    try:
-                        self.model.to('cuda')
-                    except Exception:
-                        pass
-            else:
-                # CPU path
-                self.model = AutoModelForImageTextToText.from_pretrained(
-                    self.model_id,
-                    trust_remote_code=True
-                )
-                try:
-                    self.model.to('cpu')
-                except Exception:
-                    pass
-        except Exception as e:
-            raise RuntimeError(f"Failed to load model {self.model_id}: {e}")
+    # ------------------------------------------------------------------
+    # Prompt
+    # ------------------------------------------------------------------
 
-    def _build_prompt(self):
-        return VLM_BASE_PROMPT_TEMPLATE
+    def _build_prompt(self, user_prompt: Optional[str]) -> str:
+        """
+        Prompt logic:
+        - Caption mode → descriptive VLM prompt
+        - Label mode   → same prompt (rules live in postprocess)
+        """
+        return user_prompt or VLM_BASE_PROMPT_TEMPLATE
 
-    def __call__(self, image, max_new_tokens=20):
-        """Run inference on a PIL.Image (or array).
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
 
-        Returns pipeline-like output: `[{'generated_text': '<label>'}]`.
+    def __call__(
+        self,
+        image,
+        prompt: Optional[str] = None,
+        max_new_tokens: int = 64,
+    ):
+        """
+        Run inference.
+
+        Returns:
+            [{'generated_text': caption_or_label}]
         """
         try:
-            # Accept numpy arrays or PIL images
-            if not isinstance(image, Image.Image):
-                # assume OpenCV BGR numpy array
-                image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            image = _to_pil(image)
+            prompt = self._build_prompt(prompt)
 
-            prompt = self._build_prompt()
-            # Prepare inputs
-            inputs = self.processor(text=prompt, images=image, return_tensors='pt')
-            # Move inputs to model device if possible
-            try:
-                inputs = {k: v.to(next(self.model.parameters()).device) for k, v in inputs.items()}
-            except Exception:
-                pass
+            inputs = self.processor(
+                text=prompt,
+                images=image,
+                return_tensors="pt",
+            )
+
+            inputs = {
+                k: v.to(self.device)
+                for k, v in inputs.items()
+            }
 
             with torch.inference_mode():
-                output_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+                output_ids = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                )
 
-            # decode
-            try:
-                raw = self.processor.decode(output_ids[0], skip_special_tokens=True).strip()
-            except Exception:
-                # fallback: use tokenizer if present
-                try:
-                    raw = self.model.config.processor_class.decode(output_ids[0], skip_special_tokens=True)
-                except Exception:
-                    raw = str(output_ids[0])
+            text = self.processor.decode(
+                output_ids[0],
+                skip_special_tokens=True,
+            ).strip()
 
-            # Post-process into normalized label (simple heuristics)
-            txt = raw.lower()
-            if 'phone' in txt:
-                label = 'using_phone'
-            elif 'assemble' in txt or 'drone' in txt:
-                label = 'assembling_drone'
-            elif 'idle' in txt:
-                label = 'idle'
-            else:
-                label = 'unknown'
+            # Mode-specific behavior
+            if self.mode == "label":
+                text = self._postprocess(text)
 
-            return [{'generated_text': label}]
+            return [{"generated_text": text}]
+
         except Exception as e:
-            # don't propagate heavy exceptions to server; return empty result
-            return [{'generated_text': ''}]
+            logging.exception("QwenVLMAdapter inference failed: %s", e)
+            return [{"generated_text": ""}]
+
+    # ------------------------------------------------------------------
+    # Label post-processing (ONLY used in label mode)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _postprocess(text: str) -> str:
+        txt = text.lower()
+
+        if "phone" in txt:
+            return "using_phone"
+        if "assemble" in txt or "drone" in txt:
+            return "assembling_drone"
+        if "idle" in txt:
+            return "idle"
+
+        return "unknown"
+
+    # ------------------------------------------------------------------
+    # Cleanup
+    # ------------------------------------------------------------------
 
     def release(self):
         try:
-            if hasattr(self, 'model'):
-                del self.model
-            if hasattr(self, 'processor'):
-                del self.processor
+            del self.model
+            del self.processor
             torch.cuda.empty_cache()
         except Exception:
             pass

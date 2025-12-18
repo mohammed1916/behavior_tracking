@@ -1,116 +1,165 @@
 import os
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 import torch
-from transformers import pipeline
-from backend.vlm_blip import get_blip_captioner
 
+from backend.vlm_blip import get_blip_captioner
 from backend.vlm_qwen import QwenVLMAdapter
 
 
-_captioner_cache: dict = {}
+# -----------------------------------------------------------------------------
+# Globals
+# -----------------------------------------------------------------------------
+
+_captioner_cache: Dict[str, Any] = {}
+
+LOCAL_VLM_MODELS: Dict[str, dict] = {}
+LOCAL_VLM_PROVIDERS: set[str] = set()
 
 
-# Load supported local VLM models from JSON (single source of truth)
-LOCAL_VLM_MODELS: dict = {}
-LOCAL_VLM_PROVIDERS: set = set()
-_model_cfg_path = os.path.join(os.path.dirname(__file__), 'local_vlm_models.json')
-with open(_model_cfg_path, 'r', encoding='utf-8') as _f:
-    _cfg = json.load(_f)
-for _e in _cfg.get('models', []):
-    _mid = (_e.get('id') or '').lower()
-    if not _mid:
+# -----------------------------------------------------------------------------
+# Load JSON model registry (single source of truth)
+# -----------------------------------------------------------------------------
+
+_MODEL_CFG_PATH = os.path.join(os.path.dirname(__file__), "local_vlm_models.json")
+
+with open(_MODEL_CFG_PATH, "r", encoding="utf-8") as f:
+    cfg = json.load(f)
+
+for entry in cfg.get("models", []):
+    model_id = (entry.get("id") or "").strip().lower()
+    if not model_id:
         continue
-    LOCAL_VLM_MODELS[_mid] = _e
-    _prov = _mid.split('/')[0]
-    LOCAL_VLM_PROVIDERS.add(_prov)
-logging.info('Loaded local VLM models from %s: %s', _model_cfg_path, list(LOCAL_VLM_MODELS.keys()))
 
+    LOCAL_VLM_MODELS[model_id] = entry
+    LOCAL_VLM_PROVIDERS.add(model_id.split("/")[0])
+
+logging.info(
+    "Loaded local VLM models from %s: %s",
+    _MODEL_CFG_PATH,
+    list(LOCAL_VLM_MODELS.keys()),
+)
+
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+
+def _resolve_device(device_override: Optional[str]) -> str:
+    """
+    Resolve compute device deterministically.
+    """
+    if device_override:
+        s = device_override.lower()
+        if s.startswith("cuda") or "gpu" in s:
+            return device_override
+        return "cpu"
+
+    if torch.cuda.is_available():
+        return "cuda:0"
+
+    return "cpu"
+
+
+def _cache_under_keys(obj: Any, *keys: str) -> None:
+    """
+    Cache an object under multiple normalized keys.
+    """
+    for k in keys:
+        if k:
+            _captioner_cache[k] = obj
+            _captioner_cache[k.lower()] = obj
+
+
+# -----------------------------------------------------------------------------
+# Captioner loaders
+# -----------------------------------------------------------------------------
 
 def get_local_captioner() -> Optional[Any]:
-    """Return the local BLIP captioner pipeline (deterministic).
-
-    This function assumes the `transformers` package is available and will
-    raise ImportError otherwise.
     """
-    global _captioner_cache
-    if 'blip' in _captioner_cache:
-        return _captioner_cache['blip']
+    Return the local BLIP captioner pipeline (cached, deterministic).
+    """
+    cached = _captioner_cache.get("blip")
+    if cached is not None:
+        return cached
 
     try:
-        p = get_blip_captioner()
-    except Exception as e:
-        logging.exception('Failed to initialize BLIP captioner: %s', e)
+        captioner = get_blip_captioner()
+    except Exception:
+        logging.exception("Failed to initialize BLIP captioner")
         return None
 
-    # Cache under a few common keys so callers probing different ids match
-    _captioner_cache['blip'] = p
-    try:
-        canonical = 'Salesforce/blip-image-captioning-large'
-        _captioner_cache[canonical] = p
-        _captioner_cache[canonical.lower()] = p
-    except Exception:
-        pass
-    logging.info('Loaded local BLIP captioner (Salesforce/blip-image-captioning-large) via vlm_blip')
-    return p
+    _cache_under_keys(
+        captioner,
+        "blip",
+        "Salesforce/blip-image-captioning-large",
+    )
+
+    logging.info(
+        "Loaded local BLIP captioner (Salesforce/blip-image-captioning-large)"
+    )
+    return captioner
 
 
-def get_captioner_for_model(model_id: Optional[str], device_override: Optional[str] = None) -> Optional[Any]:
-    """Return a captioner for the requested model using exact JSON lookup.
+def get_captioner_for_model(
+    model_id: Optional[str],
+    device_override: Optional[str] = None,
+) -> Optional[Any]:
+    """
+    Return a captioner for the requested model using exact JSON lookup.
 
-    No fallbacks or try/except are used: failures will raise exceptions.
+    - No provider fallbacks
+    - No silent retries
+    - Cache-first resolution
     """
     if not model_id:
         return get_local_captioner()
 
+    # Fast path: cache hit
+    cached = _captioner_cache.get(model_id) or _captioner_cache.get(model_id.lower())
+    if cached is not None:
+        return cached
+
     mid = model_id.lower()
+    cfg = LOCAL_VLM_MODELS.get(mid)
+    if cfg is None:
+        return None
 
-    # Exact JSON-configured model id match first
-    if mid in LOCAL_VLM_MODELS:
-        cfg = LOCAL_VLM_MODELS[mid]
-        prov = mid.split('/')[0]
-        if prov == 'qwen':
-            device = 'cpu'
-            if device_override:
-                s = str(device_override).lower()
-                if s.startswith('cuda') or 'gpu' in s:
-                    device = device_override
-            else:
-                if torch is not None and getattr(torch, 'cuda', None) is not None and torch.cuda.is_available():
-                    device = 'cuda:0'
-            # model_path = os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model')
-            # adapter = QwenVLMAdapter(model_path, device=device)
-            adapter = QwenVLMAdapter("Qwen/Qwen2-VL-2B-Instruct", device=device)
-            # Cache adapter under both original and lowercased keys to help probes
-            _captioner_cache[model_id] = adapter
-            try:
-                _captioner_cache[model_id.lower()] = adapter
-            except Exception:
-                pass
-            logging.info('Loaded QwenVLMAdapter for %s (device=%s) via JSON config', model_id, device)
-            return adapter
-        if prov == 'salesforce' or 'blip' in mid:
-            return get_local_captioner()
+    provider = mid.split("/")[0]
 
-    # No provider-level fallback; only exact JSON-configured models are supported
+    # ------------------------------------------------------------------
+    # Qwen
+    # ------------------------------------------------------------------
+    if provider == "qwen":
+        device = _resolve_device(device_override)
+
+        # Allow model registry to specify a preferred mode (e.g. "label")
+        preferred_model_id = cfg.get("id") or model_id
+        preferred_mode = cfg.get("mode", "caption")
+
+        adapter = QwenVLMAdapter(
+            model_id=preferred_model_id,
+            device=device,
+            mode=preferred_mode,
+        )
+
+        # Cache under both requested key and the registry id
+        _cache_under_keys(adapter, model_id, cfg.get("id"))
+
+        logging.info(
+            "Loaded QwenVLMAdapter for %s (device=%s mode=%s)",
+            preferred_model_id,
+            device,
+            preferred_mode,
+        )
+        return adapter
+
+    # ------------------------------------------------------------------
+    # BLIP / Salesforce
+    # ------------------------------------------------------------------
+    if provider == "salesforce" or "blip" in mid:
+        return get_local_captioner()
+
     return None
-
-
-def _normalize_caption_output(captioner, out):
-    first = out[0] if isinstance(out, list) and len(out) > 0 else out
-    for k in ('generated_text', 'caption', 'text'):
-        if hasattr(first, 'get') and first.get(k):
-            return first.get(k)
-    ids_list = None
-    if hasattr(first, '__contains__') and 'input_ids' in first:
-        ids = first.get('input_ids') if hasattr(first, 'get') else None
-        if ids is not None:
-            if hasattr(ids, 'tolist'):
-                ids_list = ids.tolist()
-            else:
-                ids_list = list(ids)
-        if ids_list and hasattr(captioner, 'tokenizer'):
-            return captioner.tokenizer.decode(ids_list, skip_special_tokens=True)
-    return str(first)

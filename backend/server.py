@@ -301,14 +301,34 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         caption = _normalize_caption_output(captioner, out)
                         
                         # Determine label (LLM + keyword rules) via centralized helper
+                        # Support VLM adapters that directly emit a label mode (e.g. Qwen label mode).
                         classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
-                        label, cls_text = rules_mod.determine_label(
-                            caption,
-                            use_llm=use_llm,
-                            text_llm=llm_mod.get_local_text_llm(),
-                            prompt=prompt,
-                            classify_prompt_template=classify_prompt_template,
-                        )
+                        label = None
+                        cls_text = None
+                        # If frontend requested a VLM 'label' mode, prefer interpreting
+                        # the VLM output as a label directly when it matches known labels.
+                        if classifier_mode == 'label':
+                            try:
+                                candidate = (caption or '').strip().lower()
+                                known_multi = rules_mod.LABEL_SETS.get('multi', [])
+                                if candidate in known_multi:
+                                    label = candidate
+                                    cls_text = candidate
+                            except Exception:
+                                label = None
+
+                        # Fallback to LLM-based classification / keyword rules
+                        if label is None:
+                            # Map frontend mode -> rules output_mode: allow using 'multi' for VLM label intent
+                            output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
+                            label, cls_text = rules_mod.determine_label(
+                                caption,
+                                use_llm=use_llm,
+                                text_llm=llm_mod.get_local_text_llm(),
+                                prompt=prompt,
+                                classify_prompt_template=classify_prompt_template,
+                                output_mode=output_mode,
+                            )
                         
                         # Subtask overrun check (same as vlm_local_stream)
                         subtask_overrun = None
@@ -661,15 +681,32 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     # choose classify prompt: explicit override > classifier default > global
                     # choose label prompt: explicit override > label-mode template
                     classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
-                    label, cls_text = rules_mod.determine_label(
-                        caption,
-                        use_llm=use_llm,
-                        text_llm=llm_mod.get_local_text_llm(),
-                        prompt=prompt,
-                        classify_prompt_template=classify_prompt_template,
-                        rule_set=rule_set,
-                        output_mode=classifier_mode,
-                    )
+                    label = None
+                    cls_text = None
+                    # If frontend requested a VLM 'label' mode, prefer interpreting
+                    # the VLM output as a label directly when it matches known labels.
+                    if classifier_mode == 'label':
+                        try:
+                            candidate = (caption or '').strip().lower()
+                            known_multi = rules_mod.LABEL_SETS.get('multi', [])
+                            if candidate in known_multi:
+                                label = candidate
+                                cls_text = candidate
+                        except Exception:
+                            label = None
+
+                    # Fallback to LLM-based classification / keyword rules
+                    if label is None:
+                        output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
+                        label, cls_text = rules_mod.determine_label(
+                            caption,
+                            use_llm=use_llm,
+                            text_llm=llm_mod.get_local_text_llm(),
+                            prompt=prompt,
+                            classify_prompt_template=classify_prompt_template,
+                            rule_set=rule_set,
+                            output_mode=output_mode,
+                        )
 
                     time_sec = fi / (fps if fps > 0 else 30.0)
 
