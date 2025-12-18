@@ -135,24 +135,21 @@ def get_captioner_for_model(
     if provider == "qwen":
         device = _resolve_device(device_override)
 
-        # Allow model registry to specify a preferred mode (e.g. "label")
+        # Allow model registry to specify a preferred model id
         preferred_model_id = cfg.get("id") or model_id
-        preferred_mode = cfg.get("mode", "caption")
 
         adapter = QwenVLMAdapter(
             model_id=preferred_model_id,
             device=device,
-            mode=preferred_mode,
         )
 
         # Cache under both requested key and the registry id
         _cache_under_keys(adapter, model_id, cfg.get("id"))
 
         print(
-            "Loaded QwenVLMAdapter for %s (device=%s mode=%s)",
+            "Loaded QwenVLMAdapter for %s (device=%s)",
             preferred_model_id,
             device,
-            preferred_mode,
         )
         return adapter
 
