@@ -853,7 +853,7 @@ async def vlm_local_models():
 async def list_rules():
     """Return available label modes for frontend selection."""
     try:
-            out = {'label_modes': rules_mod.list_label_modes()}
+        out = {'label_modes': rules_mod.list_label_modes()}
         return out
     except Exception as e:
         logging.exception('Failed to list label modes: %s', e)
@@ -883,105 +883,105 @@ async def backend_status():
         return {'llm_available': False, 'vlm_models': []}
 
 
-@app.post("/backend/caption")
-async def caption_image(request: dict):
-    """Caption an image using the specified VLM model.
+# @app.post("/backend/caption")
+# async def caption_image(request: dict):
+#     """Caption an image using the specified VLM model.
     
-    Expects JSON:
-    {
-        "image": "base64_encoded_image_data",
-        "model": "model_id_string"
-    }
+#     Expects JSON:
+#     {
+#         "image": "base64_encoded_image_data",
+#         "model": "model_id_string"
+#     }
     
-    Returns:
-    {
-        "caption": "generated caption text",
-        "model": "model_id_used"
-    }
-    """
+#     Returns:
+#     {
+#         "caption": "generated caption text",
+#         "model": "model_id_used"
+#     }
+#     """
     
-    try:
-        image_data = request.get("image")
-        model_id = request.get("model")
+#     try:
+#         image_data = request.get("image")
+#         model_id = request.get("model")
         
-        if not image_data:
-            return make_alert_json('No image data provided', status_code=400)
+#         if not image_data:
+#             return make_alert_json('No image data provided', status_code=400)
 
-        if not model_id:
-            return make_alert_json('No model specified', status_code=400)
+#         if not model_id:
+#             return make_alert_json('No model specified', status_code=400)
         
-        # Decode base64 image
-        try:
-            # Handle data URL format (data:image/png;base64,...)
-            if image_data.startswith('data:'):
-                image_data = image_data.split(',')[1]
+#         # Decode base64 image
+#         try:
+#             # Handle data URL format (data:image/png;base64,...)
+#             if image_data.startswith('data:'):
+#                 image_data = image_data.split(',')[1]
             
-            image_bytes = base64.b64decode(image_data)
-            image = Image.open(io.BytesIO(image_bytes))
+#             image_bytes = base64.b64decode(image_data)
+#             image = Image.open(io.BytesIO(image_bytes))
             
-            # Convert to RGB if needed and ensure minimum size
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+#             # Convert to RGB if needed and ensure minimum size
+#             if image.mode != 'RGB':
+#                 image = image.convert('RGB')
             
-            # Ensure minimum size for BLIP (resize very small images)
-            if image.size[0] < 224 or image.size[1] < 224:
-                image = image.resize((224, 224), Image.Resampling.LANCZOS)
+#             # Ensure minimum size for BLIP (resize very small images)
+#             if image.size[0] < 224 or image.size[1] < 224:
+#                 image = image.resize((224, 224), Image.Resampling.LANCZOS)
                 
-        except Exception as e:
-            return make_alert_json(f"Invalid image data: {str(e)}", status_code=400)
+#         except Exception as e:
+#             return make_alert_json(f"Invalid image data: {str(e)}", status_code=400)
         
-        # Optional preprocessing flags (can be supplied in JSON body)
-        enable_mediapipe = bool(request.get('enable_mediapipe', False))
-        enable_yolo = bool(request.get('enable_yolo', False))
+#         # Optional preprocessing flags (can be supplied in JSON body)
+#         enable_mediapipe = bool(request.get('enable_mediapipe', False))
+#         enable_yolo = bool(request.get('enable_yolo', False))
 
-        # Get the appropriate captioner
-        captioner = get_captioner_for_model(model_id)
+#         # Get the appropriate captioner
+#         captioner = get_captioner_for_model(model_id)
         
-        if captioner is None:
-            return make_alert_json(f"Model {model_id} is not available", status_code=500)
+#         if captioner is None:
+#             return make_alert_json(f"Model {model_id} is not available", status_code=500)
         
-        # Optionally run mediapipe / yolo preprocessing: server does not
-        # execute the standalone mediapipe_vlm scripts here to avoid tight
-        # coupling. If the frontend requests these features, return a minimal
-        # summary indicating whether the server is configured to run them.
-        mediapipe_summary = None
-        yolo_summary = None
-        if enable_mediapipe:
-            mediapipe_summary = {'available': False, 'message': 'Mediapipe preprocessing is not enabled on this server'}
-        if enable_yolo:
-            yolo_summary = {'available': False, 'message': 'YOLO preprocessing is not enabled on this server'}
+#         # Optionally run mediapipe / yolo preprocessing: server does not
+#         # execute the standalone mediapipe_vlm scripts here to avoid tight
+#         # coupling. If the frontend requests these features, return a minimal
+#         # summary indicating whether the server is configured to run them.
+#         mediapipe_summary = None
+#         yolo_summary = None
+#         if enable_mediapipe:
+#             mediapipe_summary = {'available': False, 'message': 'Mediapipe preprocessing is not enabled on this server'}
+#         if enable_yolo:
+#             yolo_summary = {'available': False, 'message': 'YOLO preprocessing is not enabled on this server'}
 
-        # Generate caption (or label via adapter)
-        try:
-            result = captioner(image)
-            # Extract caption text from result
-            if isinstance(result, list) and len(result) > 0:
-                if isinstance(result[0], dict) and 'generated_text' in result[0]:
-                    caption_text = result[0]['generated_text']
-                else:
-                    caption_text = str(result[0])
-            else:
-                caption_text = str(result)
+#         # Generate caption (or label via adapter)
+#         try:
+#             result = captioner(image)
+#             # Extract caption text from result
+#             if isinstance(result, list) and len(result) > 0:
+#                 if isinstance(result[0], dict) and 'generated_text' in result[0]:
+#                     caption_text = result[0]['generated_text']
+#                 else:
+#                     caption_text = str(result[0])
+#             else:
+#                 caption_text = str(result)
 
-            out = {
-                "caption": caption_text,
-                "model": model_id,
-                "status": "success"
-            }
-            if mediapipe_summary is not None:
-                out['mediapipe'] = mediapipe_summary
-            if yolo_summary is not None:
-                out['yolo'] = yolo_summary
-            return out
-        except Exception as e:
-            logging.error(f"Error during caption generation with {model_id}: {e}")
-            return make_alert_json(f"Caption generation failed: {str(e)}", status_code=500)
+#             out = {
+#                 "caption": caption_text,
+#                 "model": model_id,
+#                 "status": "success"
+#             }
+#             if mediapipe_summary is not None:
+#                 out['mediapipe'] = mediapipe_summary
+#             if yolo_summary is not None:
+#                 out['yolo'] = yolo_summary
+#             return out
+#         except Exception as e:
+#             logging.error(f"Error during caption generation with {model_id}: {e}")
+#             return make_alert_json(f"Caption generation failed: {str(e)}", status_code=500)
         
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Unexpected error in caption endpoint: {e}")
-        return make_alert_json('Internal server error', status_code=500)
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logging.error(f"Unexpected error in caption endpoint: {e}")
+#         return make_alert_json('Internal server error', status_code=500)
 
 
 @app.post('/backend/load_vlm_model')

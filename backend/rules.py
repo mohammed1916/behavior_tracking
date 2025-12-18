@@ -95,50 +95,52 @@ def determine_label(
     # Build the final prompt: prefer an explicit classify_prompt_template
     # passed by caller; otherwise compose from shared VLM + label + rules templates
     if use_llm and text_llm is not None:
-        try:
-            if classify_prompt_template:
-                final_template = classify_prompt_template
-            else:
-                label_tpl = LABEL_PROMPTS.get(output_mode, LABEL_PROMPTS['binary'])
-                final_template = llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE
-            rendered = final_template.format(prompt=prompt, caption=caption)
-            cls_out = text_llm(rendered, max_new_tokens=max_new_tokens)
-            cls_text = _extract_text_from_llm_output(cls_out) or None
-            if cls_text:
-                cleaned = re.sub(r'[^\n\w\s]', '', cls_text).strip()
-                tokens = [t for t in cleaned.split() if t]
-                if tokens:
-                    last = tokens[-1].lower()
-                    expected = LABEL_SETS.get(output_mode, LABEL_SETS['binary'])
-                    if last in expected:
-                        label = last
+        # try:
+        if classify_prompt_template:
+            final_template = classify_prompt_template
+        else:
+            label_tpl = LABEL_PROMPTS.get(output_mode, LABEL_PROMPTS['binary'])
+            final_template = llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE
+        rendered = final_template.format(prompt=prompt, caption=caption)
+        cls_out = text_llm(rendered, max_new_tokens=max_new_tokens)
+        cls_text = _extract_text_from_llm_output(cls_out) or None
+        if cls_text:
+            cleaned = re.sub(r'[^\n\w\s]', '', cls_text).strip()
+            tokens = [t for t in cleaned.split() if t]
+            if tokens:
+                last = tokens[-1].lower()
+                expected = LABEL_SETS.get(output_mode, LABEL_SETS['binary'])
+                if last in expected:
+                    label = last
+                else:
+                    # # If caller requested binary output but model returned a multi label,
+                    # # deterministically map multi->binary: non-idle -> work
+                    # if output_mode == 'binary':
+                    #     if any(sub in last for sub in ('assemble', 'drone', 'screw', 'install', 'repair', 'work')):
+                    #         label = 'work'
+                    #     elif 'phone' in last:
+                    #         label = 'idle'
+                    # else:
+                    # preserve unknown / try to coerce to a known multi label
+                    if any(sub in last for sub in ('assemble', 'drone')):
+                        label = 'assembling_drone'
+                    elif 'phone' in last:
+                        label = 'using_phone'
+                    elif 'idle' in last:
+                        label = 'idle'
                     else:
-                        # If caller requested binary output but model returned a multi label,
-                        # deterministically map multi->binary: non-idle -> work
-                        if output_mode == 'binary':
-                            if any(sub in last for sub in ('assemble', 'drone', 'screw', 'install', 'repair', 'work')):
-                                label = 'work'
-                            elif 'phone' in last:
-                                label = 'idle'
-                        else:
-                            # preserve unknown / try to coerce to a known multi label
-                            if any(sub in last for sub in ('assemble', 'drone')):
-                                label = 'assembling_drone'
-                            elif 'phone' in last:
-                                label = 'using_phone'
-                            elif 'idle' in last:
-                                label = 'idle'
-                            else:
-                                label = 'unknown'
-        except Exception:
-            logger.exception('LLM classification failed')
+                        label = 'unknown'
+        # except Exception:
+        #     logger.exception('LLM classification failed')
 
-    # Keyword fallback when still 'idle'
-    if label == 'idle':
+    # # Keyword fallback when still 'idle'
+    # if label == 'idle':
+    
+    if not use_llm or cls_text is None:
         lw = caption.lower() if isinstance(caption, str) else ''
         kws = RULE_SETS.get(rule_set, {}).get('work_keywords', WORK_KEYWORDS)
         if any(k in lw for k in kws):
-            label = 'work'
+            label = 'work' # if not label is alredy initialized as idle
 
     return label, cls_text
 
