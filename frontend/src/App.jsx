@@ -541,9 +541,9 @@ function App() {
                 )}
               </div>
 
-            {/* <label>Prompt:
+            <label>Prompt:
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
-            </label> */}
+            </label>
               <div style={{ marginTop: 8 }}>
                 <label style={{ display: 'block', marginTop: 6 }}>Mode:
                   <select value={vlmClassifierMode} onChange={(e) => setVlmClassifierMode(e.target.value)}>
@@ -556,9 +556,9 @@ function App() {
                   </select>
                 </label>
 
-                {/* <label style={{ display: 'block', marginTop: 6 }}>Classifier Prompt (optional override):
+                <label style={{ display: 'block', marginTop: 6 }}>Classifier Prompt (optional override):
                   <textarea value={vlmClassifierPrompt} onChange={(e) => setVlmClassifierPrompt(e.target.value)} placeholder="Optional: override prompt template" rows={3} />
-                </label> */}
+                </label>
               </div>
 
             <label style={{ display: 'block', marginTop: 8 }}>

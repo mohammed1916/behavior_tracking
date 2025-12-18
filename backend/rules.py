@@ -100,7 +100,7 @@ def determine_label(
                 final_template = classify_prompt_template
             else:
                 label_tpl = LABEL_PROMPTS.get(output_mode, LABEL_PROMPTS['binary'])
-                final_template = llm_mod.VLM_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE
+                final_template = llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE
             rendered = final_template.format(prompt=prompt, caption=caption)
             cls_out = text_llm(rendered, max_new_tokens=max_new_tokens)
             cls_text = _extract_text_from_llm_output(cls_out) or None

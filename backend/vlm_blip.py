@@ -6,7 +6,7 @@ the server can treat BLIP similarly to other adapter-style VLMs (e.g. Qwen).
 import logging
 import torch
 from transformers import pipeline
-from .llm import VLM_PROMPT_TEMPLATE
+from .llm import VLM_BASE_PROMPT_TEMPLATE
 
 
 def get_blip_captioner(device_override: str = None):
@@ -45,7 +45,7 @@ def get_blip_captioner(device_override: str = None):
     def captioner(image, prompt: str = None, **kwargs):
         # # If caller does not provide a prompt, use the shared VLM prompt template
         # if not prompt:
-        #     prompt = VLM_PROMPT_TEMPLATE
+        #     prompt = VLM_BASE_PROMPT_TEMPLATE
 
         # if prompt:
         #     # Try pipeline variants that may accept prompt/text parameters.

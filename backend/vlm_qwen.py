@@ -8,7 +8,7 @@ import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText
 from PIL import Image
 import cv2
-from .llm import VLM_PROMPT_TEMPLATE
+from .llm import VLM_BASE_PROMPT_TEMPLATE
 
 DEFAULT_QWEN_MODEL = os.environ.get('QWEN_MODEL_ID', 'Qwen/Qwen2-VL-2B-Instruct')
 
@@ -68,7 +68,7 @@ class QwenVLMAdapter:
             raise RuntimeError(f"Failed to load model {self.model_id}: {e}")
 
     def _build_prompt(self):
-        return VLM_PROMPT_TEMPLATE
+        return VLM_BASE_PROMPT_TEMPLATE
 
     def __call__(self, image, max_new_tokens=20):
         """Run inference on a PIL.Image (or array).
