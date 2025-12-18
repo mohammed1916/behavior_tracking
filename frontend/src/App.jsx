@@ -42,7 +42,7 @@ function App() {
   const [vlmResult, setVlmResult] = useState(null);
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
-  const [vlmUseLLM, setVlmUseLLM] = useState(true);
+  const [vlmClassifierSource, setVlmClassifierSource] = useState('llm');
   const [classifiers, setClassifiers] = useState({});
   const [vlmClassifierMode, setVlmClassifierMode] = useState('binary');
   const [vlmClassifierPrompt, setVlmClassifierPrompt] = useState('');
@@ -119,7 +119,7 @@ function App() {
       const upj = await up.json();
       const filename = upj.filename;
 
-      let url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}`;
+      let url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&classifier_source=${encodeURIComponent(vlmClassifierSource)}`;
       if (enableMediapipe) url += '&enable_mediapipe=true';
       if (enableYolo) url += '&enable_yolo=true';
       // include classifier mode and optional prompt so server can use same label mode as live view
@@ -562,8 +562,13 @@ function App() {
               </div>
 
             <label style={{ display: 'block', marginTop: 8 }}>
-              <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
-              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
+              <div style={{ marginBottom: 6 }}>Classifier source:</div>
+              <select value={vlmClassifierSource} onChange={(e) => setVlmClassifierSource(e.target.value)}>
+                <option value="llm">LLM (use text LLM)</option>
+                <option value="vlm">VLM (interpret VLM output as label)</option>
+                <option value="bow">Bag of words (keyword matching)</option>
+              </select>
+              <small style={{ color: '#666', marginLeft: 8, display: 'block', marginTop: 6 }}>Choose whether labels come from the VLM, a local LLM, or bag-of-words heuristics.</small>
             </label>
             <br/>
 
@@ -582,7 +587,7 @@ function App() {
                   <LiveView
                     model={vlmModel}
                     prompt={vlmPrompt}
-                    useLLM={vlmUseLLM}
+                    classifierSource={vlmClassifierSource}
                     classifierMode={vlmClassifierMode}
                     classifierPrompt={vlmClassifierPrompt}
                     selectedSubtask={''}

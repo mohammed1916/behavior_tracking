@@ -145,7 +145,7 @@ os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 # Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
 
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
@@ -187,6 +187,10 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             saved_basename = None
             saved_path = None
             record_enabled = bool(save_video)
+
+            # Normalize classifier source selection (vlm | llm | bow)
+            classifier_source_norm = (classifier_source or 'llm').lower()
+            effective_use_llm = (classifier_source_norm == 'llm')
 
             while app.state.webcam_event.is_set():
                 ret, frame = cap.read()
@@ -305,25 +309,31 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
                         label = None
                         cls_text = None
-                        # If frontend requested a VLM 'label' mode, prefer interpreting
+                        # If frontend selected VLM as classifier source, prefer interpreting
                         # the VLM output as a label directly when it matches known labels.
-                        if classifier_mode == 'label':
+                        if classifier_source_norm == 'vlm':
                             try:
                                 candidate = (caption or '').strip().lower()
                                 known_multi = rules_mod.LABEL_SETS.get('multi', [])
                                 if candidate in known_multi:
                                     label = candidate
                                     cls_text = candidate
+                                else:
+                                    # Fallback to bag-of-words (no LLM) if VLM output isn't a known label
+                                    label, cls_text = rules_mod.determine_label(
+                                        caption,
+                                        use_llm=False,
+                                        prompt=prompt,
+                                        classify_prompt_template=classify_prompt_template,
+                                    )
                             except Exception:
                                 label = None
-
-                        # Fallback to LLM-based classification / keyword rules
-                        if label is None:
-                            # Map frontend mode -> rules output_mode: allow using 'multi' for VLM label intent
+                        else:
+                            # For 'llm' and 'bow' sources drive behavior via effective_use_llm
                             output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
                             label, cls_text = rules_mod.determine_label(
                                 caption,
-                                use_llm=use_llm,
+                                use_llm=effective_use_llm,
                                 text_llm=llm_mod.get_local_text_llm(),
                                 prompt=prompt,
                                 classify_prompt_template=classify_prompt_template,
@@ -570,7 +580,7 @@ def make_alert_json(message: str, status_code: int = 400):
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -582,6 +592,10 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
     def gen():
         try:
             yield _sse_event({"stage": "started", "message": "processing started"})
+
+            # Normalize classifier source selection (vlm | llm | bow)
+            classifier_source_norm = (classifier_source or 'llm').lower()
+            effective_use_llm = (classifier_source_norm == 'llm')
 
             # Basic video info
             cap = cv2.VideoCapture(file_path)
@@ -683,24 +697,32 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
                     label = None
                     cls_text = None
-                    # If frontend requested a VLM 'label' mode, prefer interpreting
+                    # If frontend selected VLM as classifier source, prefer interpreting
                     # the VLM output as a label directly when it matches known labels.
-                    if classifier_mode == 'label':
+                    if classifier_source_norm == 'vlm':
                         try:
                             candidate = (caption or '').strip().lower()
                             known_multi = rules_mod.LABEL_SETS.get('multi', [])
                             if candidate in known_multi:
                                 label = candidate
                                 cls_text = candidate
+                            else:
+                                # Fallback to bag-of-words (no LLM) if VLM output isn't a known label
+                                label, cls_text = rules_mod.determine_label(
+                                    caption,
+                                    use_llm=False,
+                                    prompt=prompt,
+                                    classify_prompt_template=classify_prompt_template,
+                                    rule_set=rule_set,
+                                )
                         except Exception:
                             label = None
-
-                    # Fallback to LLM-based classification / keyword rules
-                    if label is None:
+                    else:
+                        # For 'llm' and 'bow' sources drive behavior via effective_use_llm
                         output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
                         label, cls_text = rules_mod.determine_label(
                             caption,
-                            use_llm=use_llm,
+                            use_llm=effective_use_llm,
                             text_llm=llm_mod.get_local_text_llm(),
                             prompt=prompt,
                             classify_prompt_template=classify_prompt_template,

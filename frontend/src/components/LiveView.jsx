@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export default function LiveView({ model: propModel = '', prompt: propPrompt = '', useLLM: propUseLLM = false, selectedSubtask = '', subtaskId = '', compareTimings = false, jpegQuality = 80, maxWidth = '', saveRecording = false, enableMediapipe = false, enableYolo = false, classifier: propClassifier = null, classifierMode: propClassifierMode = null, classifierPrompt: propClassifierPrompt = null }) {
+export default function LiveView({ model: propModel = '', prompt: propPrompt = '', classifierSource: propClassifierSource = 'llm', selectedSubtask = '', subtaskId = '', compareTimings = false, jpegQuality = 80, maxWidth = '', saveRecording = false, enableMediapipe = false, enableYolo = false, classifier: propClassifier = null, classifierMode: propClassifierMode = null, classifierPrompt: propClassifierPrompt = null }) {
   const [running, setRunning] = useState(false);
   const imgRef = useRef(null);
   const eventSourceRef = useRef(null);
 
   // UI options (model/useLLM come from props)
   const [model, setModel] = useState(propModel || '');
-  const [useLLM, setUseLLM] = useState(!!propUseLLM);
+  const [classifierSource, setClassifierSource] = useState(propClassifierSource || 'llm');
   const [savedVideoUrl, setSavedVideoUrl] = useState('');
   const [classifiers, setClassifiers] = useState({});
 
@@ -20,7 +20,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
   useEffect(() => {
     // Keep state in sync if parent props change
     setModel(propModel || '');
-    setUseLLM(!!propUseLLM);
+    setClassifierSource(propClassifierSource || 'llm');
     // LiveView is now fully controlled: parent passes `classifierMode` and `classifierPrompt`.
       // fetch available label modes
     (async () => {
@@ -39,13 +39,13 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
         eventSourceRef.current.close();
       }
     };
-  }, [propModel, propPrompt, propUseLLM, selectedSubtask]);
+  }, [propModel, propPrompt, propClassifierSource, selectedSubtask]);
 
   const buildUrl = () => {
     const base = `${window.location.protocol}//${window.location.hostname}:8001`;
     const params = new URLSearchParams();
     if (model) params.set('model', model);
-    if (useLLM) params.set('use_llm', 'true');
+    params.set('classifier_source', classifierSource || 'llm');
     // Use the parent-provided prompt (no local duplicate)
     if (propPrompt) params.set('prompt', propPrompt);
     if (subtaskId) params.set('subtask_id', subtaskId);
@@ -148,7 +148,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
           <div style={{ color: 'var(--muted)' }}><strong>Model:</strong> {model || '(default)'}</div>
-          <div style={{ color: 'var(--muted)' }}><strong>Use LLM:</strong> {useLLM ? 'Yes' : 'No'}</div>
+          <div style={{ color: 'var(--muted)' }}><strong>Classifier:</strong> {classifierSource || 'llm'}</div>
           <div style={{ marginLeft: 12 }}>
             <div style={{ color: 'var(--muted)' }}><strong>Mode:</strong> {propClassifierMode || 'binary'}</div>
           </div>
