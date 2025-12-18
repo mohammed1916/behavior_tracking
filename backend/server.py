@@ -40,7 +40,6 @@ import backend.db as db_mod
 
 get_local_captioner = captioner_mod.get_local_captioner
 get_captioner_for_model = captioner_mod.get_captioner_for_model
-_normalize_caption_output = captioner_mod._normalize_caption_output
 _captioner_cache = getattr(captioner_mod, '_captioner_cache', {})
 _captioner_status = getattr(captioner_mod, '_captioner_status', {})
 
@@ -102,14 +101,14 @@ app.add_middleware(
 )
 
 # configure logging so INFO/DEBUG messages are shown
-logging.basicConfig(level=print, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # write logs to a file so the frontend can tail recent activity
 LOG_FILE = "server.log"
 logger = logging.getLogger()
 if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', '') == os.path.abspath(LOG_FILE) for h in logger.handlers):
     fh = logging.FileHandler(LOG_FILE)
-    fh.setLevel(print)
+    fh.setLevel(logging.INFO)
     fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
     logger.addHandler(fh)
 
@@ -456,9 +455,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             try:
                                 # Use centralized label normalization from rules.py
                                 # Validate against the label set selected by the user (binary or multi)
-                                normalized = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
-                                label = normalized
-                                cls_text = normalized
+                                label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
+                                # Preserve the raw caption as auxiliary text for UI context
+                                cls_text = caption
                             except Exception:
                                 label = None
                         else:
@@ -896,9 +895,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         try:
                             # Use centralized label normalization from rules.py
                             # Validate against the label set selected by the user (binary or multi)
-                            normalized = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
-                            label = normalized
-                            cls_text = normalized
+                            label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
+                            # Preserve the raw caption as auxiliary text for UI context
+                            cls_text = caption
                         except Exception:
                             label = None
                     else:

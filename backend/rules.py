@@ -43,20 +43,21 @@ LABEL_SETS: Dict[str, List[str]] = {
 
 
 def normalize_label_text(text: str, output_mode: str = 'multi') -> str:
-    """Centralized label normalization used by VLM adapters in VLM-source mode.
+    """Centralized label normalization: extract and normalize text into activity labels.
     
-    Converts raw VLM output text to normalized activity labels.
-    Validates against the appropriate label set for the selected output_mode.
+    Used by VLM-source mode (direct caption normalization) and 
+    LLM/BOW modes (normalize final LLM/keyword decision).
+    Returns the best-matching label from LABEL_SETS[output_mode].
     
     Args:
-        text: Raw VLM output text to normalize
+        text: Raw text (VLM caption or LLM output token) to normalize
         output_mode: 'multi' or 'binary' - determines which LABEL_SETS to validate against
     
     Returns:
         Normalized label string from the appropriate LABEL_SETS[output_mode]
     """
     if not text:
-        return 'unknown'
+        return 'unknown' if output_mode == 'multi' else 'idle'
     
     txt = text.lower()
     expected_labels = LABEL_SETS.get(output_mode, LABEL_SETS['binary'])
@@ -69,20 +70,14 @@ def normalize_label_text(text: str, output_mode: str = 'multi') -> str:
             return 'assembling_drone'
         if 'idle' in txt:
             return 'idle'
-        # Default for multi-label when no pattern matches
         return 'unknown'
     
     # Binary mode: work or idle
-    elif output_mode == 'binary':
-        # Check for work indicators
+    else:  # 'binary'
         work_kws = ['make', 'assemble', 'work', 'use', 'cut', 'screw', 'weld', 'attach', 'phone', 'drone']
         if any(kw in txt for kw in work_kws):
             return 'work'
-        # Default to idle
         return 'idle'
-    
-    # Fallback: return 'unknown' or 'idle' depending on mode
-    return expected_labels[0] if expected_labels else 'unknown'
 
 
 def _extract_text_from_llm_output(cls_out: Any) -> str:
@@ -152,18 +147,8 @@ def determine_label(
             tokens = [t for t in cleaned.split() if t]
             if tokens:
                 last = tokens[-1].lower()
-                expected = LABEL_SETS.get(output_mode, LABEL_SETS['binary'])
-                if last in expected:
-                    label = last
-                else:
-                    if any(sub in last for sub in ('assemble', 'drone')):
-                        label = 'assembling_drone'
-                    elif 'phone' in last:
-                        label = 'using_phone'
-                    elif 'idle' in last:
-                        label = 'idle'
-                    else:
-                        label = 'unknown'
+                # Use centralized normalization
+                label = normalize_label_text(last, output_mode)
     
     if not use_llm or cls_text is None:
         lw = caption.lower() if isinstance(caption, str) else ''
