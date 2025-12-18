@@ -113,15 +113,6 @@ def determine_label(
                 if last in expected:
                     label = last
                 else:
-                    # # If caller requested binary output but model returned a multi label,
-                    # # deterministically map multi->binary: non-idle -> work
-                    # if output_mode == 'binary':
-                    #     if any(sub in last for sub in ('assemble', 'drone', 'screw', 'install', 'repair', 'work')):
-                    #         label = 'work'
-                    #     elif 'phone' in last:
-                    #         label = 'idle'
-                    # else:
-                    # preserve unknown / try to coerce to a known multi label
                     if any(sub in last for sub in ('assemble', 'drone')):
                         label = 'assembling_drone'
                     elif 'phone' in last:
@@ -130,11 +121,6 @@ def determine_label(
                         label = 'idle'
                     else:
                         label = 'unknown'
-        # except Exception:
-        #     logger.exception('LLM classification failed')
-
-    # # Keyword fallback when still 'idle'
-    # if label == 'idle':
     
     if not use_llm or cls_text is None:
         lw = caption.lower() if isinstance(caption, str) else ''
