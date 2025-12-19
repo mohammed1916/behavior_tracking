@@ -63,13 +63,20 @@ def test_vlm_local_stream_no_llm(tmp_path, monkeypatch):
     """Test VLM-only mode (no LLM): no segment events should be emitted."""
     client = TestClient(server.app)
 
-    # locate sample video
-    here = os.path.dirname(os.path.dirname(__file__))
-    sample = os.path.abspath(os.path.join(here, '..', 'data', 'assembly_idle.mp4'))
-    if not os.path.exists(sample):
-        sample = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'assembly_idle.mp4'))
-    if not os.path.exists(sample):
-        pytest.skip('sample video data/assembly_idle.mp4 not found')
+    # locate sample video - test file is 3 levels deep in backend/tests/streaming/
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(test_dir)))
+    candidates = [
+        'data/assembly_drone/wire.mp4',
+    ]
+    sample = None
+    for cand in candidates:
+        full_path = os.path.join(repo_root, cand)
+        if os.path.exists(full_path):
+            sample = full_path
+            break
+    if not sample:
+        pytest.skip(f'Test video not found. Repo root: {repo_root}')
 
     monkeypatch.setattr(server, 'get_captioner_for_model', lambda model=None, device_override=None: DummyCaptioner(device='cpu'))
 
@@ -104,12 +111,21 @@ def test_vlm_to_llm_aggregation_e2e(tmp_path, monkeypatch):
     """Test new architecture: VLM → time-windowed aggregation → LLM classification."""
     client = TestClient(server.app)
 
-    here = os.path.dirname(os.path.dirname(__file__))
-    sample = os.path.abspath(os.path.join(here, '..', 'data', 'assembly_idle.mp4'))
-    if not os.path.exists(sample):
-        sample = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'assembly_idle.mp4'))
-    if not os.path.exists(sample):
-        pytest.skip('sample video data/assembly_idle.mp4 not found')
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(test_dir)))
+    candidates = [
+        'data/assembly_idle.mp4',
+        'data/assembly_drone/assembly_drone_240_144.mp4',
+        'data/assembly_drone/wire.mp4',
+    ]
+    sample = None
+    for cand in candidates:
+        full_path = os.path.join(repo_root, cand)
+        if os.path.exists(full_path):
+            sample = full_path
+            break
+    if not sample:
+        pytest.skip(f'Test video not found. Repo root: {repo_root}')
 
     monkeypatch.setattr(server, 'get_captioner_for_model', lambda model=None, device_override=None: DummyCaptioner(device='cpu'))
 
