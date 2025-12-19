@@ -57,7 +57,9 @@ def collect_sse_events(response_lines):
             buf += line + '\n'
     return events
 
-
+"""
+python -m pytest backend/tests/streaming/test_e2e_vlm_stream.py::test_vlm_to_llm_aggregation_e2e -xvs 2>&1 | tail -150
+"""
 @pytest.mark.timeout(60)
 def test_vlm_local_stream_no_llm(tmp_path, monkeypatch):
     """Test VLM-only mode (no LLM): no segment events should be emitted."""
