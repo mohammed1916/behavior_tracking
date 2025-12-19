@@ -46,6 +46,9 @@ from backend.stream_utils import (
     build_classify_prompt_template,
     per_sample_label_for_source,
     merge_and_filter_ranges,
+    compute_sample_interval,
+    encode_frame_for_sse_image,
+    probe_saved_video_info,
 )
 
 # Timing/segmenting defaults (tunable)
@@ -118,15 +121,8 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             cumulative_work_frames = 0
             start_time = time.time()
 
-            # Determine sampling interval for live inference (seconds).
-            # processing_mode supports 'current_frame' (default) and 'every_2s' (force 2s sampling)
-            if processing_mode == 'every_2s':
-                sample_interval = 2.0
-            else:
-                try:
-                    sample_interval = float(sample_interval_sec) if sample_interval_sec is not None and float(sample_interval_sec) > 0 else 2.0
-                except Exception:
-                    sample_interval = 2.0
+            # Determine sampling interval for live inference (seconds)
+            sample_interval = compute_sample_interval(processing_mode, sample_interval_sec)
             
             writer = None
             writer_type = None
@@ -181,35 +177,24 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 frame = cv2.flip(frame, 1)
                 # If recording requested, lazily create VideoWriter once we have a frame
                 if record_enabled and writer is None:
-                    try:
-                        # Ensure processed dir exists
+                    # Local helper to start recording and emit SSE debug
+                    def _start_recording(initial_frame, cap_obj):
+                        nonlocal writer, writer_type, ffmpeg_proc, saved_basename, saved_path
                         os.makedirs(PROCESSED_DIR, exist_ok=True)
                         uniq = str(uuid.uuid4())
                         saved_basename = f"live_{uniq}.mp4"
                         saved_path = os.path.join(PROCESSED_DIR, saved_basename)
-                        # Determine fps (fallback to 30)
                         try:
-                            cap_fps = float(cap.get(cv2.CAP_PROP_FPS) or 0) or 30.0
+                            cap_fps = float(cap_obj.get(cv2.CAP_PROP_FPS) or 0) or 30.0
                         except Exception:
                             cap_fps = 30.0
-                        h, w = frame.shape[:2]
-                        # Prefer ffmpeg encoding (H.264) when available for browser compatibility
+                        h, w = initial_frame.shape[:2]
                         ffmpeg_path = shutil.which('ffmpeg')
                         if ffmpeg_path:
-                            # Build ffmpeg command to read raw BGR frames from stdin and encode to h264 mp4
                             cmd = [
-                                ffmpeg_path,
-                                '-y',
-                                '-f', 'rawvideo',
-                                '-pix_fmt', 'bgr24',
-                                '-s', f'{w}x{h}',
-                                '-r', str(int(cap_fps)),
-                                '-i', '-',
-                                '-c:v', 'libx264',
-                                '-preset', 'veryfast',
-                                '-pix_fmt', 'yuv420p',
-                                '-crf', '23',
-                                saved_path
+                                ffmpeg_path, '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24',
+                                '-s', f'{w}x{h}', '-r', str(int(cap_fps)), '-i', '-',
+                                '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '23', saved_path
                             ]
                             try:
                                 ffmpeg_proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
@@ -222,19 +207,15 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 ffmpeg_proc = None
                                 writer = None
                                 writer_type = None
-
-                        # If ffmpeg unavailable or failed, fall back to OpenCV VideoWriter
                         if writer is None:
                             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
                             writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
                             writer_type = 'cv2'
-                            # verify writer opened; if not, try AVI/XVID fallback
                             if not getattr(writer, 'isOpened', lambda: False)():
                                 try:
                                     writer.release()
                                 except Exception as _e_rel:
                                     logging.debug('VideoWriter release failed before fallback: %s', _e_rel)
-                                # fallback to AVI/XVID
                                 saved_basename = f"live_{uniq}.avi"
                                 saved_path = os.path.join(PROCESSED_DIR, saved_basename)
                                 fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -244,13 +225,14 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
                             print('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
                             yield _sse_event({"stage": "debug", "message": f"Recording via OpenCV VideoWriter to {saved_basename}"})
+
+                    try:
+                        yield from _start_recording(frame, cap)
                     except Exception as e:
                         logging.exception('Failed to create VideoWriter: %s', e)
-                        # notify client and disable recording for this session
                         yield _sse_event({"stage": "alert", "message": f"Failed to create recorder: {e}"})
                         writer = None
                         record_enabled = False
-                        # remove any partial file
                         try:
                             if saved_path and os.path.exists(saved_path):
                                 os.remove(saved_path)
@@ -334,24 +316,8 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             payload['subtask_overrun'] = subtask_overrun
                         # Encode current frame as JPEG and include as base64 to allow clients to render a live image.
                         try:
-                            enc_frame = frame
-                            # Optionally downscale to max_width to reduce bandwidth
-                            if max_width is not None:
-                                try:
-                                    h, w = enc_frame.shape[:2]
-                                    if w > int(max_width):
-                                        new_w = int(max_width)
-                                        new_h = int(h * (new_w / w))
-                                        enc_frame = cv2.resize(enc_frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
-                                except Exception as e_r:
-                                    logging.debug('Failed to resize frame for SSE image: %s', e_r)
-                            # Respect JPEG quality parameter
-                            try:
-                                ret_jpg, buf = cv2.imencode('.jpg', enc_frame, [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)])
-                            except Exception:
-                                ret_jpg, buf = cv2.imencode('.jpg', enc_frame)
-                            if ret_jpg and buf is not None:
-                                b64 = base64.b64encode(buf.tobytes()).decode('ascii')
+                            b64 = encode_frame_for_sse_image(frame, jpeg_quality=jpeg_quality, max_width=max_width)
+                            if b64:
                                 payload['image'] = b64
                         except Exception as e:
                             logging.debug('Failed to encode frame for SSE image: %s', e)
@@ -444,19 +410,10 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 # Provide accurate video info if recording was saved
                 vid_info = {'fps': 30.0, 'frame_count': frame_counter, 'width': None, 'height': None, 'duration': elapsed_time}
                 if saved_path and os.path.exists(saved_path):
-                    try:
-                        # probe saved file via cv2 to get width/height/fps
-                        vcap = cv2.VideoCapture(saved_path)
-                        vid_fps = float(vcap.get(cv2.CAP_PROP_FPS) or 0) or vid_info['fps']
-                        vid_w = int(vcap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0) or None
-                        vid_h = int(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0) or None
-                        vcap.release()
-                        vid_info['fps'] = vid_fps
-                        vid_info['width'] = vid_w
-                        vid_info['height'] = vid_h
-                    except Exception as _e_probe:
-                        logging.debug('Failed to probe saved recording for metadata: %s', _e_probe)
-                        yield _sse_event({"stage": "debug", "message": f"Video probe failed; using defaults: {_e_probe}"})
+                    vid_info, err = probe_saved_video_info(saved_path, vid_info['fps'], frame_counter, elapsed_time)
+                    if err:
+                        logging.debug('Failed to probe saved recording for metadata: %s', err)
+                        yield _sse_event({"stage": "debug", "message": f"Video probe failed; using defaults: {err}"})
                 aid = str(uuid.uuid4())
                 filename_for_db = saved_basename if saved_basename else f"live_webcam_{aid}.mp4"
                 video_url = f"/backend/download/{filename_for_db}" if saved_basename else None

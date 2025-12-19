@@ -1,5 +1,6 @@
 import base64
 from typing import Optional, List, Dict, Any, Callable
+import cv2
 import inspect
 
 import backend.llm as llm_mod
@@ -160,3 +161,59 @@ def merge_and_filter_ranges(ranges: List[Dict[str, Any]], min_segment_sec: float
     if dur >= min_segment_sec:
         merged.append(cur.copy())
     return merged
+
+
+def compute_sample_interval(processing_mode: str, sample_interval_sec: Optional[float]) -> float:
+    """Compute sampling interval in seconds given processing mode and optional param."""
+    if (processing_mode or '').strip().lower() == 'every_2s':
+        return 2.0
+    try:
+        if sample_interval_sec is not None:
+            v = float(sample_interval_sec)
+            if v > 0:
+                return v
+    except Exception:
+        pass
+    return 2.0
+
+
+def encode_frame_for_sse_image(frame, jpeg_quality: int = 80, max_width: Optional[int] = None) -> Optional[str]:
+    """Resize (optional) and JPEG-encode a BGR frame, returning base64 string or None."""
+    try:
+        enc_frame = frame
+        if max_width is not None:
+            try:
+                h, w = enc_frame.shape[:2]
+                if w > int(max_width):
+                    new_w = int(max_width)
+                    new_h = int(h * (new_w / w))
+                    enc_frame = cv2.resize(enc_frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            except Exception:
+                pass
+        try:
+            ret_jpg, buf = cv2.imencode('.jpg', enc_frame, [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)])
+        except Exception:
+            ret_jpg, buf = cv2.imencode('.jpg', enc_frame)
+        if ret_jpg and buf is not None:
+            return base64.b64encode(buf.tobytes()).decode('ascii')
+    except Exception:
+        return None
+    return None
+
+
+def probe_saved_video_info(saved_path: str, default_fps: float, frame_count: int, duration: float) -> (Dict[str, Any], Optional[str]):
+    """Probe saved video file for metadata via OpenCV. Returns (vid_info, error_msg)."""
+    vid_info = {'fps': default_fps, 'frame_count': frame_count, 'width': None, 'height': None, 'duration': duration}
+    err = None
+    try:
+        vcap = cv2.VideoCapture(saved_path)
+        vid_fps = float(vcap.get(cv2.CAP_PROP_FPS) or 0) or default_fps
+        vid_w = int(vcap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0) or None
+        vid_h = int(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0) or None
+        vcap.release()
+        vid_info['fps'] = vid_fps
+        vid_info['width'] = vid_w
+        vid_info['height'] = vid_h
+    except Exception as e:
+        err = str(e)
+    return vid_info, err
