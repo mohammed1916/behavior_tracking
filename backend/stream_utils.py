@@ -13,37 +13,82 @@ def normalize_caption_output(captioner, output: Any) -> str:
     - "plain string"
     - {"caption": "..."}
     """
+    import json
+    
     if not output:
         return ""
 
+    # Handle list format (common from transformers pipelines)
     if isinstance(output, list) and output:
         first = output[0]
         if isinstance(first, dict):
-            return first.get('generated_text') or first.get('caption') or str(first)
-        return str(first)
+            text = first.get('generated_text') or first.get('caption') or ""
+            return text.strip() if text else ""
+        return str(first).strip()
 
+    # Handle dict format
     if isinstance(output, dict):
-        return output.get('generated_text') or output.get('caption') or str(output)
+        text = output.get('generated_text') or output.get('caption') or ""
+        return text.strip() if text else ""
 
-    return str(output).strip()
+    # Handle string format (including stringified dicts)
+    output_str = str(output).strip()
+    
+    # Try to parse if it looks like a stringified dict
+    if output_str.startswith('{') and output_str.endswith('}'):
+        try:
+            parsed = json.loads(output_str)
+            if isinstance(parsed, dict):
+                text = parsed.get('generated_text') or parsed.get('caption') or ""
+                return text.strip() if text else ""
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    return output_str
 
 
 def call_captioner(captioner, img, prompt: Optional[str]):
-    """Call captioner with prompt if supported, otherwise fall back to bare call."""
+    """Call captioner with prompt if supported, otherwise fall back to bare call.
+    
+    Args:
+        captioner: The model instance to call
+        img: PIL Image or cv2 BGR image
+        prompt: Optional prompt/instruction for the model
+        
+    Returns:
+        Model output (typically [{'generated_text': '...'}])
+    """
+    if prompt is None or prompt.strip() == "":
+        # Use default behavior - let the captioner pick its prompt
+        prompt = None
+    
     try:
-        return captioner(img, prompt=prompt)
+        return captioner(img, prompt=prompt) if prompt else captioner(img)
     except TypeError:
+        # Model doesn't support prompt parameter
         return captioner(img)
 
 
 def build_vlm_prompt_for_source(classifier_source_norm: str, classifier_mode: str, classifier_prompt: Optional[str]) -> Optional[str]:
-    """Return the prompt sent to the VLM for the given classifier source."""
+    """Return the prompt sent to the VLM for the given classifier source.
+    
+    Returns a non-empty prompt for image captioning/description, or None to use model defaults.
+    """
     if classifier_source_norm == 'vlm':
         label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
-        return classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+        prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+        return prompt if prompt and prompt.strip() else None
+    
     if classifier_source_norm == 'bow':
-        return classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
-    return classifier_prompt or "Describe the main person's visible action."
+        prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+        return prompt if prompt and prompt.strip() else None
+    
+    # 'llm' mode: ask for plain description; let model use its base template
+    if classifier_prompt:
+        return classifier_prompt if classifier_prompt.strip() else None
+    
+    # Return a simple description task prompt
+    return llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\nDescribe the visible activities and actions of the main person in detail."
 
 
 def build_classify_prompt_template(classifier_source_norm: str, classifier_mode: str, classifier_prompt: Optional[str]) -> Optional[str]:
