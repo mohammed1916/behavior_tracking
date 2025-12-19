@@ -36,6 +36,7 @@ app.state.webcam_event = threading.Event()
 import backend.captioner as captioner_mod
 import backend.llm as llm_mod
 import backend.db as db_mod
+import backend.evidence as evidence_mod
 
 
 get_local_captioner = captioner_mod.get_local_captioner
@@ -194,132 +195,41 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             saved_path = None
             record_enabled = bool(save_video)
 
-            # Temporal aggregation config (event-driven windows with safety cap)
-            agg_min_window = 1.5  # seconds (do not emit windows shorter than this)
-            agg_max_window = 4.0  # seconds (force emit after this many seconds)
-            agg_debounce_count = 3  # require this many samples of a new semantic state
-
-            # Aggregation state
-            seg_start_time = None
-            seg_samples = []
-            seg_signature = None
-            candidate_signature = None
-            candidate_count = 0
-
-            def _tokens_for_caption(caption: str):
-                if not caption:
-                    return set()
-                s = re.sub(r"[^\w\s]", " ", caption.lower())
-                toks = [t for t in s.split() if len(t) > 2]
-                stop = {'the','and','with','using','person','currently','a','an','is','are','in','on','of','their','to'}
-                return set([t for t in toks if t not in stop])
-
-            def _jaccard(a:set, b:set):
-                if not a and not b:
-                    return 1.0
-                if not a or not b:
-                    return 0.0
-                inter = len(a & b)
-                uni = len(a | b)
-                return inter/uni if uni>0 else 0.0
-
-            def _finalize_segment(end_time: float):
-                nonlocal seg_start_time, seg_samples, seg_signature
-                if not seg_start_time or not seg_samples:
-                    return None
-                start = seg_start_time
-                end = end_time
-                # enforce minimum window duration
-                if (end - start) < agg_min_window:
-                    return None
-                # pick dominant caption
-                counts = {}
-                for s in seg_samples:
-                    c = (s.get('caption') or '').strip()
-                    counts[c] = counts.get(c, 0) + 1
-                dominant = max(counts.items(), key=lambda x: x[1])[0] if counts else ''
-                # build aggregated caption text for LLM: list unique captions with timestamps
-                timeline_lines = []
-                for s in seg_samples:
-                    timeline_lines.append(f"<t={s.get('time_sec',0):.2f}> {s.get('caption') or ''}")
-                aggregated_text = "\n".join(timeline_lines)
-                out = {
-                    'stage': 'segment',
-                    'start_time': start,
-                    'end_time': end,
-                    'duration': end - start,
-                    'dominant_caption': dominant,
-                    'captions': [s.get('caption') for s in seg_samples],
-                    'timeline': aggregated_text,
-                }
-                # reset segment
-                seg_start_time = None
-                seg_samples = []
-                seg_signature = None
-                return out
-
             # Normalize classifier source selection (vlm | llm | bow)
             classifier_source_norm = (classifier_source or 'llm').lower()
             effective_use_llm = (classifier_source_norm == 'llm')
 
-            # Temporal aggregation config (event-driven windows with safety cap)
-            agg_min_window = 1.5
-            agg_max_window = 4.0
-            agg_debounce_count = 3
+            # Time-windowed aggregation state and config (no semantic similarity)
+            current_window = None
+            last_sample_time = None
+            max_window_sec = 4.0
+            silence_timeout_sec = 1.5
+            min_samples = 2
 
-            # Aggregation state
-            seg_start_time = None
-            seg_samples = []
-            seg_signature = None
-            candidate_signature = None
-            candidate_count = 0
-
-            def _tokens_for_caption(caption: str):
-                if not caption:
-                    return set()
-                s = re.sub(r"[^\w\s]", " ", caption.lower())
-                toks = [t for t in s.split() if len(t) > 2]
-                stop = {'the','and','with','using','person','currently','a','an','is','are','in','on','of','their','to'}
-                return set([t for t in toks if t not in stop])
-
-            def _jaccard(a:set, b:set):
-                if not a and not b:
-                    return 1.0
-                if not a or not b:
-                    return 0.0
-                inter = len(a & b)
-                uni = len(a | b)
-                return inter/uni if uni>0 else 0.0
-
-            def _finalize_segment(end_time: float):
-                nonlocal seg_start_time, seg_samples, seg_signature
-                if not seg_start_time or not seg_samples:
+            def _close_window_if_needed(elapsed_time: float):
+                nonlocal current_window, last_sample_time
+                if current_window is None:
                     return None
-                start = seg_start_time
-                end = end_time
-                if (end - start) < agg_min_window:
+                gap = elapsed_time - last_sample_time if last_sample_time is not None else 0
+                duration = elapsed_time - current_window.start_time
+                if gap > silence_timeout_sec or duration >= max_window_sec:
+                    window = current_window
+                    current_window = None
+                    last_sample_time = None
+                    return window
+                return None
+
+            def _finalize_window(window):
+                if window is None or len(window.samples) < min_samples:
                     return None
-                counts = {}
-                for s in seg_samples:
-                    c = (s.get('caption') or '').strip()
-                    counts[c] = counts.get(c, 0) + 1
-                dominant = max(counts.items(), key=lambda x: x[1])[0] if counts else ''
-                timeline_lines = []
-                for s in seg_samples:
-                    timeline_lines.append(f"<t={s.get('time_sec',0):.2f}> {s.get('caption') or ''}")
-                aggregated_text = "\n".join(timeline_lines)
                 out = {
                     'stage': 'segment',
-                    'start_time': start,
-                    'end_time': end,
-                    'duration': end - start,
-                    'dominant_caption': dominant,
-                    'captions': [s.get('caption') for s in seg_samples],
-                    'timeline': aggregated_text,
+                    'start_time': window.start_time,
+                    'end_time': window.end_time,
+                    'duration': window.end_time - window.start_time,
+                    'captions': [s['caption'] for s in window.samples],
+                    'timeline': window.to_timeline(),
                 }
-                seg_start_time = None
-                seg_samples = []
-                seg_signature = None
                 return out
 
             while app.state.webcam_event.is_set():
@@ -538,53 +448,47 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         else:
                             collected_idle.append(frame_counter)
 
-                        # --- temporal aggregation (event-driven windows) ---
+                        # --- time-windowed aggregation (no semantic similarity) ---
                         if classifier_source_norm == 'llm':
-                            if seg_start_time is None:
-                                seg_start_time = elapsed_time
-                                seg_samples = [sample]
-                                seg_signature = _tokens_for_caption(caption)
-                                candidate_signature = None
-                                candidate_count = 0
-                            else:
-                                toks = _tokens_for_caption(caption)
-                                same_score = _jaccard(seg_signature or set(), toks)
-                                if same_score >= 0.6:
-                                    seg_samples.append(sample)
-                                    seg_signature = (seg_signature or set()) | toks
-                                    candidate_signature = None
-                                    candidate_count = 0
-                                else:
-                                    if candidate_signature is None or _jaccard(candidate_signature, toks) < 0.9:
-                                        candidate_signature = toks
-                                        candidate_count = 1
-                                    else:
-                                        candidate_count += 1
-                                    # finalize if candidate persisted or max window exceeded
-                                    if candidate_count >= agg_debounce_count or (elapsed_time - seg_start_time >= agg_max_window):
-                                        seg_out = _finalize_segment(elapsed_time)
-                                        if seg_out is not None:
-                                            # if LLM-driven temporal classification requested, run on aggregated timeline
-                                            if llm_mod.get_local_text_llm() is not None:
-                                                try:
-                                                    cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
-                                                    rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_out['timeline'])
-                                                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
-                                                    seg_label, _ = rules_mod.determine_label(seg_out['timeline'], use_llm=True, text_llm=llm_mod.get_local_text_llm(), prompt=prompt, classify_prompt_template=cls_prompt, output_mode=classifier_mode)
-                                                    seg_out['label'] = seg_label
-                                                    try:
-                                                        seg_out['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
-                                                    except Exception:
-                                                        seg_out['llm_output'] = None
-                                                except Exception:
-                                                    pass
-                                            yield _sse_event(seg_out)
-                                        # start new segment
-                                        seg_start_time = elapsed_time
-                                        seg_samples = [sample]
-                                        seg_signature = toks
-                                        candidate_signature = None
-                                        candidate_count = 0
+                            # Add sample to current window or start new one
+                            if current_window is None:
+                                current_window = evidence_mod.EvidenceWindow(
+                                    start_time=elapsed_time,
+                                    end_time=elapsed_time
+                                )
+                            
+                            current_window.add_sample(elapsed_time, caption)
+                            last_sample_time = elapsed_time
+                            
+                            # Check if window should close (silence or max duration)
+                            closed_window = _close_window_if_needed(elapsed_time)
+                            if closed_window is not None:
+                                # Window closed: convert to segment and send to LLM
+                                seg_event = _finalize_window(closed_window)
+                                if seg_event is not None:
+                                    # LLM classifies the full timeline
+                                    cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                                    rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_event['timeline'])
+                                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
+                                    seg_label, _ = rules_mod.determine_label(
+                                        seg_event['timeline'],
+                                        use_llm=True,
+                                        text_llm=llm_mod.get_local_text_llm(),
+                                        prompt=prompt,
+                                        classify_prompt_template=cls_prompt,
+                                        output_mode=classifier_mode
+                                    )
+                                    seg_event['label'] = seg_label
+                                    seg_event['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                                    yield _sse_event(seg_event)
+                                
+                                # Start fresh window with current sample
+                                current_window = evidence_mod.EvidenceWindow(
+                                    start_time=elapsed_time,
+                                    end_time=elapsed_time
+                                )
+                                current_window.add_sample(elapsed_time, caption)
+                                last_sample_time = elapsed_time
                         
                         last_inference_time = time.time()
                     except Exception as e:
@@ -846,68 +750,37 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             collected_idle = []
             collected_work = []
             
-            # Temporal aggregation state (for LLM mode)
-            seg_start_time = None
-            seg_samples = []
-            seg_signature = None
-            candidate_signature = None
-            candidate_count = 0
-            
-            # Temporal aggregation config (event-driven windows with safety cap)
-            agg_min_window = 1.5  # seconds (do not emit windows shorter than this)
-            agg_max_window = 4.0  # seconds (force emit after this many seconds)
-            agg_debounce_count = 3  # require this many samples of a new semantic state
-            
-            def _tokens_for_caption(caption: str):
-                if not caption:
-                    return set()
-                s = re.sub(r"[^\w\s]", " ", caption.lower())
-                toks = [t for t in s.split() if len(t) > 2]
-                stop = {'the','and','with','using','person','currently','a','an','is','are','in','on','of','their','to'}
-                return set([t for t in toks if t not in stop])
+            # Time-windowed aggregation state and config (no semantic similarity)
+            current_window = None
+            last_sample_time = None
+            max_window_sec = 4.0
+            silence_timeout_sec = 1.5
+            min_samples = 2
 
-            def _jaccard(a:set, b:set):
-                if not a and not b:
-                    return 1.0
-                if not a or not b:
-                    return 0.0
-                inter = len(a & b)
-                uni = len(a | b)
-                return inter/uni if uni>0 else 0.0
+            def _close_window_if_needed(current_time: float):
+                nonlocal current_window, last_sample_time
+                if current_window is None:
+                    return None
+                gap = current_time - last_sample_time if last_sample_time is not None else 0
+                duration = current_time - current_window.start_time
+                if gap > silence_timeout_sec or duration >= max_window_sec:
+                    window = current_window
+                    current_window = None
+                    last_sample_time = None
+                    return window
+                return None
 
-            def _finalize_segment(end_time: float):
-                nonlocal seg_start_time, seg_samples, seg_signature
-                if not seg_start_time or not seg_samples:
+            def _finalize_window(window):
+                if window is None or len(window.samples) < min_samples:
                     return None
-                start = seg_start_time
-                end = end_time
-                # enforce minimum window duration
-                if (end - start) < agg_min_window:
-                    return None
-                # pick dominant caption
-                counts = {}
-                for s in seg_samples:
-                    c = (s.get('caption') or '').strip()
-                    counts[c] = counts.get(c, 0) + 1
-                dominant = max(counts.items(), key=lambda x: x[1])[0] if counts else ''
-                # build aggregated caption text for LLM: list unique captions with timestamps
-                timeline_lines = []
-                for s in seg_samples:
-                    timeline_lines.append(f"<t={s.get('time_sec',0):.2f}> {s.get('caption') or ''}")
-                aggregated_text = "\n".join(timeline_lines)
                 out = {
                     'stage': 'segment',
-                    'start_time': start,
-                    'end_time': end,
-                    'duration': end - start,
-                    'dominant_caption': dominant,
-                    'captions': [s.get('caption') for s in seg_samples],
-                    'timeline': aggregated_text,
+                    'start_time': window.start_time,
+                    'end_time': window.end_time,
+                    'duration': window.end_time - window.start_time,
+                    'captions': [s.get('caption') for s in window.samples],
+                    'timeline': window.to_timeline(),
                 }
-                # reset segment
-                seg_start_time = None
-                seg_samples = []
-                seg_signature = None
                 return out
             
             for fi in indices:
@@ -1030,50 +903,47 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     else:
                         collected_idle.append(fi)
 
-                    # temporal aggregation (LLM-only)
+                    # --- time-windowed aggregation (no semantic similarity) ---
                     if classifier_source_norm == 'llm':
-                        if seg_start_time is None:
-                            seg_start_time = time_sec
-                            seg_samples = [sample]
-                            seg_signature = _tokens_for_caption(caption)
-                            candidate_signature = None
-                            candidate_count = 0
-                        else:
-                            toks = _tokens_for_caption(caption)
-                            same_score = _jaccard(seg_signature or set(), toks)
-                            if same_score >= 0.6:
-                                seg_samples.append(sample)
-                                seg_signature = (seg_signature or set()) | toks
-                                candidate_signature = None
-                                candidate_count = 0
-                            else:
-                                if candidate_signature is None or _jaccard(candidate_signature, toks) < 0.9:
-                                    candidate_signature = toks
-                                    candidate_count = 1
-                                else:
-                                    candidate_count += 1
-                                if candidate_count >= agg_debounce_count or (time_sec - seg_start_time >= agg_max_window):
-                                    seg_out = _finalize_segment(time_sec)
-                                    if seg_out is not None:
-                                        if llm_mod.get_local_text_llm() is not None:
-                                            try:
-                                                cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
-                                                rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_out['timeline'])
-                                                llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
-                                                seg_label, _ = rules_mod.determine_label(seg_out['timeline'], use_llm=True, text_llm=llm_mod.get_local_text_llm(), prompt=prompt, classify_prompt_template=cls_prompt, output_mode=classifier_mode)
-                                                seg_out['label'] = seg_label
-                                                try:
-                                                    seg_out['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
-                                                except Exception:
-                                                    seg_out['llm_output'] = None
-                                            except Exception:
-                                                pass
-                                        yield _sse_event(seg_out)
-                                    seg_start_time = time_sec
-                                    seg_samples = [sample]
-                                    seg_signature = toks
-                                    candidate_signature = None
-                                    candidate_count = 0
+                        # Add sample to current window or start new one
+                        if current_window is None:
+                            current_window = evidence_mod.EvidenceWindow(
+                                start_time=time_sec,
+                                end_time=time_sec
+                            )
+                        
+                        current_window.add_sample(time_sec, caption)
+                        last_sample_time = time_sec
+                        
+                        # Check if window should close (silence or max duration)
+                        closed_window = _close_window_if_needed(time_sec)
+                        if closed_window is not None:
+                            # Window closed: convert to segment and send to LLM
+                            seg_event = _finalize_window(closed_window)
+                            if seg_event is not None:
+                                # LLM classifies the full timeline
+                                cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                                rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_event['timeline'])
+                                llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
+                                seg_label, _ = rules_mod.determine_label(
+                                    seg_event['timeline'],
+                                    use_llm=True,
+                                    text_llm=llm_mod.get_local_text_llm(),
+                                    prompt=prompt,
+                                    classify_prompt_template=cls_prompt,
+                                    output_mode=classifier_mode
+                                )
+                                seg_event['label'] = seg_label
+                                seg_event['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                                yield _sse_event(seg_event)
+                            
+                            # Start fresh window with current sample
+                            current_window = evidence_mod.EvidenceWindow(
+                                start_time=time_sec,
+                                end_time=time_sec
+                            )
+                            current_window.add_sample(time_sec, caption)
+                            last_sample_time = time_sec
 
                     yield _sse_event(payload)
                 except Exception as e:
