@@ -430,7 +430,7 @@ function App() {
                 {vlmAvailableModels.length > 0 ? (
                   vlmAvailableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)
                 ) : (
-                  <option value="">(no local models available)</option>
+                  <option value="">(no local models available, Please try clicking the Refresh models button)</option>
                 )}
               </select>
               <select value={vlmLoadDevice} onChange={(e) => setVlmLoadDevice(e.target.value)} style={{ marginLeft: 8 }} title="Device to load model on">
