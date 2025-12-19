@@ -11,6 +11,11 @@ import SegmentDisplay from './components/SegmentDisplay';
 
 function App() {
 
+  // Helper to detect if error is from server not responding
+  const isServerError = (err) => {
+    return err instanceof TypeError || (err.message && (err.message.includes('Failed to fetch') || err.message.includes('fetch') || err.message.includes('ERR_')));
+  };
+
   // VLM state
   const [vlmModel, setVlmModel] = useState('qwen_local');
   const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
@@ -118,7 +123,7 @@ function App() {
       const fd = new FormData();
       if (vlmVideo) fd.append('video', vlmVideo);
       const up = await fetch('http://localhost:8001/backend/upload_vlm', { method: 'POST', body: fd });
-      if (!up.ok) throw new Error('Upload failed');
+      if (!up.ok) throw new Error('Upload failed: ' + up.status);
       const upj = await up.json();
       const filename = upj.filename;
 
@@ -202,7 +207,9 @@ function App() {
       };
     } catch (err) {
       console.error('VLM request failed', err);
-      setVlmResult({ error: err.message || String(err) });
+      const isServerDown = err instanceof TypeError || (err.message && err.message.includes('Failed to fetch'));
+      const errorMsg = isServerDown ? 'Server not running or crashed' : (err.message || String(err));
+      setVlmResult({ error: errorMsg });
       setVlmLoading(false);
     }
   };
@@ -226,6 +233,7 @@ function App() {
       }
     } catch (e) {
       console.warn('Could not fetch local VLM models', e);
+      if (isServerError(e)) alert('Server not running or crashed');
       setVlmAvailableModels([]);
     }
   };
@@ -241,6 +249,7 @@ function App() {
       setStatusLastFetched(Date.now());
     } catch (e) {
       console.warn('Failed to fetch backend status', e);
+      if (isServerError(e)) alert('Server not running or crashed');
     }
   };
 
@@ -260,6 +269,7 @@ function App() {
         if (!vlmClassifierMode && Object.keys(labelModes || {}).length) setVlmClassifierMode(Object.keys(labelModes)[0]);
       } catch (e) {
         console.warn('Failed to fetch label modes', e);
+        if (isServerError(e)) alert('Server not running or crashed');
       }
     })();
     fetchTasks();
@@ -281,6 +291,7 @@ function App() {
       setPreloadedDevices(modelsMap);
     } catch (e) {
       console.warn('Could not fetch preloaded models', e);
+      if (isServerError(e)) alert('Server not running or crashed');
       setPreloadedDevices({});
     }
   };
@@ -293,6 +304,7 @@ function App() {
       setTasksList(data || []);
     } catch (e) {
       console.warn('Failed to fetch tasks', e);
+      if (isServerError(e)) alert('Server not running or crashed');
       setTasksList([]);
     }
   };
@@ -306,6 +318,7 @@ function App() {
       setSubtasksList(data || []);
     } catch (e) {
       console.warn('Failed to fetch subtasks', e);
+      if (isServerError(e)) alert('Server not running or crashed');
       setSubtasksList([]);
     }
   };
@@ -333,7 +346,8 @@ function App() {
         fetchPreloadedModels();
       }
     } catch (e) {
-      alert('Load model error: ' + (e.message || String(e)));
+      const msg = isServerError(e) ? 'Server not running or crashed' : (e.message || String(e));
+      alert('Load model error: ' + msg);
     } finally {
       setModelLoading(false);
     }
