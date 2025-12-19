@@ -369,25 +369,26 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         # If frontend selected VLM as classifier source, prefer interpreting
                         # the VLM output as a label directly when it matches known labels.
                         if classifier_source_norm == 'vlm':
-                            try:
-                                # Use centralized label normalization from rules.py
-                                # Validate against the label set selected by the user (binary or multi)
-                                label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
-                                # Preserve the raw caption as auxiliary text for UI context
-                                cls_text = caption
-                            except Exception:
-                                label = None
-                        else:
-                            # For 'llm' and 'bow' sources drive behavior via effective_use_llm
+                            # Use centralized label normalization from rules.py
+                            # Validate against the label set selected by the user (binary or multi)
+                            label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
+                            # Preserve the raw caption as auxiliary text for UI context
+                            cls_text = caption
+                        elif classifier_source_norm == 'bow':
+                            # Local rules-only classification (no LLM)
                             output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
                             label, cls_text = rules_mod.determine_label(
                                 caption,
-                                use_llm=effective_use_llm,
-                                text_llm=llm_mod.get_local_text_llm(),
+                                use_llm=False,
+                                text_llm=None,
                                 prompt=prompt,
                                 classify_prompt_template=classify_prompt_template,
                                 output_mode=output_mode,
                             )
+                        else:
+                            # 'llm' mode: defer all semantic classification to the windowed LLM pass
+                            label = None
+                            cls_text = None
                         
                         # Subtask overrun check (same as vlm_local_stream)
                         subtask_overrun = None
@@ -837,26 +838,27 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     # If frontend selected VLM as classifier source, prefer interpreting
                     # the VLM output as a label directly when it matches known labels.
                     if classifier_source_norm == 'vlm':
-                        try:
-                            # Use centralized label normalization from rules.py
-                            # Validate against the label set selected by the user (binary or multi)
-                            label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
-                            # Preserve the raw caption as auxiliary text for UI context
-                            cls_text = caption
-                        except Exception:
-                            label = None
-                    else:
-                        # For 'llm' and 'bow' sources drive behavior via effective_use_llm
+                        # Use centralized label normalization from rules.py
+                        # Validate against the label set selected by the user (binary or multi)
+                        label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
+                        # Preserve the raw caption as auxiliary text for UI context
+                        cls_text = caption
+                    elif classifier_source_norm == 'bow':
+                        # Local rules-only classification (no LLM)
                         output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
                         label, cls_text = rules_mod.determine_label(
                             caption,
-                            use_llm=effective_use_llm,
-                            text_llm=llm_mod.get_local_text_llm(),
+                            use_llm=False,
+                            text_llm=None,
                             prompt=prompt,
                             classify_prompt_template=classify_prompt_template,
                             rule_set=rule_set,
                             output_mode=output_mode,
                         )
+                    else:
+                        # 'llm' mode: defer all semantic classification to the windowed LLM pass
+                        label = None
+                        cls_text = None
 
                     time_sec = fi / (fps if fps > 0 else 30.0)
 
