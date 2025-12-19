@@ -125,23 +125,30 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 
 
-# @app.get("/backend/download/{filename}")
-# async def download_video(filename: str):
-#     file_path = os.path.join(PROCESSED_DIR, filename)
-#     if os.path.exists(file_path):
-#         # Choose media type by extension
-#         ext = os.path.splitext(filename)[1].lower()
-#         media_type = "application/octet-stream"
-#         if ext == '.mp4':
-#             media_type = 'video/mp4'
-#         elif ext == '.avi':
-#             media_type = 'video/x-msvideo'
-#         elif ext in ('.mov', '.qt'):
-#             media_type = 'video/quicktime'
-#         return FileResponse(file_path, media_type=media_type, filename=filename, headers={"Accept-Ranges": "bytes"})
-#     return make_alert_json('File not found', status_code=404)
-
-# Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
+def _normalize_caption_output(captioner, output):
+    """Normalize captioner output to a single caption string.
+    
+    Handles various output formats:
+    - [{"generated_text": "..."}] (Qwen, transformers pipeline)
+    - "plain string"
+    - {"caption": "..."}
+    """
+    if not output:
+        return ""
+    
+    # Handle list format
+    if isinstance(output, list) and output:
+        first = output[0]
+        if isinstance(first, dict):
+            return first.get('generated_text') or first.get('caption') or str(first)
+        return str(first)
+    
+    # Handle dict format
+    if isinstance(output, dict):
+        return output.get('generated_text') or output.get('caption') or str(output)
+    
+    # Handle string format
+    return str(output).strip()
 
 @app.get("/backend/stream_pose")
 async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
@@ -838,6 +845,71 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             collected_samples = []
             collected_idle = []
             collected_work = []
+            
+            # Temporal aggregation state (for LLM mode)
+            seg_start_time = None
+            seg_samples = []
+            seg_signature = None
+            candidate_signature = None
+            candidate_count = 0
+            
+            # Temporal aggregation config (event-driven windows with safety cap)
+            agg_min_window = 1.5  # seconds (do not emit windows shorter than this)
+            agg_max_window = 4.0  # seconds (force emit after this many seconds)
+            agg_debounce_count = 3  # require this many samples of a new semantic state
+            
+            def _tokens_for_caption(caption: str):
+                if not caption:
+                    return set()
+                s = re.sub(r"[^\w\s]", " ", caption.lower())
+                toks = [t for t in s.split() if len(t) > 2]
+                stop = {'the','and','with','using','person','currently','a','an','is','are','in','on','of','their','to'}
+                return set([t for t in toks if t not in stop])
+
+            def _jaccard(a:set, b:set):
+                if not a and not b:
+                    return 1.0
+                if not a or not b:
+                    return 0.0
+                inter = len(a & b)
+                uni = len(a | b)
+                return inter/uni if uni>0 else 0.0
+
+            def _finalize_segment(end_time: float):
+                nonlocal seg_start_time, seg_samples, seg_signature
+                if not seg_start_time or not seg_samples:
+                    return None
+                start = seg_start_time
+                end = end_time
+                # enforce minimum window duration
+                if (end - start) < agg_min_window:
+                    return None
+                # pick dominant caption
+                counts = {}
+                for s in seg_samples:
+                    c = (s.get('caption') or '').strip()
+                    counts[c] = counts.get(c, 0) + 1
+                dominant = max(counts.items(), key=lambda x: x[1])[0] if counts else ''
+                # build aggregated caption text for LLM: list unique captions with timestamps
+                timeline_lines = []
+                for s in seg_samples:
+                    timeline_lines.append(f"<t={s.get('time_sec',0):.2f}> {s.get('caption') or ''}")
+                aggregated_text = "\n".join(timeline_lines)
+                out = {
+                    'stage': 'segment',
+                    'start_time': start,
+                    'end_time': end,
+                    'duration': end - start,
+                    'dominant_caption': dominant,
+                    'captions': [s.get('caption') for s in seg_samples],
+                    'timeline': aggregated_text,
+                }
+                # reset segment
+                seg_start_time = None
+                seg_samples = []
+                seg_signature = None
+                return out
+            
             for fi in indices:
                 try:
                     cap2.set(cv2.CAP_PROP_POS_FRAMES, fi)
