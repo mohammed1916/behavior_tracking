@@ -39,41 +39,20 @@ import backend.evidence as evidence_mod
 
 
 import backend.captioner as captioner_mod
+from backend.stream_utils import (
+    normalize_caption_output,
+    call_captioner,
+    build_vlm_prompt_for_source,
+    build_classify_prompt_template,
+    per_sample_label_for_source,
+    merge_and_filter_ranges,
+)
 
 # Timing/segmenting defaults (tunable)
 MIN_SEGMENT_SEC = 0.5  # ignore segments shorter than this
 MERGE_GAP_SEC = 1.0    # merge segments separated by <= this gap
 
 
-def merge_and_filter_ranges(ranges, min_segment_sec=MIN_SEGMENT_SEC, merge_gap_sec=MERGE_GAP_SEC):
-    """Merge nearby ranges and drop very short segments.
-
-    ranges: list of dicts with 'startTime' and 'endTime'
-    Returns a new list of merged, filtered ranges.
-    """
-    if not ranges:
-        return []
-    # Sort by start
-    rs = sorted(ranges, key=lambda r: r.get('startTime', 0))
-    merged = []
-    cur = rs[0].copy()
-    for r in rs[1:]:
-        gap = r.get('startTime', 0) - cur.get('endTime', 0)
-        if gap <= merge_gap_sec:
-            # extend current
-            cur['endTime'] = max(cur.get('endTime', 0), r.get('endTime', 0))
-            cur['endFrame'] = max(cur.get('endFrame', cur.get('endFrame', 0)), r.get('endFrame', r.get('endFrame', 0)))
-        else:
-            # finalize current if long enough
-            dur = cur.get('endTime', 0) - cur.get('startTime', 0)
-            if dur >= min_segment_sec:
-                merged.append(cur.copy())
-            cur = r.copy()
-    # last segment
-    dur = cur.get('endTime', 0) - cur.get('startTime', 0)
-    if dur >= min_segment_sec:
-        merged.append(cur.copy())
-    return merged
 
 app.add_middleware(
     CORSMiddleware,
@@ -108,81 +87,9 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 
 
-def _normalize_caption_output(captioner, output):
-    """Normalize captioner output to a single caption string.
-    
-    Handles various output formats:
-    - [{"generated_text": "..."}] (Qwen, transformers pipeline)
-    - "plain string"
-    - {"caption": "..."}
-    """
-    if not output:
-        return ""
-    
-    # Handle list format
-    if isinstance(output, list) and output:
-        first = output[0]
-        if isinstance(first, dict):
-            return first.get('generated_text') or first.get('caption') or str(first)
-        return str(first)
-    
-    # Handle dict format
-    if isinstance(output, dict):
-        return output.get('generated_text') or output.get('caption') or str(output)
-    
-    # Handle string format
-    return str(output).strip()
-
-
-def _call_captioner(captioner, img, prompt: Optional[str]):
-    """Call captioner with prompt if supported, otherwise fall back to bare call."""
-    try:
-        return captioner(img, prompt=prompt)
-    except TypeError:
-        return captioner(img)
 
 
 # Shared helpers to keep stream endpoints consistent
-def _build_vlm_prompt_for_source(classifier_source_norm: str, classifier_mode: str, classifier_prompt: Optional[str]):
-    """Return the prompt sent to the VLM for the given classifier source."""
-    if classifier_source_norm == 'vlm':
-        label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
-        return classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
-    if classifier_source_norm == 'bow':
-        return classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
-    # 'llm' (or default): ask for a plain description; avoid instruction-like text being echoed back
-    return classifier_prompt or "Describe the main person's visible action."
-
-
-def _build_classify_prompt_template(classifier_source_norm: str, classifier_mode: str, classifier_prompt: Optional[str]):
-    """Return classify prompt template used for downstream LLM label decisions."""
-    if classifier_source_norm == 'vlm':
-        label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
-        return classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
-    if classifier_source_norm == 'bow':
-        return None
-    return classifier_prompt or rules_mod.get_label_template(classifier_mode)
-
-
-def _per_sample_label_for_source(classifier_source_norm: str, classifier_mode: str, caption: str, prompt: str, rule_set: str, classify_prompt_template: Optional[str], effective_use_llm: bool):
-    """Compute per-sample label + text. For 'llm' source we defer labeling to windowed LLM (returns None)."""
-    if classifier_source_norm == 'vlm':
-        label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
-        return label, caption
-    if classifier_source_norm == 'bow':
-        output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
-        label, cls_text = rules_mod.determine_label(
-            caption,
-            use_llm=False,
-            text_llm=None,
-            prompt=prompt,
-            classify_prompt_template=classify_prompt_template,
-            rule_set=rule_set,
-            output_mode=output_mode,
-        )
-        return label, cls_text
-    # 'llm' mode: defer semantics to the evidence window + LLM pass
-    return None, None
 
 @app.get("/backend/stream_pose")
 async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
@@ -371,12 +278,12 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 if time.time() - last_inference_time >= sample_interval:
                     try:
                         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                        vlm_prompt = _build_vlm_prompt_for_source(classifier_source_norm, classifier_mode, classifier_prompt)
-                        out = _call_captioner(captioner, img, vlm_prompt)
-                        caption = _normalize_caption_output(captioner, out)
+                        vlm_prompt = build_vlm_prompt_for_source(classifier_source_norm, classifier_mode, classifier_prompt)
+                        out = call_captioner(captioner, img, vlm_prompt)
+                        caption = normalize_caption_output(captioner, out)
 
-                        classify_prompt_template = _build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
-                        label, cls_text = _per_sample_label_for_source(
+                        classify_prompt_template = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
+                        label, cls_text = per_sample_label_for_source(
                             classifier_source_norm,
                             classifier_mode,
                             caption,
@@ -806,12 +713,12 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     except Exception:
                         logging.exception('YOLO processing failed on frame')
 
-                    vlm_prompt = _build_vlm_prompt_for_source(classifier_source_norm, classifier_mode, classifier_prompt)
-                    out = _call_captioner(captioner, img, vlm_prompt)
-                    caption = _normalize_caption_output(captioner, out)
+                    vlm_prompt = build_vlm_prompt_for_source(classifier_source_norm, classifier_mode, classifier_prompt)
+                    out = call_captioner(captioner, img, vlm_prompt)
+                    caption = normalize_caption_output(captioner, out)
 
-                    classify_prompt_template = _build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
-                    label, cls_text = _per_sample_label_for_source(
+                    classify_prompt_template = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
+                    label, cls_text = per_sample_label_for_source(
                         classifier_source_norm,
                         classifier_mode,
                         caption,
