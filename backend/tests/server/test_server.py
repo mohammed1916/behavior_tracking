@@ -37,7 +37,7 @@ def test_vlm_local_models_list():
 
 def test_load_vlm_model_with_mock(monkeypatch):
     # Patch the loader to return a dummy captioner and avoid heavy model loads
-    monkeypatch.setattr(server, "get_captioner_for_model", lambda model_id: DummyCaptioner())
+    monkeypatch.setattr(server, "get_captioner_for_model", lambda *args, **kwargs: DummyCaptioner())
     resp = client.post("/backend/load_vlm_model", data={"model": "test_model"})
     assert resp.status_code == 200
     j = resp.json()
@@ -45,7 +45,7 @@ def test_load_vlm_model_with_mock(monkeypatch):
 
 
 def test_caption_endpoint_with_mock(monkeypatch):
-    monkeypatch.setattr(server, "get_captioner_for_model", lambda model_id: DummyCaptioner())
+    monkeypatch.setattr(server, "get_captioner_for_model", lambda *args, **kwargs: DummyCaptioner())
     b64 = make_test_image_b64()
     payload = {"image": f"data:image/jpeg;base64,{b64}", "model": "test_model"}
     resp = client.post("/backend/caption", json=payload)
@@ -57,7 +57,7 @@ def test_caption_endpoint_with_mock(monkeypatch):
 
 def test_caption_endpoint_model_missing(monkeypatch):
     # Simulate missing model loader
-    monkeypatch.setattr(server, "get_captioner_for_model", lambda model_id: None)
+    monkeypatch.setattr(server, "get_captioner_for_model", lambda *args, **kwargs: None)
     b64 = make_test_image_b64()
     payload = {"image": f"data:image/jpeg;base64,{b64}", "model": "nonexistent"}
     resp = client.post("/backend/caption", json=payload)

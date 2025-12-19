@@ -40,7 +40,7 @@ export default function StoredAnalyses({ onView }) {
         <button onClick={fetchList} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
       </div>
       {error && <div style={{ color: 'red' }}>{error}</div>}
-      {!loading && analyses.length === 0 && <div style={{ color: '#666' }}>No stored analyses found.</div>}
+      {!loading && analyses.length === 0 && <div style={{ color: 'var(--muted)' }}>No stored analyses found.</div>}
       {analyses.length > 0 && (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -54,7 +54,7 @@ export default function StoredAnalyses({ onView }) {
           </thead>
           <tbody>
             {analyses.map(a => (
-              <tr key={a.id} style={{ borderTop: '1px solid #eee' }}>
+              <tr key={a.id} style={{ borderTop: '1px solid var(--panel-border)' }}>
                 <td style={{ padding: '6px 4px' }}>{a.filename}</td>
                 <td style={{ textAlign: 'center' }}>{a.model}</td>
                 <td style={{ textAlign: 'center' }}>{a.created_at ? new Date(a.created_at).toLocaleString() : ''}</td>

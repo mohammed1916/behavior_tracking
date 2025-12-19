@@ -21,31 +21,28 @@ import base64
 import io
 from datetime import datetime
 import threading
-import rules as rules_mod
+import backend.rules as rules_mod
+
+#if env has set debug then debug mode
+if os.getenv('DEBUG', '0') == '1':
+    import debugpy
+    debugpy.listen(("0.0.0.0", 5678))
+    debugpy.wait_for_client()
 
 app = FastAPI()
 
 app.state.webcam_event = threading.Event()
 
-captioner_mod = None
-llm_mod = None
-db_mod = None
-
-import captioner as captioner_mod
-import llm as llm_mod
-import db as db_mod
+import backend.captioner as captioner_mod
+import backend.llm as llm_mod
+import backend.db as db_mod
+import backend.evidence as evidence_mod
 
 
 get_local_captioner = captioner_mod.get_local_captioner
 get_captioner_for_model = captioner_mod.get_captioner_for_model
-_normalize_caption_output = captioner_mod._normalize_caption_output
 _captioner_cache = getattr(captioner_mod, '_captioner_cache', {})
 _captioner_status = getattr(captioner_mod, '_captioner_status', {})
-
-CLASSIFY_PROMPT_TEMPLATE = getattr(llm_mod, 'CLASSIFY_PROMPT_TEMPLATE', globals().get('CLASSIFY_PROMPT_TEMPLATE'))
-DURATION_PROMPT_TEMPLATE = getattr(llm_mod, 'DURATION_PROMPT_TEMPLATE', globals().get('DURATION_PROMPT_TEMPLATE'))
-TASK_COMPLETION_PROMPT_TEMPLATE = getattr(llm_mod, 'TASK_COMPLETION_PROMPT_TEMPLATE', globals().get('TASK_COMPLETION_PROMPT_TEMPLATE'))
-get_local_text_llm = getattr(llm_mod, 'get_local_text_llm', None)
 
 DB_PATH = db_mod.DB_PATH
 init_db = db_mod.init_db
@@ -61,6 +58,40 @@ list_subtasks_from_db = db_mod.list_subtasks_from_db
 get_subtask_from_db = db_mod.get_subtask_from_db
 compute_ranges = db_mod.compute_ranges
 update_subtask_counts = db_mod.update_subtask_counts
+# Timing/segmenting defaults (tunable)
+MIN_SEGMENT_SEC = 0.5  # ignore segments shorter than this
+MERGE_GAP_SEC = 1.0    # merge segments separated by <= this gap
+
+
+def merge_and_filter_ranges(ranges, min_segment_sec=MIN_SEGMENT_SEC, merge_gap_sec=MERGE_GAP_SEC):
+    """Merge nearby ranges and drop very short segments.
+
+    ranges: list of dicts with 'startTime' and 'endTime'
+    Returns a new list of merged, filtered ranges.
+    """
+    if not ranges:
+        return []
+    # Sort by start
+    rs = sorted(ranges, key=lambda r: r.get('startTime', 0))
+    merged = []
+    cur = rs[0].copy()
+    for r in rs[1:]:
+        gap = r.get('startTime', 0) - cur.get('endTime', 0)
+        if gap <= merge_gap_sec:
+            # extend current
+            cur['endTime'] = max(cur.get('endTime', 0), r.get('endTime', 0))
+            cur['endFrame'] = max(cur.get('endFrame', cur.get('endFrame', 0)), r.get('endFrame', r.get('endFrame', 0)))
+        else:
+            # finalize current if long enough
+            dur = cur.get('endTime', 0) - cur.get('startTime', 0)
+            if dur >= min_segment_sec:
+                merged.append(cur.copy())
+            cur = r.copy()
+    # last segment
+    dur = cur.get('endTime', 0) - cur.get('startTime', 0)
+    if dur >= min_segment_sec:
+        merged.append(cur.copy())
+    return merged
 
 app.add_middleware(
     CORSMiddleware,
@@ -82,11 +113,9 @@ if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', '')
     fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
     logger.addHandler(fh)
 
-CLASSIFY_PROMPT_TEMPLATE = globals().get('CLASSIFY_PROMPT_TEMPLATE') if 'CLASSIFY_PROMPT_TEMPLATE' in globals() else getattr(llm_mod, 'CLASSIFY_PROMPT_TEMPLATE', None)
-DURATION_PROMPT_TEMPLATE = globals().get('DURATION_PROMPT_TEMPLATE') if 'DURATION_PROMPT_TEMPLATE' in globals() else getattr(llm_mod, 'DURATION_PROMPT_TEMPLATE', None)
-TASK_COMPLETION_PROMPT_TEMPLATE = globals().get('TASK_COMPLETION_PROMPT_TEMPLATE') if 'TASK_COMPLETION_PROMPT_TEMPLATE' in globals() else getattr(llm_mod, 'TASK_COMPLETION_PROMPT_TEMPLATE', None)
-get_local_text_llm = getattr(llm_mod, 'get_local_text_llm', None)
-
+CLASSIFY_PROMPT_TEMPLATE = llm_mod.CLASSIFY_PROMPT_TEMPLATE
+# DURATION_PROMPT_TEMPLATE = llm_mod.DURATION_PROMPT_TEMPLATE
+TASK_COMPLETION_PROMPT_TEMPLATE = llm_mod.TASK_COMPLETION_PROMPT_TEMPLATE
 
 UPLOAD_DIR = "uploads"
 PROCESSED_DIR = "processed"
@@ -97,26 +126,33 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 
 
-@app.get("/backend/download/{filename}")
-async def download_video(filename: str):
-    file_path = os.path.join(PROCESSED_DIR, filename)
-    if os.path.exists(file_path):
-        # Choose media type by extension
-        ext = os.path.splitext(filename)[1].lower()
-        media_type = "application/octet-stream"
-        if ext == '.mp4':
-            media_type = 'video/mp4'
-        elif ext == '.avi':
-            media_type = 'video/x-msvideo'
-        elif ext in ('.mov', '.qt'):
-            media_type = 'video/quicktime'
-        return FileResponse(file_path, media_type=media_type, filename=filename, headers={"Accept-Ranges": "bytes"})
-    return make_alert_json('File not found', status_code=404)
-
-# Webcam streaming state is stored in `app.state.webcam_event` (threading.Event)
+def _normalize_caption_output(captioner, output):
+    """Normalize captioner output to a single caption string.
+    
+    Handles various output formats:
+    - [{"generated_text": "..."}] (Qwen, transformers pipeline)
+    - "plain string"
+    - {"caption": "..."}
+    """
+    if not output:
+        return ""
+    
+    # Handle list format
+    if isinstance(output, list) and output:
+        first = output[0]
+        if isinstance(first, dict):
+            return first.get('generated_text') or first.get('caption') or str(first)
+        return str(first)
+    
+    # Handle dict format
+    if isinstance(output, dict):
+        return output.get('generated_text') or output.get('caption') or str(output)
+    
+    # Handle string format
+    return str(output).strip()
 
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary')):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification every 2 seconds.
     Emits structured payloads similar to /vlm_local_stream, and saves analysis to DB at the end.
     """
@@ -141,6 +177,16 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             collected_work = []
             cumulative_work_frames = 0
             start_time = time.time()
+
+            # Determine sampling interval for live inference (seconds).
+            # processing_mode supports 'current_frame' (default) and 'every_2s' (force 2s sampling)
+            if processing_mode == 'every_2s':
+                sample_interval = 2.0
+            else:
+                try:
+                    sample_interval = float(sample_interval_sec) if sample_interval_sec is not None and float(sample_interval_sec) > 0 else 2.0
+                except Exception:
+                    sample_interval = 2.0
             
             writer = None
             writer_type = None
@@ -148,6 +194,43 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             saved_basename = None
             saved_path = None
             record_enabled = bool(save_video)
+
+            # Normalize classifier source selection (vlm | llm | bow)
+            classifier_source_norm = (classifier_source or 'llm').lower()
+            effective_use_llm = (classifier_source_norm == 'llm')
+
+            # Time-windowed aggregation state and config (no semantic similarity)
+            current_window = None
+            last_sample_time = None
+            max_window_sec = 4.0
+            silence_timeout_sec = 1.5
+            min_samples = 2
+
+            def _close_window_if_needed(elapsed_time: float):
+                nonlocal current_window, last_sample_time
+                if current_window is None:
+                    return None
+                gap = elapsed_time - last_sample_time if last_sample_time is not None else 0
+                duration = elapsed_time - current_window.start_time
+                if gap > silence_timeout_sec or duration >= max_window_sec:
+                    window = current_window
+                    current_window = None
+                    last_sample_time = None
+                    return window
+                return None
+
+            def _finalize_window(window):
+                if window is None or len(window.samples) < min_samples:
+                    return None
+                out = {
+                    'stage': 'segment',
+                    'start_time': window.start_time,
+                    'end_time': window.end_time,
+                    'duration': window.end_time - window.start_time,
+                    'captions': [s['caption'] for s in window.samples],
+                    'timeline': window.to_timeline(),
+                }
+                return out
 
             while app.state.webcam_event.is_set():
                 ret, frame = cap.read()
@@ -191,7 +274,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 ffmpeg_proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
                                 writer_type = 'ffmpeg'
                                 writer = ffmpeg_proc
-                                logging.info('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                                print('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
                             except Exception as e:
                                 logging.warning('ffmpeg recording failed to start: %s', e)
                                 ffmpeg_proc = None
@@ -216,14 +299,11 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
                             if not getattr(writer, 'isOpened', lambda: False)():
                                 raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
-                            logging.info('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                            print('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
                     except Exception as e:
                         logging.exception('Failed to create VideoWriter: %s', e)
                         # notify client and disable recording for this session
-                        try:
-                            yield _sse_event({"stage": "alert", "message": f"Failed to create recorder: {e}"})
-                        except Exception:
-                            pass
+                        yield _sse_event({"stage": "alert", "message": f"Failed to create recorder: {e}"})
                         writer = None
                         record_enabled = False
                         # remove any partial file
@@ -233,48 +313,81 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         except Exception:
                             pass
                 # If writer is active, write the raw frame (BGR)
-                try:
-                    if writer is not None:
-                        if writer_type == 'ffmpeg' and ffmpeg_proc is not None and ffmpeg_proc.stdin:
-                            # Ensure contiguous bytes and write to ffmpeg stdin
+                if writer is not None:
+                    if writer_type == 'ffmpeg' and ffmpeg_proc is not None and ffmpeg_proc.stdin:
+                        # Ensure contiguous bytes and write to ffmpeg stdin
+                        try:
+                            data = frame.tobytes()
+                            ffmpeg_proc.stdin.write(data)
+                        except BrokenPipeError:
+                            logging.exception('ffmpeg stdin broken pipe during write')
+                            # disable recording on error
                             try:
-                                data = frame.tobytes()
-                                ffmpeg_proc.stdin.write(data)
-                            except BrokenPipeError:
-                                logging.exception('ffmpeg stdin broken pipe during write')
-                                # disable recording on error
-                                try:
-                                    ffmpeg_proc.stdin.close()
-                                except Exception:
-                                    pass
-                                ffmpeg_proc = None
-                                writer = None
-                                writer_type = None
-                        else:
-                            # OpenCV writer
-                            try:
-                                writer.write(frame)
+                                ffmpeg_proc.stdin.close()
                             except Exception:
                                 pass
-                except Exception:
-                    pass
+                            ffmpeg_proc = None
+                            writer = None
+                            writer_type = None
+                    else:
+                        writer.write(frame)
                 frame_counter += 1
                 elapsed_time = time.time() - start_time
                 
-                if time.time() - last_inference_time >= 2.0:
+                if time.time() - last_inference_time >= sample_interval:
                     try:
                         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                        out = captioner(img)
+                        # Build a VLM caption prompt depending on classifier source.
+                        # - 'vlm': ask VLM to emit a label using the VLM base + label template + rules
+                        # - 'llm': ask VLM to produce descriptive caption using VLM base prompt
+                        # - 'bow': ask VLM to produce descriptive caption; label rules are applied locally
+                        try:
+                            if classifier_source_norm == 'vlm':
+                                label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
+                                vlm_prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                            elif classifier_source_norm == 'bow':
+                                vlm_prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                            else:
+                                # 'llm' or default: produce a descriptive caption useful for downstream LLM
+                                vlm_prompt = classifier_prompt or llm_mod.VLM_BASE_PROMPT_TEMPLATE
+                            out = captioner(img, prompt=vlm_prompt)
+                        except TypeError:
+                            out = captioner(img)
                         caption = _normalize_caption_output(captioner, out)
                         
                         # Determine label (LLM + keyword rules) via centralized helper
-                        label, cls_text = rules_mod.determine_label(
-                            caption,
-                            use_llm=use_llm,
-                            text_llm=get_local_text_llm(),
-                            prompt=prompt,
-                            classify_prompt_template=CLASSIFY_PROMPT_TEMPLATE,
-                        )
+                        # choose classify prompt: for VLM-source use VLM+label+rules; for llm use label template; for bow use no LLM prompt
+                        if classifier_source_norm == 'vlm':
+                            label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
+                            classify_prompt_template = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                        elif classifier_source_norm == 'bow':
+                            classify_prompt_template = None
+                        else:
+                            classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
+                        label = None
+                        cls_text = None
+                        # If frontend selected VLM as classifier source, prefer interpreting
+                        # the VLM output as a label directly when it matches known labels.
+                        if classifier_source_norm == 'vlm':
+                            try:
+                                # Use centralized label normalization from rules.py
+                                # Validate against the label set selected by the user (binary or multi)
+                                label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
+                                # Preserve the raw caption as auxiliary text for UI context
+                                cls_text = caption
+                            except Exception:
+                                label = None
+                        else:
+                            # For 'llm' and 'bow' sources drive behavior via effective_use_llm
+                            output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
+                            label, cls_text = rules_mod.determine_label(
+                                caption,
+                                use_llm=effective_use_llm,
+                                text_llm=llm_mod.get_local_text_llm(),
+                                prompt=prompt,
+                                classify_prompt_template=classify_prompt_template,
+                                output_mode=output_mode,
+                            )
                         
                         # Subtask overrun check (same as vlm_local_stream)
                         subtask_overrun = None
@@ -284,7 +397,14 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 assign = get_subtask_from_db(subtask_id)
                                 if assign is not None and assign.get('duration_sec') is not None:
                                     expected = assign.get('duration_sec')
-                                    actual_work_time = cumulative_work_frames / 30.0  # Assume 30 FPS for live stream
+                                    # derive work duration from collected_samples using compute_ranges
+                                    # try:
+                                    fps_assume = 30.0
+                                    work_ranges = compute_ranges(collected_work, collected_samples, fps_assume)
+                                    merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                    actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                    # except Exception:
+                                        # actual_work_time = cumulative_work_frames / 30.0
                                     if actual_work_time > expected:
                                         subtask_overrun = True
                                     else:
@@ -319,15 +439,56 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         except Exception as e:
                             logging.debug('Failed to encode frame for SSE image: %s', e)
                         yield _sse_event(payload)
-                        
+
                         # Collect for DB saving
-                        collected_samples.append({
-                            'frame_index': frame_counter, 'time_sec': elapsed_time, 'caption': caption, 'label': label, 'llm_output': cls_text
-                        })
+                        sample = {'frame_index': frame_counter, 'time_sec': elapsed_time, 'caption': caption, 'label': label, 'llm_output': cls_text}
+                        collected_samples.append(sample)
                         if label == 'work':
                             collected_work.append(frame_counter)
                         else:
                             collected_idle.append(frame_counter)
+
+                        # --- time-windowed aggregation (no semantic similarity) ---
+                        if classifier_source_norm == 'llm':
+                            # Add sample to current window or start new one
+                            if current_window is None:
+                                current_window = evidence_mod.EvidenceWindow(
+                                    start_time=elapsed_time,
+                                    end_time=elapsed_time
+                                )
+                            
+                            current_window.add_sample(elapsed_time, caption)
+                            last_sample_time = elapsed_time
+                            
+                            # Check if window should close (silence or max duration)
+                            closed_window = _close_window_if_needed(elapsed_time)
+                            if closed_window is not None:
+                                # Window closed: convert to segment and send to LLM
+                                seg_event = _finalize_window(closed_window)
+                                if seg_event is not None:
+                                    # LLM classifies the full timeline
+                                    cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                                    rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_event['timeline'])
+                                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
+                                    seg_label, _ = rules_mod.determine_label(
+                                        seg_event['timeline'],
+                                        use_llm=True,
+                                        text_llm=llm_mod.get_local_text_llm(),
+                                        prompt=prompt,
+                                        classify_prompt_template=cls_prompt,
+                                        output_mode=classifier_mode
+                                    )
+                                    seg_event['label'] = seg_label
+                                    seg_event['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                                    yield _sse_event(seg_event)
+                                
+                                # Start fresh window with current sample
+                                current_window = evidence_mod.EvidenceWindow(
+                                    start_time=elapsed_time,
+                                    end_time=elapsed_time
+                                )
+                                current_window.add_sample(elapsed_time, caption)
+                                last_sample_time = elapsed_time
                         
                         last_inference_time = time.time()
                     except Exception as e:
@@ -382,31 +543,77 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 video_url = f"/backend/download/{filename_for_db}" if saved_basename else None
                 save_analysis_to_db(aid, filename_for_db, model or 'default', prompt, video_url, vid_info, collected_samples, subtask_id=subtask_id)
                 
+                # Evaluate subtasks completion from collected captions using vector store + LLM
+                try:
+                    captions = [s.get('caption') for s in collected_samples if s.get('caption')]
+                    evals = db_mod.evaluate_subtasks_completion(captions)
+                except Exception:
+                    evals = []
+
                 # Update subtask counts if compare_timings enabled
-                if compare_timings and subtask_id:
+                if compare_timings and (subtask_id or task_id):
                     try:
-                        subtask = get_subtask_from_db(subtask_id)
-                        if subtask and collected_work:
-                            expected_duration = subtask['duration_sec']
-                            min_frame = min(collected_work)
-                            max_frame = max(collected_work)
-                            actual_work_time = (max_frame - min_frame) / 30.0  # Assume 30 FPS
-                            if actual_work_time <= expected_duration:
-                                update_subtask_counts(subtask_id, 1, 0)
-                            else:
-                                update_subtask_counts(subtask_id, 0, 1)
+                        # If a task_id is provided, evaluate all subtasks under that task
+                        if task_id:
+                            try:
+                                subs = db_mod.list_subtasks_from_db()
+                                # task_id may be a single id or a comma-separated list from the frontend
+                                task_ids = [t.strip() for t in (task_id or '').split(',') if t.strip()]
+                                subs_for_task = [s for s in subs if (s.get('task_id') in task_ids) or (s.get('task_name') in task_ids)]
+                                for s in subs_for_task:
+                                    sid = s.get('id')
+                                    if evaluation_mode == 'llm_only':
+                                        db_mod.aggregate_and_update_subtask(sid, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
+                                    else:
+                                        # combined (default)
+                                        db_mod.aggregate_and_update_subtask(sid, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
+                            except Exception:
+                                logging.exception('Failed to aggregate for task_id, falling back to timing-only per-subtask')
+                                # best-effort timing-only per-subtask
+                                subs = db_mod.list_subtasks_from_db()
+                                task_ids = [t.strip() for t in (task_id or '').split(',') if t.strip()]
+                                subs_for_task = [s for s in subs if (s.get('task_id') in task_ids) or (s.get('task_name') in task_ids)]
+                                for s in subs_for_task:
+                                    sid = s.get('id')
+                                    subtask = get_subtask_from_db(sid)
+                                    if subtask and collected_work:
+                                        work_ranges = compute_ranges(collected_work, collected_samples, 30.0)
+                                        merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                        actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                        expected_duration = subtask.get('duration_sec')
+                                        if actual_work_time <= expected_duration:
+                                            db_mod.update_subtask_counts(sid, 1, 0)
+                                        else:
+                                            db_mod.update_subtask_counts(sid, 0, 1)
+                        else:
+                            # single subtask behavior (backwards compatible)
+                            try:
+                                inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
+                                print(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
+                            except Exception:
+                                subtask = get_subtask_from_db(subtask_id)
+                                if subtask and collected_work:
+                                    work_ranges = compute_ranges(collected_work, collected_samples, 30.0)
+                                    merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                    actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                    expected_duration = subtask.get('duration_sec')
+                                    if actual_work_time <= expected_duration:
+                                        db_mod.update_subtask_counts(subtask_id, 1, 0)
+                                    else:
+                                        db_mod.update_subtask_counts(subtask_id, 0, 1)
                     except Exception as e:
-                        logging.exception(f'Failed to update subtask counts for {subtask_id}')
+                        logging.exception(f'Failed to update subtask counts for {subtask_id or task_id}')
                 
                 out = {"stage": "finished", "message": "live processing complete", "stored_analysis_id": aid}
+                if evals:
+                    out['subtask_evaluations'] = evals
                 if video_url:
                     out['video_url'] = video_url
                 yield _sse_event(out)
             except Exception as e:
-                yield _sse_event({"stage": "finished", "message": "live processing complete"})
-            except Exception as e:
                 yield _sse_event({"stage": "alert", "message": str(e)})
         finally:
+            yield _sse_event({"stage": "finished", "message": "live processing complete"})
             # Clear the event so other callers know streaming stopped
             app.state.webcam_event.clear()
     # # Add explicit CORS headers to resolve OpaqueResponseBlocking
@@ -424,10 +631,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
 async def stop_webcam():
     """Stop the webcam stream."""
     # Clear the shared event to stop any running webcam stream
-    try:
-        app.state.webcam_event.clear()
-    except Exception:
-        pass
+    app.state.webcam_event.clear()
     return {"message": "Webcam stopped"}
 
 
@@ -446,7 +650,7 @@ async def upload_vlm(video: UploadFile = File(...)):
                 if not chunk:
                     break
                 buffer.write(chunk)
-        logging.info(f"Saved VLM upload to {save_path}")
+        print(f"Saved VLM upload to {save_path}")
         return {"filename": filename}
     except Exception as e:
         logging.exception('Failed to save uploaded VLM video')
@@ -466,7 +670,7 @@ def make_alert_json(message: str, status_code: int = 400):
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary')):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -478,6 +682,10 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
     def gen():
         try:
             yield _sse_event({"stage": "started", "message": "processing started"})
+
+            # Normalize classifier source selection (vlm | llm | bow)
+            classifier_source_norm = (classifier_source or 'llm').lower()
+            effective_use_llm = (classifier_source_norm == 'llm')
 
             # Basic video info
             cap = cv2.VideoCapture(file_path)
@@ -492,8 +700,28 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             yield _sse_event({"stage": "video_info", "fps": fps, "frame_count": frame_count, "width": width, "height": height, "duration": duration})
 
             # Build sample indices (safe-guard)
-            max_samples = min(30, max(1, frame_count))
-            indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
+            # If `sample_interval_sec` provided, sample frames every N seconds;
+            # otherwise fall back to evenly spaced up to 30 samples.
+            if sample_interval_sec is not None and sample_interval_sec > 0:
+                # Determine sampling interval for processing samples.
+                # If processing_mode == 'every_2s' force a 2.0s step regardless of provided param.
+                try:
+                    step = 2.0 if processing_mode == 'every_2s' else float(sample_interval_sec)
+                    times = []
+                    t = 0.0
+                    while t <= duration:
+                        times.append(t)
+                        t += step
+                    # convert times to nearest frame indices, clamp to valid range
+                    indices = sorted(list({min(frame_count - 1, max(0, int(round(tt * fps)))) for tt in times}))
+                    if not indices:
+                        indices = [0]
+                except Exception:
+                    max_samples = min(30, max(1, frame_count))
+                    indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
+            else:
+                max_samples = min(30, max(1, frame_count))
+                indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
 
             captioner = get_captioner_for_model(model)
             if captioner is None:
@@ -509,9 +737,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             mp_detector = None
             yolo_detector = None
             if enable_mediapipe:
-                logging.info('Mediapipe preprocessing requested but disabled in server configuration')
+                print('Mediapipe preprocessing requested but disabled in server configuration')
             if enable_yolo:
-                logging.info('YOLO preprocessing requested but disabled in server configuration')
+                print('YOLO preprocessing requested but disabled in server configuration')
 
             # Open second capture for seeking samples
             cap2 = cv2.VideoCapture(file_path)
@@ -521,6 +749,40 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             collected_samples = []
             collected_idle = []
             collected_work = []
+            
+            # Time-windowed aggregation state and config (no semantic similarity)
+            current_window = None
+            last_sample_time = None
+            max_window_sec = 4.0
+            silence_timeout_sec = 1.5
+            min_samples = 2
+
+            def _close_window_if_needed(current_time: float):
+                nonlocal current_window, last_sample_time
+                if current_window is None:
+                    return None
+                gap = current_time - last_sample_time if last_sample_time is not None else 0
+                duration = current_time - current_window.start_time
+                if gap > silence_timeout_sec or duration >= max_window_sec:
+                    window = current_window
+                    current_window = None
+                    last_sample_time = None
+                    return window
+                return None
+
+            def _finalize_window(window):
+                if window is None or len(window.samples) < min_samples:
+                    return None
+                out = {
+                    'stage': 'segment',
+                    'start_time': window.start_time,
+                    'end_time': window.end_time,
+                    'duration': window.end_time - window.start_time,
+                    'captions': [s.get('caption') for s in window.samples],
+                    'timeline': window.to_timeline(),
+                }
+                return out
+            
             for fi in indices:
                 try:
                     cap2.set(cv2.CAP_PROP_POS_FRAMES, fi)
@@ -546,33 +808,72 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     except Exception:
                         logging.exception('YOLO processing failed on frame')
 
-                    out = captioner(img)
+                    # Build a VLM caption prompt depending on classifier source.
+                    try:
+                        if classifier_source_norm == 'vlm':
+                            label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
+                            vlm_prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                        elif classifier_source_norm == 'bow':
+                            vlm_prompt = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                        else:
+                            vlm_prompt = classifier_prompt or llm_mod.VLM_BASE_PROMPT_TEMPLATE
+                        out = captioner(img, prompt=vlm_prompt)
+                    except TypeError:
+                        out = captioner(img)
                     caption = _normalize_caption_output(captioner, out)
 
                     # Determine label (LLM + keyword rules) via centralized helper
                     # choose classify prompt: explicit override > classifier default > global
-                    classify_prompt_template = classifier_prompt or rules_mod.CLASSIFIER_PROMPTS.get(classifier)
-                    label, cls_text = rules_mod.determine_label(
-                        caption,
-                        use_llm=use_llm,
-                        text_llm=get_local_text_llm(),
-                        prompt=prompt,
-                        classify_prompt_template=classify_prompt_template or CLASSIFY_PROMPT_TEMPLATE,
-                        rule_set=rule_set,
-                        output_mode=classifier_mode,
-                    )
+                    # choose label prompt: explicit override > label-mode template
+                    if classifier_source_norm == 'vlm':
+                        label_tpl = llm_mod.LABLE_PROMPT_TEMPLATE_MULTI if classifier_mode == 'multi' else llm_mod.LABLE_PROMPT_TEMPLATE_BINARY
+                        classify_prompt_template = classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
+                    elif classifier_source_norm == 'bow':
+                        classify_prompt_template = None
+                    else:
+                        classify_prompt_template = classifier_prompt or rules_mod.get_label_template(classifier_mode)
+                    label = None
+                    cls_text = None
+                    # If frontend selected VLM as classifier source, prefer interpreting
+                    # the VLM output as a label directly when it matches known labels.
+                    if classifier_source_norm == 'vlm':
+                        try:
+                            # Use centralized label normalization from rules.py
+                            # Validate against the label set selected by the user (binary or multi)
+                            label = rules_mod.normalize_label_text(caption, output_mode=classifier_mode)
+                            # Preserve the raw caption as auxiliary text for UI context
+                            cls_text = caption
+                        except Exception:
+                            label = None
+                    else:
+                        # For 'llm' and 'bow' sources drive behavior via effective_use_llm
+                        output_mode = 'multi' if classifier_mode == 'label' else classifier_mode
+                        label, cls_text = rules_mod.determine_label(
+                            caption,
+                            use_llm=effective_use_llm,
+                            text_llm=llm_mod.get_local_text_llm(),
+                            prompt=prompt,
+                            classify_prompt_template=classify_prompt_template,
+                            rule_set=rule_set,
+                            output_mode=output_mode,
+                        )
 
                     time_sec = fi / (fps if fps > 0 else 30.0)
 
-                    # If monitoring a subtask, compute cumulative work time and emit a flag event when exceeded
+                    # If monitoring a subtask, compute actual work time from contiguous ranges
                     subtask_overrun = None
-                    if subtask_id and label == 'work':
-                        cumulative_work_frames += 1
+                    if subtask_id:
                         try:
                             assign = get_subtask_from_db(subtask_id)
-                            if assign is not None and assign.get('expected_duration_sec') is not None:
-                                expected = assign.get('expected_duration_sec')
-                                actual_work_time = cumulative_work_frames / (fps if fps > 0 else 30.0)
+                            if assign is not None and assign.get('duration_sec') is not None:
+                                expected = assign.get('duration_sec')
+                                # Build temporary samples/work lists that include this current sample
+                                temp_sample = {'frame_index': fi, 'time_sec': time_sec, 'caption': caption, 'label': label, 'llm_output': cls_text}
+                                temp_samples = (collected_samples or []) + [temp_sample]
+                                temp_work = (collected_work or []) + ([fi] if label == 'work' else [])
+                                work_ranges = compute_ranges(temp_work, temp_samples, fps)
+                                merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                 if actual_work_time > expected:
                                     subtask_overrun = True
                                 else:
@@ -595,13 +896,54 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         payload['subtask_overrun'] = subtask_overrun
 
                     # collect
-                    collected_samples.append({
-                        'frame_index': fi, 'time_sec': time_sec, 'caption': caption, 'label': label, 'llm_output': cls_text
-                    })
+                    sample = {'frame_index': fi, 'time_sec': time_sec, 'caption': caption, 'label': label, 'llm_output': cls_text}
+                    collected_samples.append(sample)
                     if label == 'work':
                         collected_work.append(fi)
                     else:
                         collected_idle.append(fi)
+
+                    # --- time-windowed aggregation (no semantic similarity) ---
+                    if classifier_source_norm == 'llm':
+                        # Add sample to current window or start new one
+                        if current_window is None:
+                            current_window = evidence_mod.EvidenceWindow(
+                                start_time=time_sec,
+                                end_time=time_sec
+                            )
+                        
+                        current_window.add_sample(time_sec, caption)
+                        last_sample_time = time_sec
+                        
+                        # Check if window should close (silence or max duration)
+                        closed_window = _close_window_if_needed(time_sec)
+                        if closed_window is not None:
+                            # Window closed: convert to segment and send to LLM
+                            seg_event = _finalize_window(closed_window)
+                            if seg_event is not None:
+                                # LLM classifies the full timeline
+                                cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                                rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_event['timeline'])
+                                llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
+                                seg_label, _ = rules_mod.determine_label(
+                                    seg_event['timeline'],
+                                    use_llm=True,
+                                    text_llm=llm_mod.get_local_text_llm(),
+                                    prompt=prompt,
+                                    classify_prompt_template=cls_prompt,
+                                    output_mode=classifier_mode
+                                )
+                                seg_event['label'] = seg_label
+                                seg_event['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                                yield _sse_event(seg_event)
+                            
+                            # Start fresh window with current sample
+                            current_window = evidence_mod.EvidenceWindow(
+                                start_time=time_sec,
+                                end_time=time_sec
+                            )
+                            current_window.add_sample(time_sec, caption)
+                            last_sample_time = time_sec
 
                     yield _sse_event(payload)
                 except Exception as e:
@@ -613,34 +955,64 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 vid_info = {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height, 'duration': duration}
                 aid = str(uuid.uuid4())
                 save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id)
-                # Update subtask counts if compare_timings is enabled and subtask_id provided
-                if compare_timings and subtask_id:
+                # Evaluate subtasks completion from collected captions using vector store + LLM
+                try:
+                    captions = [s.get('caption') for s in collected_samples if s.get('caption')]
+                    evals = db_mod.evaluate_subtasks_completion(captions)
+                except Exception:
+                    evals = []
+
+                # Update subtask counts if compare_timings is enabled and subtask_id or task_id provided
+                if compare_timings and (subtask_id or task_id):
                     try:
-                        subtask = get_subtask_from_db(subtask_id)
-                        if subtask:
-                            expected_duration = subtask['duration_sec']
-                            # Calculate actual work time from collected_work (time span from first to last work frame)
-                            if collected_work:
-                                min_frame = min(collected_work)
-                                max_frame = max(collected_work)
-                                actual_work_time = (max_frame - min_frame) / fps if fps > 0 else 0
-                                logging.info(f'Subtask {subtask_id}: expected={expected_duration}s, actual={actual_work_time}s, work_frames={len(collected_work)}')
-                                if actual_work_time <= expected_duration:
-                                    completed_in_time_increment = 1
-                                    completed_with_delay_increment = 0
-                                    logging.info(f'Incrementing completed_in_time for subtask {subtask_id}')
-                                else:
-                                    completed_in_time_increment = 0
-                                    completed_with_delay_increment = 1
-                                    logging.info(f'Incrementing completed_with_delay for subtask {subtask_id}')
-                                # Update counts in database
-                                update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment)
-                                logging.info(f'Updated subtask {subtask_id} counts: +{completed_in_time_increment} in_time, +{completed_with_delay_increment} with_delay')
-                            else:
-                                logging.info(f'No work frames found for subtask {subtask_id}')
+                        # If a task_id is provided, evaluate all subtasks under that task
+                        if task_id:
+                            try:
+                                subs = db_mod.list_subtasks_from_db()
+                                task_ids = [t.strip() for t in (task_id or '').split(',') if t.strip()]
+                                subs_for_task = [s for s in subs if (s.get('task_id') in task_ids) or (s.get('task_name') in task_ids)]
+                                for s in subs_for_task:
+                                    sid = s.get('id')
+                                    # combined (default) or llm_only handled inside aggregate
+                                    db_mod.aggregate_and_update_subtask(sid, collected_samples, collected_work, fps=fps, llm=llm_mod.get_local_text_llm())
+                            except Exception:
+                                logging.exception('Failed to aggregate for task_id, falling back to timing-only per-subtask')
+                                subs = db_mod.list_subtasks_from_db()
+                                subs_for_task = [s for s in subs if s.get('task_id') == task_id or s.get('task_name') == task_id]
+                                for s in subs_for_task:
+                                    sid = s.get('id')
+                                    subtask = get_subtask_from_db(sid)
+                                    if subtask and collected_work:
+                                        work_ranges = compute_ranges(collected_work, collected_samples, fps)
+                                        merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                        actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                        expected_duration = subtask.get('duration_sec')
+                                        if actual_work_time <= expected_duration:
+                                            db_mod.update_subtask_counts(sid, 1, 0)
+                                        else:
+                                            db_mod.update_subtask_counts(sid, 0, 1)
+                        else:
+                            # single subtask behavior (backwards compatible)
+                            try:
+                                inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=fps, llm=llm_mod.get_local_text_llm())
+                                print(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
+                            except Exception:
+                                subtask = get_subtask_from_db(subtask_id)
+                                if subtask and collected_work:
+                                    work_ranges = compute_ranges(collected_work, collected_samples, fps)
+                                    merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
+                                    actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
+                                    expected_duration = subtask.get('duration_sec')
+                                    if actual_work_time <= expected_duration:
+                                        db_mod.update_subtask_counts(subtask_id, 1, 0)
+                                    else:
+                                        db_mod.update_subtask_counts(subtask_id, 0, 1)
                     except Exception as e:
-                        logging.exception(f'Failed to update subtask counts for {subtask_id}')
-                yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid})
+                        logging.exception(f'Failed to update subtask counts for {subtask_id or task_id}')
+                out = {"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}", "stored_analysis_id": aid}
+                if evals:
+                    out['subtask_evaluations'] = evals
+                yield _sse_event(out)
             except Exception:
                 yield _sse_event({"stage": "finished", "message": "processing complete", "video_url": f"/backend/vlm_video/{filename}"})
         except Exception as e:
@@ -673,13 +1045,33 @@ async def vlm_local_models():
 
     models_out = []
     for e in entries:
+        mid = e.get('id')
+        mid_l = (mid or '').lower()
+        # consider model available if it's present in the captioner cache
+        cached = None
+        try:
+            cached = _captioner_cache.get(mid) or _captioner_cache.get(mid_l) or None
+        except Exception:
+            cached = None
+        available = bool(cached)
+        # Ensure device is JSON-serializable (e.g., torch.device -> str)
+        device_raw = None
+        try:
+            device_raw = getattr(cached, 'device', None) if cached is not None else None
+        except Exception:
+            device_raw = None
+        device_val = None
+        try:
+            device_val = str(device_raw) if device_raw is not None else None
+        except Exception:
+            device_val = None
         models_out.append({
-            "id": e.get('id'),
+            "id": mid,
             "name": e.get('name'),
             "task": e.get('task', 'image-to-text'),
-            # We don't probe availability here to avoid loading models.
-            "available": False,
-            "probed": False,
+            "available": available,
+            "probed": available,
+            "device": device_val,
         })
 
     return {"available": False, "models": models_out, "probed": False}
@@ -687,114 +1079,137 @@ async def vlm_local_models():
 
 @app.get('/backend/rules')
 async def list_rules():
-    """Return available rule sets and metadata for frontend selection."""
+    """Return available label modes for frontend selection."""
     try:
-        out = {'rule_sets': rules_mod.list_rule_sets(), 'classifiers': rules_mod.list_classifiers()}
+        out = {'label_modes': rules_mod.list_label_modes()}
         return out
     except Exception as e:
-        logging.exception('Failed to list rule sets: %s', e)
-        return make_alert_json('Failed to list rule sets', status_code=500)
+        logging.exception('Failed to list label modes: %s', e)
+        return make_alert_json('Failed to list label modes', status_code=500)
 
 
-@app.post("/backend/caption")
-async def caption_image(request: dict):
-    """Caption an image using the specified VLM model.
-    
-    Expects JSON:
-    {
-        "image": "base64_encoded_image_data",
-        "model": "model_id_string"
-    }
-    
-    Returns:
-    {
-        "caption": "generated caption text",
-        "model": "model_id_used"
-    }
-    """
-    
+@app.get('/backend/status')
+async def backend_status():
+    """Return simple health/status info for frontend hints: LLM availability and VLM models."""
     try:
-        image_data = request.get("image")
-        model_id = request.get("model")
-        
-        if not image_data:
-            return make_alert_json('No image data provided', status_code=400)
-
-        if not model_id:
-            return make_alert_json('No model specified', status_code=400)
-        
-        # Decode base64 image
+        llm_avail = False
         try:
-            # Handle data URL format (data:image/png;base64,...)
-            if image_data.startswith('data:'):
-                image_data = image_data.split(',')[1]
-            
-            image_bytes = base64.b64decode(image_data)
-            image = Image.open(io.BytesIO(image_bytes))
-            
-            # Convert to RGB if needed and ensure minimum size
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-            
-            # Ensure minimum size for BLIP (resize very small images)
-            if image.size[0] < 224 or image.size[1] < 224:
-                image = image.resize((224, 224), Image.Resampling.LANCZOS)
-                
-        except Exception as e:
-            return make_alert_json(f"Invalid image data: {str(e)}", status_code=400)
-        
-        # Optional preprocessing flags (can be supplied in JSON body)
-        enable_mediapipe = bool(request.get('enable_mediapipe', False))
-        enable_yolo = bool(request.get('enable_yolo', False))
+            llm_avail = llm_mod.get_local_text_llm() is not None
+        except Exception:
+            llm_avail = False
 
-        # Get the appropriate captioner
-        captioner = get_captioner_for_model(model_id)
-        
-        if captioner is None:
-            return make_alert_json(f"Model {model_id} is not available", status_code=500)
-        
-        # Optionally run mediapipe / yolo preprocessing: server does not
-        # execute the standalone mediapipe_vlm scripts here to avoid tight
-        # coupling. If the frontend requests these features, return a minimal
-        # summary indicating whether the server is configured to run them.
-        mediapipe_summary = None
-        yolo_summary = None
-        if enable_mediapipe:
-            mediapipe_summary = {'available': False, 'message': 'Mediapipe preprocessing is not enabled on this server'}
-        if enable_yolo:
-            yolo_summary = {'available': False, 'message': 'YOLO preprocessing is not enabled on this server'}
-
-        # Generate caption (or label via adapter)
+        # reuse vlm_local_models to get model descriptors
         try:
-            result = captioner(image)
-            # Extract caption text from result
-            if isinstance(result, list) and len(result) > 0:
-                if isinstance(result[0], dict) and 'generated_text' in result[0]:
-                    caption_text = result[0]['generated_text']
-                else:
-                    caption_text = str(result[0])
-            else:
-                caption_text = str(result)
+            vlm = await vlm_local_models()
+            vlm_models = vlm.get('models') if isinstance(vlm, dict) else []
+        except Exception:
+            vlm_models = []
 
-            out = {
-                "caption": caption_text,
-                "model": model_id,
-                "status": "success"
-            }
-            if mediapipe_summary is not None:
-                out['mediapipe'] = mediapipe_summary
-            if yolo_summary is not None:
-                out['yolo'] = yolo_summary
-            return out
-        except Exception as e:
-            logging.error(f"Error during caption generation with {model_id}: {e}")
-            return make_alert_json(f"Caption generation failed: {str(e)}", status_code=500)
-        
-    except HTTPException:
-        raise
+        return {'llm_available': bool(llm_avail), 'vlm_models': vlm_models}
     except Exception as e:
-        logging.error(f"Unexpected error in caption endpoint: {e}")
-        return make_alert_json('Internal server error', status_code=500)
+        logging.exception('Failed to get backend status: %s', e)
+        return {'llm_available': False, 'vlm_models': []}
+
+
+# @app.post("/backend/caption")
+# async def caption_image(request: dict):
+#     """Caption an image using the specified VLM model.
+    
+#     Expects JSON:
+#     {
+#         "image": "base64_encoded_image_data",
+#         "model": "model_id_string"
+#     }
+    
+#     Returns:
+#     {
+#         "caption": "generated caption text",
+#         "model": "model_id_used"
+#     }
+#     """
+    
+#     try:
+#         image_data = request.get("image")
+#         model_id = request.get("model")
+        
+#         if not image_data:
+#             return make_alert_json('No image data provided', status_code=400)
+
+#         if not model_id:
+#             return make_alert_json('No model specified', status_code=400)
+        
+#         # Decode base64 image
+#         try:
+#             # Handle data URL format (data:image/png;base64,...)
+#             if image_data.startswith('data:'):
+#                 image_data = image_data.split(',')[1]
+            
+#             image_bytes = base64.b64decode(image_data)
+#             image = Image.open(io.BytesIO(image_bytes))
+            
+#             # Convert to RGB if needed and ensure minimum size
+#             if image.mode != 'RGB':
+#                 image = image.convert('RGB')
+            
+#             # Ensure minimum size for BLIP (resize very small images)
+#             if image.size[0] < 224 or image.size[1] < 224:
+#                 image = image.resize((224, 224), Image.Resampling.LANCZOS)
+                
+#         except Exception as e:
+#             return make_alert_json(f"Invalid image data: {str(e)}", status_code=400)
+        
+#         # Optional preprocessing flags (can be supplied in JSON body)
+#         enable_mediapipe = bool(request.get('enable_mediapipe', False))
+#         enable_yolo = bool(request.get('enable_yolo', False))
+
+#         # Get the appropriate captioner
+#         captioner = get_captioner_for_model(model_id)
+        
+#         if captioner is None:
+#             return make_alert_json(f"Model {model_id} is not available", status_code=500)
+        
+#         # Optionally run mediapipe / yolo preprocessing: server does not
+#         # execute the standalone mediapipe_vlm scripts here to avoid tight
+#         # coupling. If the frontend requests these features, return a minimal
+#         # summary indicating whether the server is configured to run them.
+#         mediapipe_summary = None
+#         yolo_summary = None
+#         if enable_mediapipe:
+#             mediapipe_summary = {'available': False, 'message': 'Mediapipe preprocessing is not enabled on this server'}
+#         if enable_yolo:
+#             yolo_summary = {'available': False, 'message': 'YOLO preprocessing is not enabled on this server'}
+
+#         # Generate caption (or label via adapter)
+#         try:
+#             result = captioner(image)
+#             # Extract caption text from result
+#             if isinstance(result, list) and len(result) > 0:
+#                 if isinstance(result[0], dict) and 'generated_text' in result[0]:
+#                     caption_text = result[0]['generated_text']
+#                 else:
+#                     caption_text = str(result[0])
+#             else:
+#                 caption_text = str(result)
+
+#             out = {
+#                 "caption": caption_text,
+#                 "model": model_id,
+#                 "status": "success"
+#             }
+#             if mediapipe_summary is not None:
+#                 out['mediapipe'] = mediapipe_summary
+#             if yolo_summary is not None:
+#                 out['yolo'] = yolo_summary
+#             return out
+#         except Exception as e:
+#             logging.error(f"Error during caption generation with {model_id}: {e}")
+#             return make_alert_json(f"Caption generation failed: {str(e)}", status_code=500)
+        
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logging.error(f"Unexpected error in caption endpoint: {e}")
+#         return make_alert_json('Internal server error', status_code=500)
 
 
 @app.post('/backend/load_vlm_model')
@@ -853,17 +1268,10 @@ async def update_subtask(subtask_id: str, subtask_info: str = Form(...), duratio
     s = get_subtask_from_db(subtask_id)
     if s is None:
         raise HTTPException(status_code=404, detail='subtask not found')
-    # Get task_id from existing
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('SELECT task_id FROM subtasks WHERE id=?', (subtask_id,))
-    r = cur.fetchone()
-    conn.close()
-    if not r:
-        raise HTTPException(status_code=404, detail='subtask not found')
-    task_id = r[0]
-    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time or s['completed_in_time'], completed_with_delay or s['completed_with_delay'])
+    task_id = s.get('task_id')
+    if not task_id:
+        raise HTTPException(status_code=400, detail='subtask missing task reference')
+    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time or s.get('completed_in_time', 0), completed_with_delay or s.get('completed_with_delay', 0))
     return {'message': 'updated'}
 
 
@@ -872,12 +1280,9 @@ async def delete_subtask(subtask_id: str):
     s = get_subtask_from_db(subtask_id)
     if s is None:
         raise HTTPException(status_code=404, detail='subtask not found')
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('DELETE FROM subtasks WHERE id=?', (subtask_id,))
-    conn.commit()
-    conn.close()
+    deleted = db_mod.delete_subtask_from_db(subtask_id)
+    if not deleted:
+        raise HTTPException(status_code=500, detail='failed to delete subtask')
     return {'message': 'deleted'}
 
 
@@ -907,13 +1312,9 @@ async def delete_task_endpoint(task_id: str):
     t = get_task_from_db(task_id)
     if not t:
         raise HTTPException(status_code=404, detail='task not found')
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('DELETE FROM subtasks WHERE task_id=?', (task_id,))
-    cur.execute('DELETE FROM tasks WHERE id=?', (task_id,))
-    conn.commit()
-    conn.close()
+    deleted = db_mod.delete_task_from_db(task_id)
+    if not deleted:
+        raise HTTPException(status_code=500, detail='failed to delete task')
     return {'message': 'deleted'}
 
 
@@ -946,10 +1347,3 @@ async def delete_analysis(analysis_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('UPDATE subtasks SET completed_in_time = completed_in_time + ?, completed_with_delay = completed_with_delay + ? WHERE id = ?', (completed_in_time_increment, completed_with_delay_increment, subtask_id))
-    conn.commit()
-    conn.close()

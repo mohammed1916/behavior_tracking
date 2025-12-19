@@ -1856,3 +1856,541 @@ If this is a private repository, make sure to pass a token having permission to 
 2025-12-11 17:53:02,152 WARNING QwenVLMAdapter not available; refusing to load non-HF model id qwen_local
 2025-12-11 17:55:34,416 INFO Preloaded qwen_local adapter from C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model
 2025-12-11 17:56:48,618 INFO Loaded qwen_local adapter via admin endpoint
+2025-12-12 15:42:48,296 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) on device=cuda:0
+2025-12-12 15:42:57,273 INFO Saved VLM upload to vlm_uploads\8cae21b6-6ea9-4512-a4ce-a5aa070a29e9_assembly_idle (2).mp4
+2025-12-12 17:21:38,930 INFO Loaded captioner for model Salesforce/blip-image-captioning-large (task=image-to-text) on device=cuda:0
+2025-12-12 17:21:48,524 INFO Saved VLM upload to vlm_uploads\c8929e3c-b530-4f33-b160-e972e8c20ebf_assembly_idle (2).mp4
+2025-12-12 17:21:49,658 INFO Using Ollama CLI model qwen3:0.6b for text LLM
+2025-12-12 17:22:08,194 ERROR Failed to initialize QwenVLMAdapter for Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 131, in get_captioner_for_model
+    adapter = QwenVLMAdapter(os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model'), device=dev_arg)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:22:08,223 ERROR Error loading model Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 131, in get_captioner_for_model
+    adapter = QwenVLMAdapter(os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model'), device=dev_arg)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\server.py", line 808, in load_vlm_model
+    p = get_captioner_for_model(model, device_override=device)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 141, in get_captioner_for_model
+    raise RuntimeError(f'Requested GPU device but adapter init failed: {e}')
+RuntimeError: Requested GPU device but adapter init failed: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:22:21,139 ERROR Failed to initialize QwenVLMAdapter for Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 131, in get_captioner_for_model
+    adapter = QwenVLMAdapter(os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model'), device=dev_arg)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:22:21,141 ERROR Error loading model Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 131, in get_captioner_for_model
+    adapter = QwenVLMAdapter(os.path.join(os.path.dirname(__file__), 'scripts', 'qwen_vlm_2b_activity_model'), device=dev_arg)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\server.py", line 808, in load_vlm_model
+    p = get_captioner_for_model(model, device_override=device)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 141, in get_captioner_for_model
+    raise RuntimeError(f'Requested GPU device but adapter init failed: {e}')
+RuntimeError: Requested GPU device but adapter init failed: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:27:38,867 ERROR Failed to initialize QwenVLMAdapter for Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 91, in get_captioner_for_model
+    adapter = QwenVLMAdapter(model_path, device=device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:27:46,549 ERROR Failed to initialize QwenVLMAdapter for Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 91, in get_captioner_for_model
+    adapter = QwenVLMAdapter(model_path, device=device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:27:55,201 ERROR Failed to initialize QwenVLMAdapter for Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 91, in get_captioner_for_model
+    adapter = QwenVLMAdapter(model_path, device=device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:43:19,626 ERROR Failed to initialize QwenVLMAdapter for Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 91, in get_captioner_for_model
+    adapter = QwenVLMAdapter(model_path, device=device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:43:26,082 ERROR Failed to initialize QwenVLMAdapter for Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 91, in get_captioner_for_model
+    adapter = QwenVLMAdapter(model_path, device=device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:57:45,772 ERROR Error loading model Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\server.py", line 808, in load_vlm_model
+    p = get_captioner_for_model(model, device_override=device)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 72, in get_captioner_for_model
+    adapter = QwenVLMAdapter(model_path, device=device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:57:49,656 ERROR Error loading model Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\server.py", line 808, in load_vlm_model
+    p = get_captioner_for_model(model, device_override=device)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 72, in get_captioner_for_model
+    adapter = QwenVLMAdapter(model_path, device=device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+2025-12-12 17:57:56,028 ERROR Error loading model Qwen/Qwen2-VL-2B-Instruct
+Traceback (most recent call last):
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 479, in cached_files
+    hf_hub_download(
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 32, in __init__
+    self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\auto\processing_auto.py", line 303, in from_pretrained
+    processor_config_file = cached_file(pretrained_model_name_or_path, PROCESSOR_NAME, **cached_file_kwargs)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 322, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 532, in cached_files
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision, repo_type)
+  File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\utils\hub.py", line 143, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\Users\BBBS-AI-01\AppData\Roaming\Python\Python312\site-packages\huggingface_hub\utils\_validators.py", line 160, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\server.py", line 808, in load_vlm_model
+    p = get_captioner_for_model(model, device_override=device)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\captioner.py", line 72, in get_captioner_for_model
+    adapter = QwenVLMAdapter(model_path, device=device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BBBS-AI-01\d\behavior_tracking\backend\vlm_qwen.py", line 34, in __init__
+    raise RuntimeError(f"Failed to load processor for model {self.model_id}: {e}")
+RuntimeError: Failed to load processor for model C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model: Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with '-' or '.' and the maximum length is 96: 'C:\Users\BBBS-AI-01\d\behavior_tracking\backend\scripts\qwen_vlm_2b_activity_model'.

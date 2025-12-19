@@ -4,6 +4,8 @@ import json
 from datetime import datetime
 import uuid
 import logging
+from backend.vector_store import STORE as vector_store
+from backend.llm import get_local_text_llm, TASK_COMPLETION_PROMPT_TEMPLATE
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'analyses.db')
 _db_initialized = False
@@ -30,33 +32,7 @@ def init_db():
         created_at TEXT
     )
     ''')
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        created_at TEXT
-    )
-    ''')
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS subtasks (
-        id TEXT PRIMARY KEY,
-        task_id TEXT NOT NULL,
-        subtask_info TEXT,
-        duration_sec INTEGER NOT NULL,
-        completed_in_time INTEGER DEFAULT 0,
-        completed_with_delay INTEGER DEFAULT 0,
-        created_at TEXT,
-        FOREIGN KEY (task_id) REFERENCES tasks(id)
-    )
-    ''')
-    try:
-        cur.execute('ALTER TABLE subtasks ADD COLUMN completed_in_time INTEGER DEFAULT 0;')
-    except sqlite3.OperationalError:
-        pass
-    try:
-        cur.execute('ALTER TABLE subtasks ADD COLUMN completed_with_delay INTEGER DEFAULT 0;')
-    except sqlite3.OperationalError:
-        pass
+    # Tasks and subtasks are stored in the vector store (backend/vector_store.py)
     cur.execute('''
     CREATE TABLE IF NOT EXISTS samples (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,62 +143,94 @@ def delete_analysis_from_db(aid):
     conn.close()
 
 def save_task_to_db(task_id, name):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    # Persist a task into the vector store. 'name' is stored as text and also used
+    # to derive a deterministic pseudo-embedding.
     created = datetime.utcnow().isoformat() + 'Z'
-    cur.execute('''INSERT OR REPLACE INTO tasks (id, name, created_at) VALUES (?, ?, ?)''', (task_id, name, created))
-    conn.commit()
-    conn.close()
+    metadata = {'name': name, 'created_at': created}
+    vector_store.upsert('tasks', task_id, text=name, metadata=metadata)
 
 def list_tasks_from_db():
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('SELECT id, name, created_at FROM tasks ORDER BY created_at DESC')
-    rows = cur.fetchall()
-    conn.close()
-    return [{'id': r[0], 'name': r[1], 'created_at': r[2]} for r in rows]
+    # Return all tasks from the vector store sorted by created_at desc
+    items = vector_store.list('tasks')
+    out = []
+    for it in items:
+        meta = it.get('metadata', {})
+        out.append({'id': it.get('id'), 'name': meta.get('name'), 'created_at': meta.get('created_at')})
+    out.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+    return out
 
 def get_task_from_db(task_id):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('SELECT id, name, created_at FROM tasks WHERE id=?', (task_id,))
-    r = cur.fetchone()
-    conn.close()
-    if not r:
+    it = vector_store.get('tasks', task_id)
+    if not it:
         return None
-    return {'id': r[0], 'name': r[1], 'created_at': r[2]}
+    meta = it.get('metadata', {})
+    return {'id': it.get('id'), 'name': meta.get('name'), 'created_at': meta.get('created_at')}
 
 def save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time=0, completed_with_delay=0):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    # Save subtask into vector store; include task_id reference in metadata
     created = datetime.utcnow().isoformat() + 'Z'
-    cur.execute('''INSERT OR REPLACE INTO subtasks (id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)''', (subtask_id, task_id, subtask_info, duration_sec, completed_in_time, completed_with_delay, created))
-    conn.commit()
-    conn.close()
+    metadata = {
+        'task_id': task_id,
+        'subtask_info': subtask_info,
+        'duration_sec': duration_sec,
+        'completed_in_time': completed_in_time,
+        'completed_with_delay': completed_with_delay,
+        'created_at': created,
+    }
+    text = subtask_info or ''
+    vector_store.upsert('subtasks', subtask_id, text=text, metadata=metadata)
 
 def list_subtasks_from_db():
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('''SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.completed_in_time, s.completed_with_delay, s.created_at FROM subtasks s JOIN tasks t ON s.task_id = t.id ORDER BY s.created_at DESC''')
-    rows = cur.fetchall()
-    conn.close()
-    return [{'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'completed_in_time': r[4], 'completed_with_delay': r[5], 'created_at': r[6]} for r in rows]
+    # List subtasks and include parent task name where available
+    items = vector_store.list('subtasks')
+    out = []
+    for it in items:
+        meta = it.get('metadata', {})
+        task = vector_store.get('tasks', meta.get('task_id')) if meta.get('task_id') else None
+        task_name = (task.get('metadata', {}).get('name')) if task else None
+        out.append({
+            'id': it.get('id'),
+            'task_id': meta.get('task_id'),
+            'task_name': task_name,
+            'subtask_info': meta.get('subtask_info'),
+            'duration_sec': meta.get('duration_sec'),
+            'completed_in_time': meta.get('completed_in_time'),
+            'completed_with_delay': meta.get('completed_with_delay'),
+            'created_at': meta.get('created_at'),
+        })
+    out.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+    return out
 
 def get_subtask_from_db(subtask_id):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('''SELECT s.id, t.name, s.subtask_info, s.duration_sec, s.completed_in_time, s.completed_with_delay, s.created_at FROM subtasks s JOIN tasks t ON s.task_id = t.id WHERE s.id = ?''', (subtask_id,))
-    r = cur.fetchone()
-    conn.close()
-    if not r:
+    it = vector_store.get('subtasks', subtask_id)
+    if not it:
         return None
-    return {'id': r[0], 'task_name': r[1], 'subtask_info': r[2], 'duration_sec': r[3], 'completed_in_time': r[4], 'completed_with_delay': r[5], 'created_at': r[6]}
+    meta = it.get('metadata', {})
+    task = vector_store.get('tasks', meta.get('task_id')) if meta.get('task_id') else None
+    task_name = (task.get('metadata', {}).get('name')) if task else None
+    return {
+        'id': it.get('id'),
+        'task_id': meta.get('task_id'),
+        'task_name': task_name,
+        'subtask_info': meta.get('subtask_info'),
+        'duration_sec': meta.get('duration_sec'),
+        'completed_in_time': meta.get('completed_in_time'),
+        'completed_with_delay': meta.get('completed_with_delay'),
+        'created_at': meta.get('created_at'),
+    }
+
+
+def delete_subtask_from_db(subtask_id):
+    return vector_store.delete('subtasks', subtask_id)
+
+
+def delete_task_from_db(task_id):
+    # delete subtasks referencing this task, then delete the task
+    subs = vector_store.list('subtasks')
+    for it in subs:
+        if it.get('metadata', {}).get('task_id') == task_id:
+            vector_store.delete('subtasks', it.get('id'))
+    return vector_store.delete('tasks', task_id)
 
 def compute_ranges(frames, samples, fps):
     if not frames or (hasattr(frames, '__len__') and len(frames) == 0):
@@ -261,10 +269,196 @@ def compute_ranges(frames, samples, fps):
         r['captions'] = captions
     return ranges
 
+
+def _llm_decision_for_task(info, captions, llm=None, subtask_id=None):
+    """Centralize LLM init, prompt building, call and response parsing.
+
+    Returns: (decision_bool, llm_output_str)
+    Raises RuntimeError on missing LLM or ambiguous output (development-only).
+    """
+    if llm is None:
+        llm = get_local_text_llm()
+        if llm is None:
+            raise RuntimeError('Local text LLM not available; ensure the environment provides a working LLM (e.g. ollama)')
+    prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
+    prompt = prompt_template.format(task=info or '', captions=captions or '')
+    resp = llm(prompt)
+    if isinstance(resp, list) and len(resp) > 0 and isinstance(resp[0], dict):
+        llm_output = resp[0].get('generated_text', '').strip()
+    else:
+        llm_output = str(resp)
+    # Log raw LLM output and captions preview
+    try:
+        print('LLM output for subtask %s: %s', subtask_id or '<anon>', (llm_output or '').replace('\n', ' '))
+        logging.debug('captions_preview: %s', (captions or '')[:1000])
+    except Exception:
+        pass
+    txt = (llm_output or '').strip().lower()
+    affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
+    negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
+    if any(a in txt for a in affirmatives):
+        return True, llm_output
+    if any(n in txt for n in negatives):
+        return False, llm_output
+    # Ambiguous
+    raise RuntimeError(f'LLM returned ambiguous decision for subtask {subtask_id or "<anon>"}: "{llm_output}"')
+
+
+def evaluate_subtasks_completion(captions, llm=None, top_k=5):
+    """Evaluate likely subtask completion using the local text LLM and FAISS-backed subtasks.
+
+    captions: list of caption strings (or single string)
+    llm: optional callable (prompt -> [{'generated_text': ...}])
+    Returns: list of dicts: {subtask_id, task_id, subtask_info, completed (bool), llm_output}
+    """
+    # normalize captions input
+    print("Running evaluate_subtasks_completion with captions:", captions)
+    if not captions:
+        return []
+    if isinstance(captions, (list, tuple)):
+        combined = '\n'.join([str(c) for c in captions])
+    else:
+        combined = str(captions)
+
+    # Require a functioning local LLM during development - fail fast.
+    if llm is None:
+        llm = get_local_text_llm()
+        if llm is None:
+            raise RuntimeError('Local text LLM not available; ensure the environment provides a working LLM (e.g. ollama)')
+    prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
+
+    # find candidate subtasks via vector search
+    candidates = vector_store.search('subtasks', query_text=combined, top_k=top_k)
+
+    results = []
+    for cand in candidates:
+        cid = cand.get('id')
+        meta = cand.get('metadata', {})
+        task_id = meta.get('task_id')
+        info = meta.get('subtask_info') or meta.get('name') or ''
+        # Ask LLM for decision (centralized helper will init LLM and parse)
+        completed, llm_out = _llm_decision_for_task(info, combined, llm=llm, subtask_id=cid)
+        results.append({'subtask_id': cid, 'task_id': task_id, 'subtask_info': info, 'completed': completed, 'llm_output': llm_out})
+
+    return results
+
 def update_subtask_counts(subtask_id, completed_in_time_increment, completed_with_delay_increment):
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute('UPDATE subtasks SET completed_in_time = completed_in_time + ?, completed_with_delay = completed_with_delay + ? WHERE id = ?', (completed_in_time_increment, completed_with_delay_increment, subtask_id))
-    conn.commit()
-    conn.close()
+    it = vector_store.get('subtasks', subtask_id)
+    if not it:
+        return False
+    meta = it.get('metadata', {})
+    meta['completed_in_time'] = int(meta.get('completed_in_time', 0)) + int(completed_in_time_increment)
+    meta['completed_with_delay'] = int(meta.get('completed_with_delay', 0)) + int(completed_with_delay_increment)
+    # persist updated metadata
+    vector_store.upsert('subtasks', subtask_id, text=it.get('text'), metadata=meta, vector=it.get('vector'))
+    return True
+
+
+def aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps, llm=None, policy='default', window_sec=5.0, padding_sec=1.0, min_segment_sec=0.5, merge_gap_sec=1.0):
+    """Aggregate LLM + timing signals for a specific subtask and update counts.
+
+    Returns (completed_in_time_increment, completed_with_delay_increment, reason)
+    """
+    # fetch subtask
+    it = vector_store.get('subtasks', subtask_id)
+    if not it:
+        return (0, 0, 'subtask_not_found')
+    meta = it.get('metadata', {})
+    expected = meta.get('duration_sec')
+    if expected is None:
+        return (0, 0, 'no_expected_duration')
+
+    # compute work ranges from provided frames and samples
+    try:
+        ranges = compute_ranges(collected_work or [], collected_samples or [], fps or 30.0)
+    except Exception:
+        ranges = []
+
+    # merge and filter ranges
+    def _merge_ranges(rs):
+        if not rs:
+            return []
+        rs_sorted = sorted(rs, key=lambda r: r.get('startTime', 0))
+        merged = []
+        cur = rs_sorted[0].copy()
+        for r in rs_sorted[1:]:
+            gap = r.get('startTime', 0) - cur.get('endTime', 0)
+            if gap <= merge_gap_sec:
+                cur['endTime'] = max(cur.get('endTime', 0), r.get('endTime', 0))
+                cur['endFrame'] = max(cur.get('endFrame', cur.get('endFrame', 0)), r.get('endFrame', r.get('endFrame', 0)))
+            else:
+                dur = cur.get('endTime', 0) - cur.get('startTime', 0)
+                if dur >= min_segment_sec:
+                    merged.append(cur.copy())
+                cur = r.copy()
+        dur = cur.get('endTime', 0) - cur.get('startTime', 0)
+        if dur >= min_segment_sec:
+            merged.append(cur.copy())
+        return merged
+
+    merged = _merge_ranges(ranges)
+    actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged)
+
+    # prepare LLM
+    # Require a functioning local LLM during debug; fail fast if missing.
+    if llm is None:
+        llm = get_local_text_llm()
+        if llm is None:
+            raise RuntimeError('Local text LLM not available; ensure the environment provides a working LLM (e.g. ollama)')
+    prompt_template = TASK_COMPLETION_PROMPT_TEMPLATE
+
+    # collect captions within windows around each merged range (or fallback to all captions)
+    captions_for_llm = ''
+    if merged:
+        pieces = []
+        for r in merged:
+            start_w = max(0.0, r.get('startTime', 0) - padding_sec)
+            end_w = r.get('endTime', 0) + padding_sec
+            # gather captions within window
+            caps = [s.get('caption') for s in (collected_samples or []) if s.get('time_sec') is not None and start_w <= s.get('time_sec') <= end_w and s.get('caption')]
+            if caps:
+                pieces.append('\n'.join(caps))
+        captions_for_llm = '\n\n'.join(pieces)
+    else:
+        # no merged ranges: fallback to all captions
+        captions_for_llm = '\n'.join([s.get('caption') for s in (collected_samples or []) if s.get('caption')])
+
+    llm_decision = None
+    llm_output = None
+    # Require LLM/prompt template; do not fall back to heuristics in development.
+    if not captions_for_llm:
+        raise RuntimeError('No captions available for LLM evaluation')
+
+    # Use centralized helper to get LLM decision and output
+    llm_decision, llm_output = _llm_decision_for_task(meta.get('subtask_info') or '', captions_for_llm, llm=llm, subtask_id=subtask_id)
+
+    # aggregation policy (default)
+    completed_in = 0
+    completed_delay = 0
+    reason = 'none'
+    if llm_decision is True:
+        if actual_work_time <= float(expected):
+            completed_in = 1
+            reason = 'llm_yes_in_time'
+        else:
+            completed_delay = 1
+            reason = 'llm_yes_with_delay'
+    elif llm_decision is False:
+        # LLM says not completed -> fall back to timing if within expected
+        if actual_work_time <= float(expected):
+            completed_in = 1
+            reason = 'llm_no_but_timing_in_time'
+        else:
+            reason = 'llm_no_timing_exceeds'
+    else:
+        # LLM uncertain -> fallback to timing
+        if actual_work_time <= float(expected):
+            completed_in = 1
+            reason = 'llm_uncertain_timing_in_time'
+        else:
+            reason = 'llm_uncertain_timing_exceeds'
+
+    if completed_in or completed_delay:
+        update_subtask_counts(subtask_id, completed_in, completed_delay)
+
+    return (completed_in, completed_delay, reason)

@@ -24,11 +24,60 @@ RULE_SETS: Dict[str, Dict[str, Any]] = {
         'description': 'Default keyword-based detection',
         'work_keywords': WORK_KEYWORDS,
     },
-    'strict': {
-        'description': 'Strict matching (fewer keywords)',
-        'work_keywords': ['assemble', 'screw', 'weld', 'repair', 'install'],
-    },
 }
+
+# Import shared prompt templates for VLM/label instructions
+from . import llm as llm_mod
+
+# Label prompt templates (binary vs multi) referenced by "classifier mode"
+LABEL_PROMPTS: Dict[str, str] = {
+    'binary': llm_mod.LABLE_PROMPT_TEMPLATE_BINARY,
+    'multi': llm_mod.LABLE_PROMPT_TEMPLATE_MULTI,
+}
+
+# Expected label sets for validation
+LABEL_SETS: Dict[str, List[str]] = {
+    'binary': ['work', 'idle'],
+    'multi': ['assembling_drone', 'idle', 'using_phone', 'unknown'],
+}
+
+
+def normalize_label_text(text: str, output_mode: str = 'multi') -> str:
+    """Centralized label normalization: extract and normalize text into activity labels.
+    
+    Used by VLM-source mode (direct caption normalization) and 
+    LLM/BOW modes (normalize final LLM/keyword decision).
+    Returns the best-matching label from LABEL_SETS[output_mode].
+    
+    Args:
+        text: Raw text (VLM caption or LLM output token) to normalize
+        output_mode: 'multi' or 'binary' - determines which LABEL_SETS to validate against
+    
+    Returns:
+        Normalized label string from the appropriate LABEL_SETS[output_mode]
+    """
+    if not text:
+        return 'unknown' if output_mode == 'multi' else 'idle'
+    
+    txt = text.lower()
+    expected_labels = LABEL_SETS.get(output_mode, LABEL_SETS['binary'])
+    
+    # Multi-label mode: assembling_drone, idle, using_phone, unknown
+    if output_mode == 'multi':
+        if 'phone' in txt:
+            return 'using_phone'
+        if 'assemble' in txt or 'drone' in txt:
+            return 'assembling_drone'
+        if 'idle' in txt:
+            return 'idle'
+        return 'unknown'
+    
+    # Binary mode: work or idle
+    else:  # 'binary'
+        work_kws = ['make', 'assemble', 'work', 'use', 'cut', 'screw', 'weld', 'attach', 'phone', 'drone']
+        if any(kw in txt for kw in work_kws):
+            return 'work'
+        return 'idle'
 
 
 def _extract_text_from_llm_output(cls_out: Any) -> str:
@@ -51,17 +100,7 @@ def _extract_text_from_llm_output(cls_out: Any) -> str:
         return str(cls_out)
 
 
-CLASSIFIER_PROMPTS: Dict[str, str] = {
-    'blip_binary': (
-        "Classify the following caption as exactly one of: 'work' or 'idle'.\n"
-        "Only output the single word 'work' or 'idle'.\n\nCaption: {caption}\nAnswer:"
-    ),
-    'qwen_activity': (
-        "You are an expert activity recognition model.\n"
-        "Look ONLY at the MAIN PERSON in the image. Choose one label: assembling_drone, idle, using_phone, or unknown.\n"
-        "Answer with exactly one label and nothing else.\n\nCaption: {caption}\nAnswer:"
-    ),
-}
+CLASSIFIER_PROMPTS: Dict[str, str] = {}
 
 
 def determine_label(
@@ -91,38 +130,31 @@ def determine_label(
     label: str = 'idle'
     cls_text: Optional[str] = None
 
-    if use_llm and text_llm is not None and classify_prompt_template:
-        try:
-            rendered = classify_prompt_template.format(prompt=prompt, caption=caption)
-            cls_out = text_llm(rendered, max_new_tokens=max_new_tokens)
-            cls_text = _extract_text_from_llm_output(cls_out) or None
-
-            if cls_text:
-                cleaned = re.sub(r'[^\n\w\s]', '', cls_text).strip()
-                tokens = [t for t in cleaned.split() if t]
-                if tokens:
-                    last = tokens[-1].lower()
-                    if last in ('work', 'idle'):
-                        label = last
-                    else:
-                        # preserve multi-class labels when requested
-                        if output_mode == 'multi':
-                            label = last
-                        else:
-                            # simple domain heuristics mapping to binary label
-                            if any(sub in last for sub in ('assembl', 'drone', 'screw', 'install', 'repair')):
-                                label = 'work'
-                            elif 'phone' in last:
-                                label = 'idle'
-        except Exception:
-            logger.exception('LLM classification failed')
-
-    # Keyword fallback when still 'idle'
-    if label == 'idle':
+    # Build the final prompt: prefer an explicit classify_prompt_template
+    # passed by caller; otherwise compose from shared VLM + label + rules templates
+    if use_llm and text_llm is not None:
+        # try:
+        if classify_prompt_template:
+            final_template = classify_prompt_template
+        else:
+            label_tpl = LABEL_PROMPTS.get(output_mode, LABEL_PROMPTS['binary'])
+            final_template = llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE
+        rendered = final_template.format(prompt=prompt, caption=caption)
+        cls_out = text_llm(rendered, max_new_tokens=max_new_tokens)
+        cls_text = _extract_text_from_llm_output(cls_out) or None
+        if cls_text:
+            cleaned = re.sub(r'[^\n\w\s]', '', cls_text).strip()
+            tokens = [t for t in cleaned.split() if t]
+            if tokens:
+                last = tokens[-1].lower()
+                # Use centralized normalization
+                label = normalize_label_text(last, output_mode)
+    
+    if not use_llm or cls_text is None:
         lw = caption.lower() if isinstance(caption, str) else ''
         kws = RULE_SETS.get(rule_set, {}).get('work_keywords', WORK_KEYWORDS)
         if any(k in lw for k in kws):
-            label = 'work'
+            label = 'work' # if not label is alredy initialized as idle
 
     return label, cls_text
 
@@ -141,15 +173,23 @@ def list_rule_sets() -> Dict[str, Dict[str, Any]]:
     return out
 
 
-def list_classifiers() -> Dict[str, Dict[str, str]]:
-    """Return available classifiers and their default prompt templates."""
-    return {k: {'prompt_template': v} for k, v in CLASSIFIER_PROMPTS.items()}
+def list_label_modes() -> Dict[str, Dict[str, Any]]:
+    """Return available classifier modes (label templates and labels)."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for name, tpl in LABEL_PROMPTS.items():
+        out[name] = {'prompt_template': tpl, 'labels': list(LABEL_SETS.get(name, []))}
+    return out
+
+def get_label_template(mode: str) -> Optional[str]:
+    return LABEL_PROMPTS.get(mode)
 
 
 __all__ = [
     'determine_label',
+    'normalize_label_text',
     'list_rule_sets',
-    'list_classifiers',
+    'list_label_modes',
+    'get_label_template',
     'CLASSIFIER_PROMPTS',
     'RULE_SETS',
     'WORK_KEYWORDS',

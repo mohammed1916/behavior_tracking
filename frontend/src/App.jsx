@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import Select from 'react-select';
 import './App.css';
 import StoredAnalyses from './components/StoredAnalyses';
 import AnalysisDetails from './components/AnalysisDetails';
@@ -6,47 +7,50 @@ import FileUpload from './components/FileUpload';
 import LiveView from './components/LiveView';
 import Tasks from './components/Tasks';
 import Subtasks from './components/Subtasks';
+import SegmentDisplay from './components/SegmentDisplay';
 
 function App() {
-  // const [file, setFile] = useState(null);
-  // const [status, setStatus] = useState('');
-  // const [result, setResult] = useState(null);
-  // const [loading, setLoading] = useState(false);
-  // const [showPose, setShowPose] = useState(false);
-  // const [mode, setMode] = useState('upload');
 
   // VLM state
   const [vlmModel, setVlmModel] = useState('qwen_local');
   const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
   const [preloadedDevices, setPreloadedDevices] = useState({});
+  const [llmAvailable, setLlmAvailable] = useState(false);
+  const [vlmStatusModels, setVlmStatusModels] = useState([]);
+  const [statusLastFetched, setStatusLastFetched] = useState(null);
   const [modelLoading, setModelLoading] = useState(false);
-  const [vlmLoadDevice, setVlmLoadDevice] = useState('auto');
+  const [vlmLoadDevice, setVlmLoadDevice] = useState('cuda:0');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advSubtaskId, setAdvSubtaskId] = useState('');
-  const [advCompareTimings, setAdvCompareTimings] = useState(false);
+  const [tasksList, setTasksList] = useState([]);
+  const [subtasksList, setSubtasksList] = useState([]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('darkMode');
+      if (saved !== null) return saved === '1';
+    } catch (e) {}
+    return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  const [evaluationMode, setEvaluationMode] = useState('combined');
+  const [advCompareTimings, setAdvCompareTimings] = useState(true);
   const [advJpegQuality, setAdvJpegQuality] = useState(80);
   const [advMaxWidth, setAdvMaxWidth] = useState('');
   const [advSaveRecording, setAdvSaveRecording] = useState(false);
+  const [processingMode, setProcessingMode] = useState('every_2s');
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
   const [vlmResult, setVlmResult] = useState(null);
   const [vlmLoading, setVlmLoading] = useState(false);
   const [vlmStream, setVlmStream] = useState(null);
-  const [vlmUseLLM, setVlmUseLLM] = useState(false);
-  const [ruleSets, setRuleSets] = useState({});
+  const [vlmSegments, setVlmSegments] = useState([]);
+  const [vlmClassifierSource, setVlmClassifierSource] = useState('llm');
   const [classifiers, setClassifiers] = useState({});
-  const [vlmRuleSet, setVlmRuleSet] = useState('default');
-  const [vlmClassifier, setVlmClassifier] = useState('blip_binary');
   const [vlmClassifierMode, setVlmClassifierMode] = useState('binary');
   const [vlmClassifierPrompt, setVlmClassifierPrompt] = useState('');
   const [viewAnalysisId, setViewAnalysisId] = useState(null);
   const [enableMediapipe, setEnableMediapipe] = useState(false);
   const [enableYolo, setEnableYolo] = useState(false);
-  // LLM length check state
-  const [llmText, setLlmText] = useState('');
-  const [llmMaxContext, setLlmMaxContext] = useState(2048);
-  const [llmResult, setLlmResult] = useState(null);
-  const [llmLoading, setLlmLoading] = useState(false);
   const vlmVideoRef = useRef(null);
   const pauseTimerRef = useRef(null);
 
@@ -92,25 +96,12 @@ function App() {
     pauseTimerRef.current = setTimeout(() => { try { v.pause(); } catch (e) {} pauseTimerRef.current = null; }, Math.ceil(dur * 1000) + 150);
   }
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-    setStatus('');
-    setResult(null);
-  };
-
-  const handleVlmVideoChange = (e) => {
-    setVlmVideo(e.target.files[0] || null);
-    setVlmResult(null);
-  };
-
   const [activeView, setActiveView] = useState('vlm');
   const [activeTab, setActiveTab] = useState('upload');
-  const [selectedSubtasks, setSelectedSubtasks] = useState([]);
+  // selection of subtasks removed from Subtasks tab
   const [subtasksRefreshTrigger, setSubtasksRefreshTrigger] = useState(0);
 
-  const onSubtaskSelect = useCallback((subtasks) => {
-    setSelectedSubtasks(subtasks);
-  }, []);
+  
 
   const handleVlmSubmit = async () => {
     if (!vlmPrompt && !vlmVideo) {
@@ -120,6 +111,7 @@ function App() {
 
     setVlmLoading(true);
     setVlmResult(null);
+    setVlmSegments([]);
 
     try {
       // upload first
@@ -130,7 +122,23 @@ function App() {
       const upj = await up.json();
       const filename = upj.filename;
 
-      const url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&use_llm=${vlmUseLLM ? 'true' : 'false'}${enableMediapipe ? '&enable_mediapipe=true' : ''}${enableYolo ? '&enable_yolo=true' : ''}${selectedSubtasks.length > 0 ? `&subtask_id=${encodeURIComponent(selectedSubtasks[0].id)}&compare_timings=true` : ''}`;
+      let url = `http://localhost:8001/backend/vlm_local_stream?filename=${encodeURIComponent(filename)}&model=${encodeURIComponent(vlmModel)}&prompt=${encodeURIComponent(vlmPrompt)}&classifier_source=${encodeURIComponent(vlmClassifierSource)}`;
+      if (enableMediapipe) url += '&enable_mediapipe=true';
+      if (enableYolo) url += '&enable_yolo=true';
+      // include classifier mode and optional prompt so server can use same label mode as live view
+      if (vlmClassifierMode) url += `&classifier_mode=${encodeURIComponent(vlmClassifierMode)}`;
+      if (vlmClassifierPrompt) url += `&classifier_prompt=${encodeURIComponent(vlmClassifierPrompt)}`;
+      // attach task/subtask selection and compare/eval mode
+      if (selectedTaskIds && selectedTaskIds.length > 0) {
+        url += `&task_id=${encodeURIComponent(selectedTaskIds.join(','))}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      } else if (advSubtaskId) {
+        url += `&subtask_id=${encodeURIComponent(advSubtaskId)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      } else {
+        url += `&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+      }
+      if (processingMode && processingMode !== 'default') {
+        url += `&processing_mode=${encodeURIComponent(processingMode)}`;
+      }
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
       setVlmStream(es);
@@ -146,6 +154,9 @@ function App() {
             analysis.fps = data.fps || analysis.fps;
             analysis.video_info = data;
             setVlmResult({ message: 'streaming', analysis: { ...analysis } });
+          } else if (data.stage === 'segment') {
+            // Append temporal segment to state
+            setVlmSegments(prev => [...prev, data]);
           } else if (data.stage === 'sample') {
             const sample = { frame_index: data.frame_index, time_sec: data.time_sec, caption: data.caption, label: data.label };
             analysis.samples.push(sample);
@@ -219,39 +230,90 @@ function App() {
     }
   };
 
+  // Fetch backend status (LLM availability and VLM models)
+  const fetchBackendStatus = async () => {
+    try {
+      const resp = await fetch('http://localhost:8001/backend/status');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      setLlmAvailable(!!data.llm_available);
+      setVlmStatusModels(data.vlm_models || []);
+      setStatusLastFetched(Date.now());
+    } catch (e) {
+      console.warn('Failed to fetch backend status', e);
+    }
+  };
+
   useEffect(() => {
     fetchLocalModels();
     fetchPreloadedModels();
-    // fetch available rule sets and classifiers
+    fetchBackendStatus();
+    // fetch available label modes
     (async () => {
       try {
         const resp = await fetch('http://localhost:8001/backend/rules');
         if (!resp.ok) return;
         const j = await resp.json();
-        setRuleSets(j.rule_sets || {});
-        setClassifiers(j.classifiers || {});
-        // keep defaults if current selections aren't present
-        if (!vlmRuleSet && Object.keys(j.rule_sets || {}).length) setVlmRuleSet(Object.keys(j.rule_sets)[0]);
-        if (!vlmClassifier && Object.keys(j.classifiers || {}).length) setVlmClassifier(Object.keys(j.classifiers)[0]);
+        // backend exposes `label_modes` (binary/multi)
+        const labelModes = j.label_modes || {};
+        setClassifiers(labelModes);
+        if (!vlmClassifierMode && Object.keys(labelModes || {}).length) setVlmClassifierMode(Object.keys(labelModes)[0]);
       } catch (e) {
-        console.warn('Failed to fetch rule sets', e);
+        console.warn('Failed to fetch label modes', e);
       }
     })();
+    fetchTasks();
+    fetchSubtasks();
   }, []);
 
   const fetchPreloadedModels = async () => {
     try {
-      const resp = await fetch('http://localhost:8001/backend/preloaded_models');
+      // backend exposes `vlm_local_models` with an array of model descriptors
+      const resp = await fetch('http://localhost:8001/backend/vlm_local_models');
       if (!resp.ok) return setPreloadedDevices({});
       const data = await resp.json();
-      const models = data.models || {};
-      // models is a map id -> {type, loaded, device}
-      setPreloadedDevices(models);
+      const modelsArr = data.models || [];
+      // convert to a map keyed by id to keep compatibility with UI expectations
+      const modelsMap = {};
+      modelsArr.forEach(m => {
+        modelsMap[m.id] = { type: m.task || 'image-to-text', loaded: !!m.available, probed: !!m.probed, device: m.device || null };
+      });
+      setPreloadedDevices(modelsMap);
     } catch (e) {
       console.warn('Could not fetch preloaded models', e);
       setPreloadedDevices({});
     }
   };
+
+  const fetchTasks = async () => {
+    try {
+      const resp = await fetch('http://localhost:8001/backend/tasks');
+      if (!resp.ok) return setTasksList([]);
+      const data = await resp.json();
+      setTasksList(data || []);
+    } catch (e) {
+      console.warn('Failed to fetch tasks', e);
+      setTasksList([]);
+    }
+  };
+
+  const fetchSubtasks = async () => {
+    try {
+      const resp = await fetch('http://localhost:8001/backend/subtasks');
+      if (!resp.ok) return setSubtasksList([]);
+      const data = await resp.json();
+      // console.log('fetched subtasks', data);
+      setSubtasksList(data || []);
+    } catch (e) {
+      console.warn('Failed to fetch subtasks', e);
+      setSubtasksList([]);
+    }
+  };
+
+  // Keep selectedTaskIds in sync with fetched tasks: remove any ids that no longer exist
+  useEffect(() => {
+    setSelectedTaskIds(prev => (prev || []).filter(id => (tasksList || []).some(t => t.id === id)));
+  }, [tasksList]);
 
   const loadModel = async () => {
     if (!vlmModel) return alert('Select a model first');
@@ -280,32 +342,77 @@ function App() {
   // derive selected local model's display name
   const selectedVlmModelName = (vlmAvailableModels || []).find(m => m.id === vlmModel)?.name || (vlmAvailableModels && vlmAvailableModels[0] && vlmAvailableModels[0].name) || '';
 
+  // task select options for react-select
+  const taskOptions = (tasksList || []).map(t => ({ value: t.id, label: t.name }));
+  const selectedTaskOptions = taskOptions.filter(o => selectedTaskIds.includes(o.value));
+
+  // react-select custom styles derived from CSS variables so the CSS theme remains authoritative
+  const cssVars = React.useMemo(() => {
+    try {
+      const css = getComputedStyle(document.documentElement);
+      return {
+        surface: css.getPropertyValue('--surface').trim() || '#fff',
+        text: css.getPropertyValue('--text').trim() || '#000',
+        muted: css.getPropertyValue('--muted').trim() || '#6b7280',
+        panelBorder: css.getPropertyValue('--panel-border').trim() || '#e6e9ef',
+        accent: css.getPropertyValue('--accent').trim() || '#646cff',
+        accentStrong: css.getPropertyValue('--accent-strong').trim() || '#4f54e6',
+        accentGhost: css.getPropertyValue('--accent-ghost').trim() || 'rgba(100,108,255,0.08)',
+        cardBg: css.getPropertyValue('--card-bg').trim() || '#fff',
+        // semantic badges (may not be present in CSS; fallbacks kept minimal)
+        successBg: css.getPropertyValue('--badge-success-bg').trim() || '#dff0d8',
+        dangerBg: css.getPropertyValue('--badge-danger-bg').trim() || '#f8d7da',
+        successText: css.getPropertyValue('--badge-success-text').trim() || '#3c763d',
+        dangerText: css.getPropertyValue('--badge-danger-text').trim() || '#721c24'
+      };
+    } catch (e) {
+      return { surface: '#fff', text: '#000', muted: '#6b7280', panelBorder: '#e6e9ef', accent: '#646cff', accentStrong: '#4f54e6', accentGhost: 'rgba(100,108,255,0.08)', cardBg: '#fff', successBg: '#dff0d8', dangerBg: '#f8d7da', successText: '#3c763d', dangerText: '#721c24' };
+    }
+  }, [darkMode]);
+
+  const selectStyles = {
+    control: (base, state) => ({
+      ...base,
+      backgroundColor: cssVars.surface,
+      borderColor: cssVars.panelBorder || base.borderColor,
+      boxShadow: state.isFocused ? '0 0 0 1px rgba(38,132,255,0.12)' : base.boxShadow,
+      color: cssVars.text
+    }),
+    menu: (base) => ({ ...base, backgroundColor: cssVars.surface, color: cssVars.text }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isSelected ? cssVars.accentStrong : (state.isFocused ? cssVars.accentGhost : cssVars.surface),
+      color: cssVars.text
+    }),
+    multiValue: (base) => ({ ...base, backgroundColor: cssVars.panelBorder, color: cssVars.text }),
+    placeholder: (base) => ({ ...base, color: cssVars.text }),
+    singleValue: (base) => ({ ...base, color: cssVars.text }),
+    input: (base) => ({ ...base, color: cssVars.text }),
+    dropdownIndicator: (base) => ({ ...base, color: cssVars.text }),
+    indicatorSeparator: (base) => ({ ...base, backgroundColor: cssVars.panelBorder })
+  };
+
+  // keep the document root .dark class in sync and persist preference
+  React.useEffect(() => {
+    try {
+      if (darkMode) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+      localStorage.setItem('darkMode', darkMode ? '1' : '0');
+    } catch (e) {}
+  }, [darkMode]);
+
   useEffect(() => {
     console.log("selectedVlmModelName changed:", selectedVlmModelName);
   }, [selectedVlmModelName]);
-  // const handleUpload = async () => {
-  //   if (!file) return alert('Please select a file first!');
-  //   setLoading(true);
-  //   setStatus('Uploading and processing...');
-  //   const formData = new FormData();
-  //   formData.append('file', file);
-  //   try {
-  //     const response = await fetch('http://localhost:8001/backend/analyze_video', { method: 'POST', body: formData });
-  //     if (!response.ok) throw new Error(`Error: ${response.statusText}`);
-  //     const data = await response.json();
-  //     setResult(data);
-  //     setStatus('Processing complete!');
-  //   } catch (error) {
-  //     console.error('Error uploading file:', error);
-  //     setStatus(`Failed: ${error.message}`);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
 
   return (
     <div className="App">
-      <h1>Behavior Tracking Analysis</h1>
+      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+        <div style={{ marginRight: 'auto' }}></div>
+        <button onClick={() => setDarkMode(d => !d)} style={{ marginLeft: 8 }}>{darkMode ? 'Light Mode' : 'Dark Mode'}</button>
+      </div>
+      <h1 style={{ margin: 0, flex: 1 }}>Behavior Tracking Analysis</h1>
+
 
       <nav className="navbar">
         <button className={activeView === 'vlm' ? 'active' : ''} onClick={() => setActiveView('vlm')}>VLM</button>
@@ -332,23 +439,58 @@ function App() {
                 <option value="cuda:0">GPU (cuda:0)</option>
               </select>
               <div style={{  margin: 30 }}/>
-              <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
-              <button type="button" onClick={() => { fetchLocalModels(); fetchPreloadedModels(); }} style={{ marginLeft: 8 }}>Refresh models</button>
-              
+              <div  style={{ display: 'flex', alignItems: 'center' }}>
+                <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
+                <button type="button" onClick={() => { fetchLocalModels(); fetchPreloadedModels(); } } style={{ marginLeft: 'auto' }}>Refresh models</button>
+              </div>
             </label>
 
-              <div style={{ margin: 16 }}>
-                <button onClick={() => setShowAdvanced(s => !s)}>{showAdvanced ? 'Hide Advanced' : 'Show Advanced'}</button>
+              <div style={{ margin: 8 }}>
+                <button onClick={() => setShowAdvanced(s => !s)}>{showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}</button>
                 {showAdvanced && (
                   <div style={{ marginTop: 8, padding: 8, border: '1px dashed var(--panel-border)', borderRadius: 6 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       <div>
-                        <label>Subtask ID (optional):</label>
-                        <input style={{ width: '100%' }} value={advSubtaskId} onChange={(e) => setAdvSubtaskId(e.target.value)} placeholder="subtask uuid" />
+                        <label>Task(s) (optional, multi-select):</label>
+                        <div style={{ marginTop: 6 }}>
+                          <Select
+                            isMulti
+                            options={taskOptions}
+                            value={selectedTaskOptions}
+                            onChange={(vals) => setSelectedTaskIds(vals ? vals.map(v => v.value) : [])}
+                            placeholder="Select task(s)..."
+                            styles={{ container: (base) => ({ ...base, width: '100%' }), ...selectStyles }}
+                            theme={(theme) => ({
+                              ...theme,
+                              colors: {
+                                ...theme.colors,
+                                primary: cssVars.accentStrong,
+                                primary25: cssVars.accentGhost,
+                                neutral0: cssVars.surface,
+                                neutral80: cssVars.text
+                              }
+                            })}
+                          />
+                          <button type="button" onClick={fetchTasks} style={{ marginLeft: 8, marginTop: 6 }}>Refresh tasks</button>
+                        </div>
+                      </div>
+                      <div>
+                        <label>Evaluation Mode:</label>
+                        <div>
+                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="combined" checked={evaluationMode==='combined'} onChange={(e) => setEvaluationMode(e.target.value)} /> Combined (LLM + timing)</label>
+                          <label><input type="radio" name="evalmode" value="llm_only" checked={evaluationMode==='llm_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> LLM only</label>
+                        </div>
                       </div>
                       <div>
                         <label>Compare Timings:</label>
                         <input type="checkbox" checked={advCompareTimings} onChange={(e) => setAdvCompareTimings(e.target.checked)} />
+                      </div>
+                      <div>
+                        <label>Processing Mode:</label>
+                        <select value={processingMode} onChange={(e) => setProcessingMode(e.target.value)} style={{ width: '100%' }}>
+                          <option value="fast">Fast sampling with mid from total frame count</option>
+                          <option value="every_2s">Sample every 2s</option>
+                        </select>
                       </div>
                       <div>
                         <label>JPEG Quality: {advJpegQuality}</label>
@@ -371,6 +513,36 @@ function App() {
                         <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} />
                       </div>
                     </div>
+
+                    {selectedTaskIds.length === 1 ? (
+                      <div style={{ marginTop: 8 }}>
+                        <strong>Subtasks for selected task</strong>
+                        <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid ' + cssVars.panelBorder, padding: 8, marginTop: 6 }}>
+                          {(() => {
+                            // try { console.debug('subtasksList', subtasksList, 'selectedTaskIds', selectedTaskIds, 'tasksList', tasksList); } catch {}
+                            const selId = selectedTaskIds && selectedTaskIds.length === 1 ? selectedTaskIds[0] : null;
+                            const selTask = selId ? (tasksList || []).find(t => t.id === selId) : null;
+                            return (subtasksList || []).filter(s => {
+                              // if (!selId) return false;
+                              // Primary match: subtask references task by `task_id`
+                              if (s.task_id === selId) return true;
+                              // Fallback: match by task name if backend didn't include task_id
+                              // if (selTask && s.task_name && s.task_name === selTask.name) return true;
+                              return false;
+                            }).map(s => (
+                            <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ flex: 1 }}>{s.subtask_info} <small style={{ color: cssVars.muted }}>({s.duration_sec}s)</small></div>
+                            </div>
+                            ))
+                          })()}
+                        </div>
+                      </div>
+                      ) : selectedTaskIds.length > 1 ? (
+                      <div style={{ marginTop: 8 }}>
+                        <strong>Multiple tasks selected — subtasks list hidden</strong>
+                        <div style={{ color: cssVars.muted, marginTop: 6 }}>Subtasks preview is available when exactly one task is selected.</div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -379,27 +551,14 @@ function App() {
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
             </label>
               <div style={{ marginTop: 8 }}>
-                <label style={{ display: 'block' }}>Rule Set:
-                  <select value={vlmRuleSet} onChange={(e) => setVlmRuleSet(e.target.value)}>
-                    {Object.keys(ruleSets).length > 0 ? Object.keys(ruleSets).map(k => <option key={k} value={k}>{k}</option>) : <option value="default">default</option>}
-                  </select>
-                </label>
-
-                <label style={{ display: 'block', marginTop: 6 }}>Classifier:
-                  <select value={vlmClassifier} onChange={(e) => setVlmClassifier(e.target.value)}>
+                <label style={{ display: 'block', marginTop: 6 }}>Mode:
+                  <select value={vlmClassifierMode} onChange={(e) => setVlmClassifierMode(e.target.value)}>
                     {Object.keys(classifiers).length > 0 ? Object.keys(classifiers).map(k => <option key={k} value={k}>{k}</option>) : (
                       <>
-                        <option value="blip_binary">blip_binary</option>
-                        <option value="qwen_activity">qwen_activity</option>
+                        <option value="binary">binary (work/idle)</option>
+                        <option value="multi">multi (preserve adapter labels)</option>
                       </>
                     )}
-                  </select>
-                </label>
-
-                <label style={{ display: 'block', marginTop: 6 }}>Classifier Mode:
-                  <select value={vlmClassifierMode} onChange={(e) => setVlmClassifierMode(e.target.value)}>
-                    <option value="binary">binary (work/idle)</option>
-                    <option value="multi">multi (preserve adapter labels)</option>
                   </select>
                 </label>
 
@@ -409,8 +568,13 @@ function App() {
               </div>
 
             <label style={{ display: 'block', marginTop: 8 }}>
-              <input type="checkbox" checked={vlmUseLLM} onChange={(e) => setVlmUseLLM(e.target.checked)} /> Use LLM classifier for labels
-              <small style={{ color: '#666', marginLeft: 8 }}>When enabled, a local text LLM (if available) will be used to decide work vs idle.</small>
+              <div style={{ marginBottom: 6 }}>Classifier source:</div>
+              <select value={vlmClassifierSource} onChange={(e) => setVlmClassifierSource(e.target.value)}>
+                <option value="llm">LLM (use text LLM)</option>
+                <option value="vlm">VLM (interpret VLM output as label)</option>
+                <option value="bow">Bag of words (keyword matching)</option>
+              </select>
+              <small style={{ color: '#666', marginLeft: 8, display: 'block', marginTop: 6 }}>Choose whether labels come from the VLM, a local LLM, or bag-of-words heuristics.</small>
             </label>
             <br/>
 
@@ -429,12 +593,10 @@ function App() {
                   <LiveView
                     model={vlmModel}
                     prompt={vlmPrompt}
-                    useLLM={vlmUseLLM}
-                    ruleSet={vlmRuleSet}
-                    classifier={vlmClassifier}
+                    classifierSource={vlmClassifierSource}
                     classifierMode={vlmClassifierMode}
                     classifierPrompt={vlmClassifierPrompt}
-                    selectedSubtask={selectedSubtasks.length > 0 ? selectedSubtasks[0].id : ''}
+                    selectedSubtask={''}
                     subtaskId={advSubtaskId}
                     compareTimings={advCompareTimings}
                     jpegQuality={advJpegQuality}
@@ -447,16 +609,11 @@ function App() {
               </div>
             </div>
 
-            {selectedSubtasks.length > 0 && (
-              <div style={{ marginTop: 10, padding: 10, backgroundColor: '#f0f9ff', borderRadius: 4 }}>
-                <strong>Selected Subtasks:</strong> {selectedSubtasks.map(t => `${t.id} (${t.completed ? 'Completed' : 'Pending'})`).join(', ')}
-                <button onClick={() => setSelectedSubtasks([])} style={{ marginLeft: 8 }}>Clear</button>
-              </div>
-            )}
+            
 
 
             <div style={{ marginTop: 6 }}>
-              <small style={{ color: '#666' }}>
+              <small style={{ color: cssVars.muted }}>
                 {vlmAvailableModels.length > 0 ? (
                   (() => {
                     const meta = preloadedDevices && preloadedDevices[vlmModel];
@@ -465,8 +622,16 @@ function App() {
                     const statusMsg = meta && meta.device_status_message;
                     return (
                       <>
-                        {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
-                        {statusMsg ? <div style={{ color: '#a00', marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
+                              {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
+                                        <span style={{ marginLeft: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? cssVars.successBg : cssVars.dangerBg), color: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? cssVars.successText : cssVars.dangerText) , fontSize: 12 }}>
+                                          {vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? 'VLM ready' : 'VLM not loaded'}
+                                        </span>
+                                        <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, backgroundColor: (llmAvailable ? cssVars.successBg : cssVars.dangerBg), color: (llmAvailable ? cssVars.successText : cssVars.dangerText), fontSize: 12 }}>
+                                          {llmAvailable ? 'LLM available' : 'LLM missing'}
+                                        </span>
+                                        <button onClick={fetchBackendStatus} style={{ marginLeft: 8 }}>Refresh status</button>
+                                        <small style={{ marginLeft: 8, color: cssVars.muted }}>{statusLastFetched ? `Last fetched: ${new Date(statusLastFetched).toLocaleString()}` : 'Last fetched: never'}</small>
+                                        {statusMsg ? <div style={{ color: cssVars.dangerText, marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
                       </>
                     );
                   })()
@@ -482,7 +647,7 @@ function App() {
               <div className="vlm-result" style={{ marginTop: 12 }}>
                 <h4>VLM Result</h4>
                 {vlmResult.error ? (
-                  <pre style={{ color: 'red' }}>{vlmResult.error}</pre>
+                  <pre style={{ color: cssVars.dangerText }}>{vlmResult.error}</pre>
                 ) : (
                   <>
                     <div style={{ marginBottom: 8 }}><strong>Analysis</strong><pre className="vlm-result">{JSON.stringify(vlmResult.analysis, null, 2)}</pre></div>
@@ -510,7 +675,7 @@ function App() {
                                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                           <div style={{ flex: 1 }}>
                                             <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                            <div style={{ fontSize: 12, color: '#444' }}>{captions.length ? captions.join(' | ') : ''}</div>
+                                            <div style={{ fontSize: 12, color: cssVars.muted }}>{captions.length ? captions.join(' | ') : ''}</div>
                                           </div>
                                           <div>
                                             <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
@@ -520,7 +685,7 @@ function App() {
                                     })
                                   })()}
                                 </div>
-                              ) : (<div style={{ color: '#666' }}>No idle frames detected.</div>)}
+                              ) : (<div style={{ color: cssVars.muted }}>No idle frames detected.</div>)}
                           </div>
 
                           <div style={{ flex: 1, textAlign: 'left' }}>
@@ -536,7 +701,7 @@ function App() {
                                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                         <div style={{ flex: 1 }}>
                                           <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                          <div style={{ fontSize: 12, color: '#444' }}>{captions.length ? captions.join(' | ') : ''}</div>
+                                          <div style={{ fontSize: 12, color: cssVars.muted }}>{captions.length ? captions.join(' | ') : ''}</div>
                                         </div>
                                         <div>
                                           <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
@@ -546,9 +711,16 @@ function App() {
                                   })
                                 })()}
                               </div>
-                            ) : (<div style={{ color: '#666' }}>No work frames detected.</div>)}
+                            ) : (<div style={{ color: cssVars.muted }}>No work frames detected.</div>)}
                           </div>
                         </div>
+
+                        {vlmSegments.length > 0 && (
+                          <div style={{ marginTop: 16 }}>
+                            <h5>Temporal Segments (LLM)</h5>
+                            <SegmentDisplay segments={vlmSegments} />
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Stored analyses panel is rendered in the left controls now */}
@@ -575,7 +747,7 @@ function App() {
         )}
 
         {activeView === 'subtasks' && (
-          <Subtasks onSubtaskSelect={onSubtaskSelect} refreshTrigger={subtasksRefreshTrigger} />
+          <Subtasks refreshTrigger={subtasksRefreshTrigger} />
         )}
       </div>
     </div>

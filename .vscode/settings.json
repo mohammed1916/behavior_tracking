@@ -1,5 +1,26 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "python.testing.pytestArgs": [
+        "backend"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "dbcode.connections": [
+        {
+            "connectionId": "ebK87RlAMXxsxhva3aFWK",
+            "name": "Backend DB",
+            "driver": "sqlite",
+            "color": "#F632CD",
+            "connectionType": "socket",
+            "socket": "behavior_tracking/backend/analyses.db",
+            "readOnly": false,
+            "postConnectionSqlType": "inline",
+            "driverOptions": {
+                "extensions": []
+            },
+            "idleTimeout": 0
+        }
+    ]
 }

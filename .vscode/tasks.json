@@ -2,18 +2,32 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"type": "npm",
-			"script": "start:server",
-			"problemMatcher": [],
-			"label": "Backend Python",
-			"detail": "cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload"
+			"label": "Backend Python (no reload)",
+			"type": "shell",
+			"command": "python -m uvicorn backend.server:app --host 0.0.0.0 --port 8001",
+			  "options": {
+					"env": {
+					"DEBUG": "1"
+					}
+				},
+			"problemMatcher": []
 		},
 		{
-			"type": "npm",
-			"script": "start:client",
-			"problemMatcher": [],
+			"label": "Backend Python (reload)",
+			"type": "shell",
+			"command": "python -m uvicorn backend.server:app --host 0.0.0.0 --port 8001 --reload",
+			  "options": {
+					"env": {
+					"DEBUG": "1"
+					}
+				},
+			"problemMatcher": []
+		},
+		{
 			"label": "Frontend React",
-			"detail": "cd frontend && npm run dev"
+			"type": "shell",
+			"command": "cd frontend && npm run dev",
+			"problemMatcher": []
 		}
 	]
 }
