@@ -44,20 +44,6 @@ get_captioner_for_model = captioner_mod.get_captioner_for_model
 _captioner_cache = getattr(captioner_mod, '_captioner_cache', {})
 _captioner_status = getattr(captioner_mod, '_captioner_status', {})
 
-DB_PATH = db_mod.DB_PATH
-init_db = db_mod.init_db
-save_analysis_to_db = db_mod.save_analysis_to_db
-list_analyses_from_db = db_mod.list_analyses_from_db
-get_analysis_from_db = db_mod.get_analysis_from_db
-delete_analysis_from_db = db_mod.delete_analysis_from_db
-save_task_to_db = db_mod.save_task_to_db
-list_tasks_from_db = db_mod.list_tasks_from_db
-get_task_from_db = db_mod.get_task_from_db
-save_subtask_to_db = db_mod.save_subtask_to_db
-list_subtasks_from_db = db_mod.list_subtasks_from_db
-get_subtask_from_db = db_mod.get_subtask_from_db
-compute_ranges = db_mod.compute_ranges
-update_subtask_counts = db_mod.update_subtask_counts
 # Timing/segmenting defaults (tunable)
 MIN_SEGMENT_SEC = 0.5  # ignore segments shorter than this
 MERGE_GAP_SEC = 1.0    # merge segments separated by <= this gap
@@ -409,13 +395,13 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         if subtask_id and label == 'work':
                             cumulative_work_frames += 1
                             try:
-                                assign = get_subtask_from_db(subtask_id)
+                                assign = db_mod.get_subtask_from_db(subtask_id)
                                 if assign is not None and assign.get('duration_sec') is not None:
                                     expected = assign.get('duration_sec')
-                                    # derive work duration from collected_samples using compute_ranges
+                                    # derive work duration from collected_samples using db_mod.compute_ranges
                                     # try:
                                     fps_assume = 30.0
-                                    work_ranges = compute_ranges(collected_work, collected_samples, fps_assume)
+                                    work_ranges = db_mod.compute_ranges(collected_work, collected_samples, fps_assume)
                                     merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
                                     actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                     # except Exception:
@@ -556,7 +542,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 aid = str(uuid.uuid4())
                 filename_for_db = saved_basename if saved_basename else f"live_webcam_{aid}.mp4"
                 video_url = f"/backend/download/{filename_for_db}" if saved_basename else None
-                save_analysis_to_db(aid, filename_for_db, model or 'default', prompt, video_url, vid_info, collected_samples, subtask_id=subtask_id)
+                db_mod.save_analysis_to_db(aid, filename_for_db, model or 'default', prompt, video_url, vid_info, collected_samples, subtask_id=subtask_id)
                 
                 # Evaluate subtasks completion from collected captions using vector store + LLM
                 try:
@@ -606,9 +592,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=30.0, llm=llm_mod.get_local_text_llm())
                                 print(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
                             except Exception:
-                                subtask = get_subtask_from_db(subtask_id)
+                                subtask = db_mod.get_subtask_from_db(subtask_id)
                                 if subtask and collected_work:
-                                    work_ranges = compute_ranges(collected_work, collected_samples, 30.0)
+                                    work_ranges = db_mod.compute_ranges(collected_work, collected_samples, 30.0)
                                     merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
                                     actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                     expected_duration = subtask.get('duration_sec')
@@ -845,14 +831,14 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     subtask_overrun = None
                     if subtask_id:
                         try:
-                            assign = get_subtask_from_db(subtask_id)
+                            assign = db_mod.get_subtask_from_db(subtask_id)
                             if assign is not None and assign.get('duration_sec') is not None:
                                 expected = assign.get('duration_sec')
                                 # Build temporary samples/work lists that include this current sample
                                 temp_sample = {'frame_index': fi, 'time_sec': time_sec, 'caption': caption, 'label': label, 'llm_output': cls_text}
                                 temp_samples = (collected_samples or []) + [temp_sample]
                                 temp_work = (collected_work or []) + ([fi] if label == 'work' else [])
-                                work_ranges = compute_ranges(temp_work, temp_samples, fps)
+                                work_ranges = db_mod.compute_ranges(temp_work, temp_samples, fps)
                                 merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
                                 actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                 if actual_work_time > expected:
@@ -935,7 +921,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             try:
                 vid_info = {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height, 'duration': duration}
                 aid = str(uuid.uuid4())
-                save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id)
+                db_mod.save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id)
                 # Evaluate subtasks completion from collected captions using vector store + LLM
                 try:
                     captions = [s.get('caption') for s in collected_samples if s.get('caption')]
