@@ -33,16 +33,12 @@ app = FastAPI()
 
 app.state.webcam_event = threading.Event()
 
-import backend.captioner as captioner_mod
 import backend.llm as llm_mod
 import backend.db as db_mod
 import backend.evidence as evidence_mod
 
 
-get_local_captioner = captioner_mod.get_local_captioner
-get_captioner_for_model = captioner_mod.get_captioner_for_model
-_captioner_cache = getattr(captioner_mod, '_captioner_cache', {})
-_captioner_status = getattr(captioner_mod, '_captioner_status', {})
+import backend.captioner as captioner_mod
 
 # Timing/segmenting defaults (tunable)
 MIN_SEGMENT_SEC = 0.5  # ignore segments shorter than this
@@ -201,7 +197,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             yield _sse_event({"stage": "started", "message": "live processing started"})
             
             cap = cv2.VideoCapture(0)
-            captioner = get_captioner_for_model(model) if model else get_local_captioner()
+            captioner = captioner_mod.get_captioner_for_model(model) if model else captioner_mod.get_local_captioner()
             if captioner is None:
                 yield _sse_event({"stage": "alert", "message": "no captioner available"})
                 return
@@ -576,9 +572,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 subs_for_task = [s for s in subs if (s.get('task_id') in task_ids) or (s.get('task_name') in task_ids)]
                                 for s in subs_for_task:
                                     sid = s.get('id')
-                                    subtask = get_subtask_from_db(sid)
+                                    subtask = db_mod.get_subtask_from_db(sid)
                                     if subtask and collected_work:
-                                        work_ranges = compute_ranges(collected_work, collected_samples, 30.0)
+                                        work_ranges = db_mod.compute_ranges(collected_work, collected_samples, 30.0)
                                         merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
                                         actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                         expected_duration = subtask.get('duration_sec')
@@ -724,7 +720,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 max_samples = min(30, max(1, frame_count))
                 indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
 
-            captioner = get_captioner_for_model(model)
+            captioner = captioner_mod.get_captioner_for_model(model)
             if captioner is None:
                 yield _sse_event({"stage": "alert", "message": f"no local captioner available for model '{model}'"})
                 return
@@ -948,9 +944,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                 subs_for_task = [s for s in subs if s.get('task_id') == task_id or s.get('task_name') == task_id]
                                 for s in subs_for_task:
                                     sid = s.get('id')
-                                    subtask = get_subtask_from_db(sid)
+                                    subtask = db_mod.get_subtask_from_db(sid)
                                     if subtask and collected_work:
-                                        work_ranges = compute_ranges(collected_work, collected_samples, fps)
+                                        work_ranges = db_mod.compute_ranges(collected_work, collected_samples, fps)
                                         merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
                                         actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                         expected_duration = subtask.get('duration_sec')
@@ -964,9 +960,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                 inc_in, inc_delay, reason = db_mod.aggregate_and_update_subtask(subtask_id, collected_samples, collected_work, fps=fps, llm=llm_mod.get_local_text_llm())
                                 print(f'Aggregate update for subtask {subtask_id}: +{inc_in} in_time, +{inc_delay} with_delay ({reason})')
                             except Exception:
-                                subtask = get_subtask_from_db(subtask_id)
+                                subtask = db_mod.get_subtask_from_db(subtask_id)
                                 if subtask and collected_work:
-                                    work_ranges = compute_ranges(collected_work, collected_samples, fps)
+                                    work_ranges = db_mod.compute_ranges(collected_work, collected_samples, fps)
                                     merged_ranges = merge_and_filter_ranges(work_ranges, MIN_SEGMENT_SEC, MERGE_GAP_SEC)
                                     actual_work_time = sum((r.get('endTime', 0) - r.get('startTime', 0)) for r in merged_ranges)
                                     expected_duration = subtask.get('duration_sec')
@@ -1017,7 +1013,7 @@ async def vlm_local_models():
         # consider model available if it's present in the captioner cache
         cached = None
         try:
-            cached = _captioner_cache.get(mid) or _captioner_cache.get(mid_l) or None
+            cached = getattr(captioner_mod, '_captioner_cache', {}).get(mid) or getattr(captioner_mod, '_captioner_cache', {}).get(mid_l) or None
         except Exception:
             cached = None
         available = bool(cached)
@@ -1187,10 +1183,10 @@ async def load_vlm_model(model: str = Form(...), device: str = Form(None)):
     if not model:
         return {"loaded": False, "model": model, "error": "No model specified"}
     try:
-        p = get_captioner_for_model(model, device_override=device)
+        p = captioner_mod.get_captioner_for_model(model, device_override=device)
         if p is None:
             return {"loaded": False, "model": model, "error": "failed to load model (not available)"}
-        status = _captioner_status.get(model, {})
+        status = getattr(captioner_mod, '_captioner_status', {}).get(model, {})
         recorded_device = status.get('device')
         recorded_reason = status.get('reason')
         device_status_message = None
@@ -1208,7 +1204,7 @@ async def load_vlm_model(model: str = Form(...), device: str = Form(None)):
 
 @app.get('/backend/subtask/{subtask_id}')
 async def get_subtask(subtask_id: str):
-    s = get_subtask_from_db(subtask_id)
+    s = db_mod.get_subtask_from_db(subtask_id)
     if s is None:
         raise HTTPException(status_code=404, detail='subtask not found')
     return s
@@ -1216,7 +1212,7 @@ async def get_subtask(subtask_id: str):
 
 @app.get('/backend/subtasks')
 async def list_subtasks():
-    return list_subtasks_from_db()
+    return db_mod.list_subtasks_from_db()
 
 
 @app.post('/backend/subtasks')
@@ -1226,25 +1222,25 @@ async def create_subtask(
     duration_sec: int = Form(...),
 ):
     subtask_id = str(uuid.uuid4())
-    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec)
+    db_mod.save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec)
     return {"subtask_id": subtask_id}
 
 
 @app.put('/backend/subtasks/{subtask_id}')
 async def update_subtask(subtask_id: str, subtask_info: str = Form(...), duration_sec: int = Form(...), completed_in_time: int = Form(None), completed_with_delay: int = Form(None)):
-    s = get_subtask_from_db(subtask_id)
+    s = db_mod.get_subtask_from_db(subtask_id)
     if s is None:
         raise HTTPException(status_code=404, detail='subtask not found')
     task_id = s.get('task_id')
     if not task_id:
         raise HTTPException(status_code=400, detail='subtask missing task reference')
-    save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time or s.get('completed_in_time', 0), completed_with_delay or s.get('completed_with_delay', 0))
+    db_mod.save_subtask_to_db(subtask_id, task_id, subtask_info, duration_sec, completed_in_time or s.get('completed_in_time', 0), completed_with_delay or s.get('completed_with_delay', 0))
     return {'message': 'updated'}
 
 
 @app.delete('/backend/subtasks/{subtask_id}')
 async def delete_subtask(subtask_id: str):
-    s = get_subtask_from_db(subtask_id)
+    s = db_mod.get_subtask_from_db(subtask_id)
     if s is None:
         raise HTTPException(status_code=404, detail='subtask not found')
     deleted = db_mod.delete_subtask_from_db(subtask_id)
@@ -1256,21 +1252,21 @@ async def delete_subtask(subtask_id: str):
 @app.post('/backend/tasks')
 async def create_task(name: str = Form(...)):
     tid = str(uuid.uuid4())
-    save_task_to_db(tid, name)
+    db_mod.save_task_to_db(tid, name)
     return {'task_id': tid, 'name': name}
 
 
 @app.get('/backend/tasks')
 async def list_tasks():
-    return list_tasks_from_db()
+    return db_mod.list_tasks_from_db()
 
 
 @app.put('/backend/tasks/{task_id}')
 async def update_task_endpoint(task_id: str, name: str = Form(...)):
-    t = get_task_from_db(task_id)
+    t = db_mod.get_task_from_db(task_id)
     if not t:
         raise HTTPException(status_code=404, detail='task not found')
-    save_task_to_db(task_id, name)
+    db_mod.save_task_to_db(task_id, name)
     return {'message': 'updated'}
 
 
@@ -1288,7 +1284,7 @@ async def delete_task_endpoint(task_id: str):
 @app.get('/backend/analyses')
 async def list_analyses(limit: int = 100):
     try:
-        return list_analyses_from_db(limit=limit)
+        return db_mod.list_analyses_from_db(limit=limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1296,7 +1292,7 @@ async def list_analyses(limit: int = 100):
 @app.get('/backend/analysis/{analysis_id}')
 async def get_analysis(analysis_id: str):
     try:
-        res = get_analysis_from_db(analysis_id)
+        res = db_mod.get_analysis_from_db(analysis_id)
         if res is None:
             raise HTTPException(status_code=404, detail='analysis not found')
         return res
@@ -1309,7 +1305,7 @@ async def get_analysis(analysis_id: str):
 @app.delete('/backend/analysis/{analysis_id}')
 async def delete_analysis(analysis_id: str):
     try:
-        delete_analysis_from_db(analysis_id)
+        db_mod.delete_analysis_from_db(analysis_id)
         return {"deleted": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
