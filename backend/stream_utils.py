@@ -1,5 +1,6 @@
 import base64
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
+import inspect
 
 import backend.llm as llm_mod
 import backend.rules as rules_mod
@@ -47,25 +48,30 @@ def normalize_caption_output(captioner, output: Any) -> str:
     return output_str
 
 
-def call_captioner(captioner, img, prompt: Optional[str]):
-    """Call captioner with prompt if supported, otherwise fall back to bare call.
-    
-    Args:
-        captioner: The model instance to call
-        img: PIL Image or cv2 BGR image
-        prompt: Optional prompt/instruction for the model
-        
-    Returns:
-        Model output (typically [{'generated_text': '...'}])
+def call_captioner(captioner, img, prompt: Optional[str], on_debug: Optional[Callable[[str], None]] = None):
+    """Call captioner with optional prompt and debug callback, passing only supported kwargs.
+
+    Uses inspect.signature to detect accepted parameters to avoid relying on nested TypeError fallbacks.
     """
-    if prompt is None or prompt.strip() == "":
-        # Use default behavior - let the captioner pick its prompt
-        prompt = None
-    
+    eff_prompt = None if (prompt is None or str(prompt).strip() == "") else prompt
+
+    kwargs: Dict[str, Any] = {}
     try:
-        return captioner(img, prompt=prompt) if prompt else captioner(img)
+        sig = inspect.signature(captioner)
+        params = sig.parameters
+    except (TypeError, ValueError):
+        # If we cannot introspect, attempt a simple direct call as fallback
+        params = {}
+
+    if eff_prompt is not None and 'prompt' in params:
+        kwargs['prompt'] = eff_prompt
+    if on_debug is not None and 'on_debug' in params:
+        kwargs['on_debug'] = on_debug
+
+    try:
+        return captioner(img, **kwargs)
     except TypeError:
-        # Model doesn't support prompt parameter
+        # Final fallback in case of unexpected signature quirks
         return captioner(img)
 
 

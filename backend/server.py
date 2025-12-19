@@ -216,6 +216,10 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 writer_type = 'ffmpeg'
                                 writer = ffmpeg_proc
                                 print('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                                try:
+                                    yield _sse_event({"stage": "debug", "message": f"Recording via ffmpeg to {saved_basename}"})
+                                except Exception as _e_dbg:
+                                    logging.debug('Failed to emit debug SSE (ffmpeg start): %s', _e_dbg)
                             except Exception as e:
                                 logging.warning('ffmpeg recording failed to start: %s', e)
                                 ffmpeg_proc = None
@@ -231,16 +235,24 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             if not getattr(writer, 'isOpened', lambda: False)():
                                 try:
                                     writer.release()
-                                except Exception:
-                                    pass
+                                except Exception as _e_rel:
+                                    logging.debug('VideoWriter release failed before fallback: %s', _e_rel)
                                 # fallback to AVI/XVID
                                 saved_basename = f"live_{uniq}.avi"
                                 saved_path = os.path.join(PROCESSED_DIR, saved_basename)
                                 fourcc = cv2.VideoWriter_fourcc(*'XVID')
                                 writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
+                                try:
+                                    yield _sse_event({"stage": "debug", "message": "OpenCV mp4v failed; using AVI/XVID fallback"})
+                                except Exception as _e_dbg:
+                                    logging.debug('Failed to emit debug SSE (AVI/XVID fallback): %s', _e_dbg)
                             if not getattr(writer, 'isOpened', lambda: False)():
                                 raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
                             print('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+                            try:
+                                yield _sse_event({"stage": "debug", "message": f"Recording via OpenCV VideoWriter to {saved_basename}"})
+                            except Exception as _e_dbg:
+                                logging.debug('Failed to emit debug SSE (OpenCV VideoWriter start): %s', _e_dbg)
                     except Exception as e:
                         logging.exception('Failed to create VideoWriter: %s', e)
                         # notify client and disable recording for this session
@@ -251,8 +263,8 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         try:
                             if saved_path and os.path.exists(saved_path):
                                 os.remove(saved_path)
-                        except Exception:
-                            pass
+                        except Exception as _e_rm:
+                            logging.debug('Failed to remove partial recording file: %s', _e_rm)
                 # If writer is active, write the raw frame (BGR)
                 if writer is not None:
                     if writer_type == 'ffmpeg' and ffmpeg_proc is not None and ffmpeg_proc.stdin:
@@ -265,8 +277,12 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             # disable recording on error
                             try:
                                 ffmpeg_proc.stdin.close()
-                            except Exception:
-                                pass
+                            except Exception as _e_close:
+                                logging.debug('Failed to close ffmpeg stdin after broken pipe: %s', _e_close)
+                            try:
+                                yield _sse_event({"stage": "debug", "message": "ffmpeg broken pipe during live recording; disabled recording"})
+                            except Exception as _e_dbg:
+                                logging.debug('Failed to emit debug SSE (ffmpeg broken pipe): %s', _e_dbg)
                             ffmpeg_proc = None
                             writer = None
                             writer_type = None
@@ -279,7 +295,19 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     try:
                         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                         vlm_prompt = build_vlm_prompt_for_source(classifier_source_norm, classifier_mode, classifier_prompt)
-                        out = call_captioner(captioner, img, vlm_prompt)
+                        _dbg_msgs: list[str] = []
+                        def _dbg(m: str):
+                            try:
+                                _dbg_msgs.append(str(m))
+                            except Exception as _e_dbg:
+                                logging.debug('Failed to collect debug message: %s', _e_dbg)
+                        out = call_captioner(captioner, img, vlm_prompt, on_debug=_dbg)
+                        if _dbg_msgs:
+                            for _m in _dbg_msgs:
+                                try:
+                                    yield _sse_event({"stage": "debug", "message": _m})
+                                except Exception as _e_dbg:
+                                    logging.debug('Failed to emit debug SSE: %s', _e_dbg)
                         caption = normalize_caption_output(captioner, out)
 
                         classify_prompt_template = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
@@ -401,29 +429,30 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             # release resources
             try:
                 cap.release()
-            except Exception:
-                pass
+            except Exception as _e_rel:
+                logging.debug('cap.release() failed: %s', _e_rel)
             try:
                 if writer_type == 'ffmpeg' and ffmpeg_proc is not None:
                     try:
                         ffmpeg_proc.stdin.close()
-                    except Exception:
-                        pass
+                    except Exception as _e_close:
+                        logging.debug('ffmpeg stdin close failed: %s', _e_close)
                     try:
                         ffmpeg_proc.wait(timeout=10)
-                    except Exception:
+                    except Exception as _e_wait:
+                        logging.debug('ffmpeg wait failed: %s', _e_wait)
                         try:
                             ffmpeg_proc.kill()
-                        except Exception:
-                            pass
+                        except Exception as _e_kill:
+                            logging.debug('ffmpeg kill failed: %s', _e_kill)
                 else:
                     if writer is not None:
                         try:
                             writer.release()
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+                        except Exception as _e_rel:
+                            logging.debug('writer.release() failed: %s', _e_rel)
+            except Exception as _e_any:
+                logging.debug('Error during teardown: %s', _e_any)
             
             # Save to DB at the end (similar to vlm_local_stream)
             try:
@@ -620,7 +649,11 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     indices = sorted(list({min(frame_count - 1, max(0, int(round(tt * fps)))) for tt in times}))
                     if not indices:
                         indices = [0]
-                except Exception:
+                except Exception as _e_idx:
+                    try:
+                        yield _sse_event({"stage": "debug", "message": f"Sampling indices fallback due to error: {_e_idx}"})
+                    except Exception as _e_dbg:
+                        logging.debug('Failed to emit debug SSE (sampling fallback): %s', _e_dbg)
                     max_samples = min(30, max(1, frame_count))
                     indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
             else:
@@ -705,16 +738,36 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     try:
                         if mp_detector is not None:
                             mediapipe_info = mp_detector.process_frame(frame)
-                    except Exception:
+                    except Exception as _e_mp:
                         logging.exception('MediaPipe processing failed on frame')
+                        try:
+                            yield _sse_event({"stage": "debug", "message": f"MediaPipe processing failed: {_e_mp}"})
+                        except Exception as _e_dbg:
+                            logging.debug('Failed to emit debug SSE (mediapipe): %s', _e_dbg)
                     try:
                         if yolo_detector is not None:
                             yolo_info = yolo_detector.detect_objects(frame)
-                    except Exception:
+                    except Exception as _e_yolo:
                         logging.exception('YOLO processing failed on frame')
+                        try:
+                            yield _sse_event({"stage": "debug", "message": f"YOLO processing failed: {_e_yolo}"})
+                        except Exception as _e_dbg:
+                            logging.debug('Failed to emit debug SSE (yolo): %s', _e_dbg)
 
                     vlm_prompt = build_vlm_prompt_for_source(classifier_source_norm, classifier_mode, classifier_prompt)
-                    out = call_captioner(captioner, img, vlm_prompt)
+                    _dbg_msgs: list[str] = []
+                    def _dbg(m: str):
+                        try:
+                            _dbg_msgs.append(str(m))
+                        except Exception as _e_dbg:
+                            logging.debug('Failed to collect debug message: %s', _e_dbg)
+                    out = call_captioner(captioner, img, vlm_prompt, on_debug=_dbg)
+                    if _dbg_msgs:
+                        for _m in _dbg_msgs:
+                            try:
+                                yield _sse_event({"stage": "debug", "message": _m})
+                            except Exception as _e_dbg:
+                                logging.debug('Failed to emit debug SSE: %s', _e_dbg)
                     caption = normalize_caption_output(captioner, out)
 
                     classify_prompt_template = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)

@@ -175,3 +175,33 @@ Traceback (most recent call last):
   File "C:\ProgramData\anaconda3\Lib\site-packages\transformers\models\qwen2_vl\modeling_qwen2_vl.py", line 1135, in get_placeholder_mask
     raise ValueError(
 ValueError: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:01,601 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:01,828 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:02,017 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:08,524 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:08,676 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:14,177 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:14,356 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:25,120 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:25,290 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:38,328 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:28:38,469 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:29:11,720 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:29:11,915 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:29:27,305 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:29:27,514 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:29:43,497 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:29:43,693 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:30:19,573 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:30:19,743 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:30:28,300 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:30:28,441 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:30:44,297 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:30:44,418 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:30:58,700 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:30:58,848 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:31:03,457 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:31:03,614 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:31:13,478 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:31:13,646 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8
+2025-12-19 15:31:18,507 WARNING Qwen fallback generation failed: Image features and image tokens do not match: tokens: 0, features 8

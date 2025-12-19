@@ -9,7 +9,7 @@ Label normalization is handled centrally in rules.py via normalize_label_text().
 
 import os
 import logging
-from typing import Optional
+from typing import Optional, Callable
 
 import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText
@@ -97,6 +97,7 @@ class QwenVLMAdapter:
         image,
         prompt: Optional[str] = None,
         max_new_tokens: int = 80,
+        on_debug: Optional[Callable[[str], None]] = None,
     ):
         """
         Run inference and return raw caption.
@@ -141,7 +142,12 @@ class QwenVLMAdapter:
                 if pad_id is not None:
                     gen_kwargs["pad_token_id"] = pad_id
             except Exception:
-                pass
+                if on_debug:
+                    try:
+                        on_debug("Qwen: unable to set special token IDs for generation.")
+                    except Exception:
+                        pass
+                logging.warning("QwenVLMAdapter: unable to set special token IDs for generation.")
 
             with torch.inference_mode():
                 output_ids = self.model.generate(
@@ -172,8 +178,11 @@ class QwenVLMAdapter:
                 generated_only[0],
                 skip_special_tokens=True,
             ).strip()
-
-            print(f"[Qwen] decoded text (post-strip)='{text}'")
+            try:
+                if on_debug:
+                    on_debug(f"Qwen decoded: {text[:200]}")
+            except Exception:
+                pass
 
             # if text == "":
             #     try:
