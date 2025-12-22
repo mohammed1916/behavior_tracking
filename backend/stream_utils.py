@@ -1,6 +1,11 @@
 import base64
 from typing import Optional, List, Dict, Any, Callable
 import cv2
+import os
+import uuid
+import subprocess
+import shutil
+import logging
 import inspect
 
 import backend.llm as llm_mod
@@ -217,3 +222,78 @@ def probe_saved_video_info(saved_path: str, default_fps: float, frame_count: int
     except Exception as e:
         err = str(e)
     return vid_info, err
+
+
+def start_live_recording(frame, cap, processed_dir: str):
+    """Generator that sets up live recording with ffmpeg/OpenCV fallbacks.
+    
+    Yields SSE debug event dicts (stage='debug', message=...).
+    Returns final state dict: {writer, writer_type, ffmpeg_proc, saved_basename, saved_path}.
+    """
+    os.makedirs(processed_dir, exist_ok=True)
+    uniq = str(uuid.uuid4())
+    saved_basename = f"live_{uniq}.mp4"
+    saved_path = os.path.join(processed_dir, saved_basename)
+    
+    try:
+        cap_fps = float(cap.get(cv2.CAP_PROP_FPS) or 0) or 30.0
+    except Exception:
+        cap_fps = 30.0
+    
+    h, w = frame.shape[:2]
+    writer = None
+    writer_type = None
+    ffmpeg_proc = None
+    
+    # Try ffmpeg first
+    ffmpeg_path = shutil.which('ffmpeg')
+    if ffmpeg_path:
+        cmd = [
+            ffmpeg_path, '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24',
+            '-s', f'{w}x{h}', '-r', str(int(cap_fps)), '-i', '-',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '23', saved_path
+        ]
+        try:
+            ffmpeg_proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+            writer_type = 'ffmpeg'
+            writer = ffmpeg_proc
+            print('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+            yield {"stage": "debug", "message": f"Recording via ffmpeg to {saved_basename}"}
+        except Exception as e:
+            logging.warning('ffmpeg recording failed to start: %s', e)
+            ffmpeg_proc = None
+            writer = None
+            writer_type = None
+    
+    # Fallback to OpenCV VideoWriter
+    if writer is None:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
+        writer_type = 'cv2'
+        
+        # Check if mp4v worked; if not, try AVI/XVID
+        if not getattr(writer, 'isOpened', lambda: False)():
+            try:
+                writer.release()
+            except Exception as _e_rel:
+                logging.debug('VideoWriter release failed before fallback: %s', _e_rel)
+            
+            saved_basename = f"live_{uniq}.avi"
+            saved_path = os.path.join(processed_dir, saved_basename)
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+            writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
+            yield {"stage": "debug", "message": "OpenCV mp4v failed; using AVI/XVID fallback"}
+        
+        if not getattr(writer, 'isOpened', lambda: False)():
+            raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
+        
+        print('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
+        yield {"stage": "debug", "message": f"Recording via OpenCV VideoWriter to {saved_basename}"}
+    
+    return {
+        'writer': writer,
+        'writer_type': writer_type,
+        'ffmpeg_proc': ffmpeg_proc,
+        'saved_basename': saved_basename,
+        'saved_path': saved_path,
+    }

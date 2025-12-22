@@ -49,6 +49,7 @@ from backend.stream_utils import (
     compute_sample_interval,
     encode_frame_for_sse_image,
     probe_saved_video_info,
+    start_live_recording,
 )
 
 # Timing/segmenting defaults (tunable)
@@ -177,57 +178,19 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 frame = cv2.flip(frame, 1)
                 # If recording requested, lazily create VideoWriter once we have a frame
                 if record_enabled and writer is None:
-                    # Local helper to start recording and emit SSE debug
-                    def _start_recording(initial_frame, cap_obj):
-                        nonlocal writer, writer_type, ffmpeg_proc, saved_basename, saved_path
-                        os.makedirs(PROCESSED_DIR, exist_ok=True)
-                        uniq = str(uuid.uuid4())
-                        saved_basename = f"live_{uniq}.mp4"
-                        saved_path = os.path.join(PROCESSED_DIR, saved_basename)
-                        try:
-                            cap_fps = float(cap_obj.get(cv2.CAP_PROP_FPS) or 0) or 30.0
-                        except Exception:
-                            cap_fps = 30.0
-                        h, w = initial_frame.shape[:2]
-                        ffmpeg_path = shutil.which('ffmpeg')
-                        if ffmpeg_path:
-                            cmd = [
-                                ffmpeg_path, '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24',
-                                '-s', f'{w}x{h}', '-r', str(int(cap_fps)), '-i', '-',
-                                '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '23', saved_path
-                            ]
-                            try:
-                                ffmpeg_proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-                                writer_type = 'ffmpeg'
-                                writer = ffmpeg_proc
-                                print('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
-                                yield _sse_event({"stage": "debug", "message": f"Recording via ffmpeg to {saved_basename}"})
-                            except Exception as e:
-                                logging.warning('ffmpeg recording failed to start: %s', e)
-                                ffmpeg_proc = None
-                                writer = None
-                                writer_type = None
-                        if writer is None:
-                            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                            writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
-                            writer_type = 'cv2'
-                            if not getattr(writer, 'isOpened', lambda: False)():
-                                try:
-                                    writer.release()
-                                except Exception as _e_rel:
-                                    logging.debug('VideoWriter release failed before fallback: %s', _e_rel)
-                                saved_basename = f"live_{uniq}.avi"
-                                saved_path = os.path.join(PROCESSED_DIR, saved_basename)
-                                fourcc = cv2.VideoWriter_fourcc(*'XVID')
-                                writer = cv2.VideoWriter(saved_path, fourcc, cap_fps, (w, h))
-                                yield _sse_event({"stage": "debug", "message": "OpenCV mp4v failed; using AVI/XVID fallback"})
-                            if not getattr(writer, 'isOpened', lambda: False)():
-                                raise RuntimeError('VideoWriter failed to open for mp4 and avi fallbacks')
-                            print('Recording live stream to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
-                            yield _sse_event({"stage": "debug", "message": f"Recording via OpenCV VideoWriter to {saved_basename}"})
-
                     try:
-                        yield from _start_recording(frame, cap)
+                        rec_gen = start_live_recording(frame, cap, PROCESSED_DIR)
+                        for debug_evt in rec_gen:
+                            yield _sse_event(debug_evt)
+                        try:
+                            state = rec_gen.send(None)
+                        except StopIteration as si:
+                            state = si.value
+                        writer = state['writer']
+                        writer_type = state['writer_type']
+                        ffmpeg_proc = state['ffmpeg_proc']
+                        saved_basename = state['saved_basename']
+                        saved_path = state['saved_path']
                     except Exception as e:
                         logging.exception('Failed to create VideoWriter: %s', e)
                         yield _sse_event({"stage": "alert", "message": f"Failed to create recorder: {e}"})
