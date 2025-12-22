@@ -208,7 +208,7 @@ function App() {
     } catch (err) {
       console.error('VLM request failed', err);
       const isServerDown = err instanceof TypeError || (err.message && err.message.includes('Failed to fetch'));
-      const errorMsg = isServerDown ? 'Server not running or crashed' : (err.message || String(err));
+      const errorMsg = isServerDown ? 'Server not running or crashed, Please Refresh after some time' : (err.message || String(err));
       setVlmResult({ error: errorMsg });
       setVlmLoading(false);
     }
@@ -233,7 +233,7 @@ function App() {
       }
     } catch (e) {
       console.warn('Could not fetch local VLM models', e);
-      if (isServerError(e)) alert('Server not running or crashed');
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       setVlmAvailableModels([]);
     }
   };
@@ -249,7 +249,7 @@ function App() {
       setStatusLastFetched(Date.now());
     } catch (e) {
       console.warn('Failed to fetch backend status', e);
-      if (isServerError(e)) alert('Server not running or crashed');
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
     }
   };
 
@@ -269,7 +269,7 @@ function App() {
         if (!vlmClassifierMode && Object.keys(labelModes || {}).length) setVlmClassifierMode(Object.keys(labelModes)[0]);
       } catch (e) {
         console.warn('Failed to fetch label modes', e);
-        if (isServerError(e)) alert('Server not running or crashed');
+        if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       }
     })();
     fetchTasks();
@@ -291,7 +291,7 @@ function App() {
       setPreloadedDevices(modelsMap);
     } catch (e) {
       console.warn('Could not fetch preloaded models', e);
-      if (isServerError(e)) alert('Server not running or crashed');
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       setPreloadedDevices({});
     }
   };
@@ -304,7 +304,7 @@ function App() {
       setTasksList(data || []);
     } catch (e) {
       console.warn('Failed to fetch tasks', e);
-      if (isServerError(e)) alert('Server not running or crashed');
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       setTasksList([]);
     }
   };
@@ -318,7 +318,7 @@ function App() {
       setSubtasksList(data || []);
     } catch (e) {
       console.warn('Failed to fetch subtasks', e);
-      if (isServerError(e)) alert('Server not running or crashed');
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       setSubtasksList([]);
     }
   };
@@ -346,7 +346,7 @@ function App() {
         fetchPreloadedModels();
       }
     } catch (e) {
-      const msg = isServerError(e) ? 'Server not running or crashed' : (e.message || String(e));
+      const msg = isServerError(e) ? 'Server not running or crashed, Please Refresh after some time' : (e.message || String(e));
       alert('Load model error: ' + msg);
     } finally {
       setModelLoading(false);
