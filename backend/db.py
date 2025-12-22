@@ -168,6 +168,61 @@ def get_analysis_from_db(aid):
             'llm_output': seg[5]
         })
     analysis['segments'] = segments
+
+    # If sample-level labels were not produced (e.g., classifier_source == 'llm'),
+    # synthesize work/idle ranges and representative frame indices from segments so
+    # the UI can render seekable segments just like the VLM-only path.
+    try:
+        if segments:
+            fps = analysis.get('fps') or 30.0
+            frame_count = analysis.get('frame_count') or None
+
+            def _to_range(seg):
+                st = float(seg.get('start_time') or 0.0)
+                et = float(seg.get('end_time') or st)
+                if et < st:
+                    et = st
+                start_f = int(round(st * fps))
+                end_f = int(round(et * fps))
+                if frame_count is not None:
+                    start_f = max(0, min(start_f, max(frame_count - 1, 0)))
+                    end_f = max(start_f, min(end_f, max(frame_count - 1, 0)))
+                return {
+                    'startTime': st,
+                    'endTime': et,
+                    'startFrame': start_f,
+                    'endFrame': end_f,
+                }
+
+            work_ranges_seg = [_to_range(seg) for seg in segments if (seg.get('label') or '').lower() == 'work']
+            idle_ranges_seg = [_to_range(seg) for seg in segments if (seg.get('label') or '').lower() == 'idle']
+
+            if not analysis.get('work_ranges'):
+                analysis['work_ranges'] = work_ranges_seg
+            if not analysis.get('idle_ranges'):
+                analysis['idle_ranges'] = idle_ranges_seg
+
+            step = max(1, int(round(fps)))  # ~1 frame per second to keep arrays small
+
+            def _frames_from_ranges(ranges):
+                frames = []
+                for r in ranges:
+                    start_f = r.get('startFrame', 0)
+                    end_f = r.get('endFrame', start_f)
+                    seq = list(range(start_f, end_f + 1, step)) if end_f >= start_f else [start_f]
+                    if end_f not in seq:
+                        seq.append(end_f)
+                    frames.extend(seq)
+                # keep unique and sorted
+                return sorted({int(f) for f in frames})
+
+            if not analysis.get('work_frames'):
+                analysis['work_frames'] = _frames_from_ranges(work_ranges_seg)
+            if not analysis.get('idle_frames'):
+                analysis['idle_frames'] = _frames_from_ranges(idle_ranges_seg)
+    except Exception:
+        pass
+
     conn.close()
     return analysis
 

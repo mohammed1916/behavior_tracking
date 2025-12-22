@@ -668,6 +668,13 @@ function App() {
                     {vlmResult.analysis && (vlmResult.analysis.captions || vlmResult.analysis.caption) && (
                       <div><strong>Captions</strong><ul className="captions-list">{vlmResult.analysis.captions ? vlmResult.analysis.captions.map((c, i) => <li key={i}>{c}</li>) : <li>{vlmResult.analysis.caption}</li>}</ul></div>
                     )}
+                    
+                    {/* Temporal Segments - shown during streaming */}
+                    <div style={{ marginTop: 16 }}>
+                      <h5>Temporal Segments (LLM)</h5>
+                      <SegmentDisplay segments={vlmSegments} />
+                    </div>
+
                     {vlmResult.analysis && vlmResult.analysis.video_url && (
                       <div style={{ marginTop: 8 }}>
                         <strong>Preview</strong>
@@ -728,13 +735,7 @@ function App() {
                             ) : (<div style={{ color: cssVars.muted }}>No work frames detected.</div>)}
                           </div>
                         </div>
-
-                        {vlmSegments.length > 0 && (
-                          <div style={{ marginTop: 16 }}>
-                            <h5>Temporal Segments (LLM)</h5>
-                            <SegmentDisplay segments={vlmSegments} />
-                          </div>
-                        )}
+                        
                       </div>
                     )}
                     {/* Stored analyses panel is rendered in the left controls now */}

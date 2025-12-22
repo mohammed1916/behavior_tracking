@@ -342,6 +342,31 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                         last_inference_time = time.time()
                     except Exception as e:
                         yield _sse_event({"stage": "sample_error", "frame_index": frame_counter, "error": str(e)})
+
+            # Flush any remaining aggregation window for classifier_source == 'llm'
+            if classifier_source_norm == 'llm' and current_window is not None:
+                closing_window = current_window
+                current_window = None
+                closed = _finalize_window(closing_window)
+                if closed is not None:
+                    cls_prompt_final = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
+                    rendered = (cls_prompt_final or "").format(prompt=prompt, caption=closed['timeline'])
+                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
+                    seg_label, _ = rules_mod.determine_label(
+                        closed['timeline'],
+                        use_llm=True,
+                        text_llm=llm_mod.get_local_text_llm(),
+                        prompt=prompt,
+                        classify_prompt_template=cls_prompt_final,
+                        output_mode=classifier_mode
+                    )
+                    closed['label'] = seg_label
+                    closed['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                    collected_segments.append(closed)
+                    try:
+                        yield _sse_event(closed)
+                    except Exception:
+                        pass
             
             # release resources
             try:
@@ -771,6 +796,31 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     yield _sse_event(payload)
                 except Exception as e:
                     yield _sse_event({"stage": "sample_error", "frame_index": fi, "error": str(e)})
+
+            # Flush any remaining aggregation window for classifier_source == 'llm'
+            if classifier_source_norm == 'llm' and current_window is not None:
+                closing_window = current_window
+                current_window = None
+                closed = _finalize_window(closing_window)
+                if closed is not None:
+                    cls_prompt_final = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
+                    rendered = (cls_prompt_final or "").format(prompt=prompt, caption=closed['timeline'])
+                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
+                    seg_label, _ = rules_mod.determine_label(
+                        closed['timeline'],
+                        use_llm=True,
+                        text_llm=llm_mod.get_local_text_llm(),
+                        prompt=prompt,
+                        classify_prompt_template=cls_prompt_final,
+                        output_mode=classifier_mode
+                    )
+                    closed['label'] = seg_label
+                    closed['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                    collected_segments.append(closed)
+                    try:
+                        yield _sse_event(closed)
+                    except Exception:
+                        pass
             cap2.release()
 
             # Persist the final collected analysis to DB
