@@ -119,6 +119,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             collected_samples = []
             collected_idle = []
             collected_work = []
+            collected_segments = []
             cumulative_work_frames = 0
             start_time = time.time()
 
@@ -326,6 +327,8 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                     )
                                     seg_event['label'] = seg_label
                                     seg_event['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                                    # Store segment for database
+                                    collected_segments.append(seg_event)
                                     yield _sse_event(seg_event)
                                 
                                 # Start fresh window with current sample
@@ -380,7 +383,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 aid = str(uuid.uuid4())
                 filename_for_db = saved_basename if saved_basename else f"live_webcam_{aid}.mp4"
                 video_url = f"/backend/download/{filename_for_db}" if saved_basename else None
-                db_mod.save_analysis_to_db(aid, filename_for_db, model or 'default', prompt, video_url, vid_info, collected_samples, subtask_id=subtask_id)
+                db_mod.save_analysis_to_db(aid, filename_for_db, model or 'default', prompt, video_url, vid_info, collected_samples, subtask_id=subtask_id, segments=collected_segments)
                 
                 # Evaluate subtasks completion from collected captions using vector store + LLM
                 try:
@@ -589,6 +592,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             collected_samples = []
             collected_idle = []
             collected_work = []
+            collected_segments = []
             
             # Time-windowed aggregation state and config (no semantic similarity)
             current_window = None
@@ -752,6 +756,8 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                 )
                                 seg_event['label'] = seg_label
                                 seg_event['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
+                                # Store segment for database
+                                collected_segments.append(seg_event)
                                 yield _sse_event(seg_event)
                             
                             # Start fresh window with current sample
@@ -771,7 +777,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             try:
                 vid_info = {'fps': fps, 'frame_count': frame_count, 'width': width, 'height': height, 'duration': duration}
                 aid = str(uuid.uuid4())
-                db_mod.save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id)
+                db_mod.save_analysis_to_db(aid, filename, model, prompt, f"/backend/vlm_video/{filename}", vid_info, collected_samples, subtask_id=subtask_id, segments=collected_segments)
                 # Evaluate subtasks completion from collected captions using vector store + LLM
                 try:
                     captions = [s.get('caption') for s in collected_samples if s.get('caption')]

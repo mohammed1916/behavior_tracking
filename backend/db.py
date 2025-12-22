@@ -45,11 +45,24 @@ def init_db():
         FOREIGN KEY(analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
     )
     ''')
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS segments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        analysis_id TEXT,
+        start_time REAL,
+        end_time REAL,
+        duration REAL,
+        timeline TEXT,
+        label TEXT,
+        llm_output TEXT,
+        FOREIGN KEY(analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
+    )
+    ''')
     conn.commit()
     conn.close()
     _db_initialized = True
 
-def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_info, samples, subtask_id=None):
+def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_info, samples, subtask_id=None, segments=None):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -74,6 +87,17 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
                 s.get('caption'),
                 s.get('label'),
                 s.get('llm_output')
+            ))
+    if segments:
+        for seg in segments:
+            cur.execute('''INSERT INTO segments (analysis_id, start_time, end_time, duration, timeline, label, llm_output) VALUES (?, ?, ?, ?, ?, ?, ?)''', (
+                analysis_id,
+                seg.get('start_time'),
+                seg.get('end_time'),
+                seg.get('duration'),
+                seg.get('timeline'),
+                seg.get('label'),
+                seg.get('llm_output')
             ))
     conn.commit()
     conn.close()
@@ -130,6 +154,20 @@ def get_analysis_from_db(aid):
     except Exception:
         analysis['idle_ranges'] = []
         analysis['work_ranges'] = []
+    # Retrieve segments if they exist
+    cur.execute('SELECT start_time, end_time, duration, timeline, label, llm_output FROM segments WHERE analysis_id=? ORDER BY start_time ASC', (aid,))
+    seg_rows = cur.fetchall()
+    segments = []
+    for seg in seg_rows:
+        segments.append({
+            'start_time': seg[0],
+            'end_time': seg[1],
+            'duration': seg[2],
+            'timeline': seg[3],
+            'label': seg[4],
+            'llm_output': seg[5]
+        })
+    analysis['segments'] = segments
     conn.close()
     return analysis
 
@@ -138,6 +176,7 @@ def delete_analysis_from_db(aid):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute('DELETE FROM samples WHERE analysis_id=?', (aid,))
+    cur.execute('DELETE FROM segments WHERE analysis_id=?', (aid,))
     cur.execute('DELETE FROM analyses WHERE id=?', (aid,))
     conn.commit()
     conn.close()
