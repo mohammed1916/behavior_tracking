@@ -158,18 +158,78 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     return window
                 return None
 
-            def _finalize_window(window):
+            def _finalize_window(window, cls_prompt):
+                """Label each caption individually, group by consecutive labels, emit segments."""
                 if window is None or len(window.samples) < min_samples:
-                    return None
-                out = {
-                    'stage': 'segment',
-                    'start_time': window.start_time,
-                    'end_time': window.end_time,
-                    'duration': window.end_time - window.start_time,
-                    'captions': [s['caption'] for s in window.samples],
-                    'timeline': window.to_timeline(),
-                }
-                return out
+                    return []
+                
+                # Label each caption individually
+                labeled_samples = []
+                text_llm = llm_mod.get_local_text_llm()
+                
+                for sample in window.samples:
+                    caption = sample['caption']
+                    t = sample['t']
+                    
+                    # Render prompt with single caption
+                    rendered = (cls_prompt or "").format(caption=caption, prompt=prompt)
+                    
+                    # Get label from LLM
+                    label, llm_text = rules_mod.determine_label(
+                        caption,
+                        use_llm=True,
+                        text_llm=text_llm,
+                        prompt=prompt,
+                        classify_prompt_template=cls_prompt,
+                        output_mode=classifier_mode
+                    )
+                    
+                    labeled_samples.append({
+                        't': t,
+                        'caption': caption,
+                        'label': label,
+                        'llm_output': llm_text
+                    })
+                
+                # Group consecutive same-label samples into segments
+                segments = []
+                current_segment = None
+                
+                for ls in labeled_samples:
+                    if current_segment is None or current_segment['label'] != ls['label']:
+                        # Start new segment
+                        if current_segment is not None:
+                            segments.append(current_segment)
+                        
+                        current_segment = {
+                            'stage': 'segment',
+                            'start_time': ls['t'],
+                            'end_time': ls['t'],
+                            'label': ls['label'],
+                            'captions': [ls['caption']],
+                            'timestamps': [ls['t']],
+                            'llm_outputs': [ls['llm_output']] if ls['llm_output'] else []
+                        }
+                    else:
+                        # Extend current segment
+                        current_segment['end_time'] = ls['t']
+                        current_segment['captions'].append(ls['caption'])
+                        current_segment['timestamps'].append(ls['t'])
+                        if ls['llm_output']:
+                            current_segment['llm_outputs'].append(ls['llm_output'])
+                
+                # Don't forget the last segment
+                if current_segment is not None:
+                    segments.append(current_segment)
+                
+                # Add duration to each segment
+                for seg in segments:
+                    seg['duration'] = seg['end_time'] - seg['start_time']
+                    # Create timeline string for display
+                    timeline_lines = [f"<t={t:.2f}> {c}" for t, c in zip(seg['timestamps'], seg['captions'])]
+                    seg['timeline'] = "\n".join(timeline_lines)
+                
+                return segments
 
             while app.state.webcam_event.is_set():
                 ret, frame = cap.read()
@@ -310,24 +370,12 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             # Check if window should close (silence or max duration)
                             closed_window = _close_window_if_needed(elapsed_time)
                             if closed_window is not None:
-                                # Window closed: convert to segment and send to LLM
-                                seg_event = _finalize_window(closed_window)
-                                if seg_event is not None:
-                                    # LLM classifies the full timeline
-                                    cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
-                                    rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_event['timeline'])
-                                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
-                                    seg_label, _ = rules_mod.determine_label(
-                                        seg_event['timeline'],
-                                        use_llm=True,
-                                        text_llm=llm_mod.get_local_text_llm(),
-                                        prompt=prompt,
-                                        classify_prompt_template=cls_prompt,
-                                        output_mode=classifier_mode
-                                    )
-                                    seg_event['label'] = seg_label
-                                    seg_event['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
-                                    # Store segment for database
+                                # Window closed: label each caption and group into segments
+                                cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                                segments = _finalize_window(closed_window, cls_prompt)
+                                
+                                # Emit all segments from this window
+                                for seg_event in segments:
                                     collected_segments.append(seg_event)
                                     yield _sse_event(seg_event)
                                 
@@ -347,24 +395,13 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             if classifier_source_norm == 'llm' and current_window is not None:
                 closing_window = current_window
                 current_window = None
-                closed = _finalize_window(closing_window)
-                if closed is not None:
-                    cls_prompt_final = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
-                    rendered = (cls_prompt_final or "").format(prompt=prompt, caption=closed['timeline'])
-                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
-                    seg_label, _ = rules_mod.determine_label(
-                        closed['timeline'],
-                        use_llm=True,
-                        text_llm=llm_mod.get_local_text_llm(),
-                        prompt=prompt,
-                        classify_prompt_template=cls_prompt_final,
-                        output_mode=classifier_mode
-                    )
-                    closed['label'] = seg_label
-                    closed['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
-                    collected_segments.append(closed)
+                cls_prompt_final = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
+                segments = _finalize_window(closing_window, cls_prompt_final)
+                
+                for seg_event in segments:
+                    collected_segments.append(seg_event)
                     try:
-                        yield _sse_event(closed)
+                        yield _sse_event(seg_event)
                     except Exception:
                         pass
             
@@ -640,18 +677,78 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     return window
                 return None
 
-            def _finalize_window(window):
+            def _finalize_window(window, cls_prompt):
+                """Label each caption individually, group by consecutive labels, emit segments."""
                 if window is None or len(window.samples) < min_samples:
-                    return None
-                out = {
-                    'stage': 'segment',
-                    'start_time': window.start_time,
-                    'end_time': window.end_time,
-                    'duration': window.end_time - window.start_time,
-                    'captions': [s.get('caption') for s in window.samples],
-                    'timeline': window.to_timeline(),
-                }
-                return out
+                    return []
+                
+                # Label each caption individually
+                labeled_samples = []
+                text_llm = llm_mod.get_local_text_llm()
+                
+                for sample in window.samples:
+                    caption = sample['caption']
+                    t = sample['t']
+                    
+                    # Render prompt with single caption
+                    rendered = (cls_prompt or "").format(caption=caption, prompt=prompt)
+                    
+                    # Get label from LLM
+                    label, llm_text = rules_mod.determine_label(
+                        caption,
+                        use_llm=True,
+                        text_llm=text_llm,
+                        prompt=prompt,
+                        classify_prompt_template=cls_prompt,
+                        output_mode=classifier_mode
+                    )
+                    
+                    labeled_samples.append({
+                        't': t,
+                        'caption': caption,
+                        'label': label,
+                        'llm_output': llm_text
+                    })
+                
+                # Group consecutive same-label samples into segments
+                segments = []
+                current_segment = None
+                
+                for ls in labeled_samples:
+                    if current_segment is None or current_segment['label'] != ls['label']:
+                        # Start new segment
+                        if current_segment is not None:
+                            segments.append(current_segment)
+                        
+                        current_segment = {
+                            'stage': 'segment',
+                            'start_time': ls['t'],
+                            'end_time': ls['t'],
+                            'label': ls['label'],
+                            'captions': [ls['caption']],
+                            'timestamps': [ls['t']],
+                            'llm_outputs': [ls['llm_output']] if ls['llm_output'] else []
+                        }
+                    else:
+                        # Extend current segment
+                        current_segment['end_time'] = ls['t']
+                        current_segment['captions'].append(ls['caption'])
+                        current_segment['timestamps'].append(ls['t'])
+                        if ls['llm_output']:
+                            current_segment['llm_outputs'].append(ls['llm_output'])
+                
+                # Don't forget the last segment
+                if current_segment is not None:
+                    segments.append(current_segment)
+                
+                # Add duration to each segment
+                for seg in segments:
+                    seg['duration'] = seg['end_time'] - seg['start_time']
+                    # Create timeline string for display
+                    timeline_lines = [f"<t={t:.2f}> {c}" for t, c in zip(seg['timestamps'], seg['captions'])]
+                    seg['timeline'] = "\n".join(timeline_lines)
+                
+                return segments
             
             for fi in indices:
                 try:
@@ -764,24 +861,12 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         # Check if window should close (silence or max duration)
                         closed_window = _close_window_if_needed(time_sec)
                         if closed_window is not None:
-                            # Window closed: convert to segment and send to LLM
-                            seg_event = _finalize_window(closed_window)
-                            if seg_event is not None:
-                                # LLM classifies the full timeline
-                                cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
-                                rendered = (cls_prompt or "").format(prompt=prompt, caption=seg_event['timeline'])
-                                llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
-                                seg_label, _ = rules_mod.determine_label(
-                                    seg_event['timeline'],
-                                    use_llm=True,
-                                    text_llm=llm_mod.get_local_text_llm(),
-                                    prompt=prompt,
-                                    classify_prompt_template=cls_prompt,
-                                    output_mode=classifier_mode
-                                )
-                                seg_event['label'] = seg_label
-                                seg_event['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
-                                # Store segment for database
+                            # Window closed: label each caption and group into segments
+                            cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                            segments = _finalize_window(closed_window, cls_prompt)
+                            
+                            # Emit all segments from this window
+                            for seg_event in segments:
                                 collected_segments.append(seg_event)
                                 yield _sse_event(seg_event)
                             
@@ -801,24 +886,13 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             if classifier_source_norm == 'llm' and current_window is not None:
                 closing_window = current_window
                 current_window = None
-                closed = _finalize_window(closing_window)
-                if closed is not None:
-                    cls_prompt_final = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
-                    rendered = (cls_prompt_final or "").format(prompt=prompt, caption=closed['timeline'])
-                    llm_res = llm_mod.get_local_text_llm()(rendered, max_new_tokens=64)
-                    seg_label, _ = rules_mod.determine_label(
-                        closed['timeline'],
-                        use_llm=True,
-                        text_llm=llm_mod.get_local_text_llm(),
-                        prompt=prompt,
-                        classify_prompt_template=cls_prompt_final,
-                        output_mode=classifier_mode
-                    )
-                    closed['label'] = seg_label
-                    closed['llm_output'] = (llm_res[0].get('generated_text') if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict) else str(llm_res))
-                    collected_segments.append(closed)
+                cls_prompt_final = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
+                segments = _finalize_window(closing_window, cls_prompt_final)
+                
+                for seg_event in segments:
+                    collected_segments.append(seg_event)
                     try:
-                        yield _sse_event(closed)
+                        yield _sse_event(seg_event)
                     except Exception:
                         pass
             cap2.release()

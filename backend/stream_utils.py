@@ -110,6 +110,12 @@ def build_classify_prompt_template(classifier_source_norm: str, classifier_mode:
         return classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
     if classifier_source_norm == 'bow':
         return None
+    # 'llm' mode: use text-only prompts (no vision tokens)
+    if classifier_source_norm == 'llm':
+        if classifier_mode == 'multi':
+            return classifier_prompt or llm_mod.LLM_CLASSIFY_SINGLE_CAPTION_MULTI
+        else:  # binary
+            return classifier_prompt or llm_mod.LLM_CLASSIFY_SINGLE_CAPTION_BINARY
     return classifier_prompt or rules_mod.get_label_template(classifier_mode)
 
 

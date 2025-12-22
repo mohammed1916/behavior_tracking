@@ -40,6 +40,38 @@ RULES_PROMPT_TEMPLATE = """Rules:
 Answer:
 """
 
+# Text-only LLM prompts (for analyzing TEXT descriptions, not images)
+# Used when classifier_source='llm' - LLM receives aggregated text captions
+LLM_CLASSIFY_SINGLE_CAPTION_BINARY = """You are a text classifier analyzing a description of a person's activity.
+
+Classify the following description as either 'work' or 'idle':
+
+Description: {caption}
+
+Rules:
+- work: Person is actively engaged in hands-on electronics, drone assembly, or using tools
+- idle: Person is not engaged in any task, standing/sitting without interaction
+
+Respond with exactly one word: work or idle
+
+Answer:"""
+
+LLM_CLASSIFY_SINGLE_CAPTION_MULTI = """You are a text classifier analyzing a description of a person's activity.
+
+Classify the following description into exactly ONE label:
+
+Description: {caption}
+
+Labels:
+- assembling_drone: Working with tools, drone parts, wires, screws, or assembly tasks
+- idle: Standing or sitting without doing any task, arms resting
+- using_phone: Holding or interacting with a phone
+- unknown: Activity cannot be confidently identified
+
+Respond with exactly one label: assembling_drone, idle, using_phone, or unknown
+
+Answer:"""
+
 
 
 # # Prompt for duration estimation: ask the LLM to return a single integer (seconds)
