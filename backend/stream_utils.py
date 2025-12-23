@@ -1,5 +1,5 @@
 import base64
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Dict, Any, Callable, Tuple
 import cv2
 import os
 import uuid
@@ -7,9 +7,108 @@ import subprocess
 import shutil
 import logging
 import inspect
+import re
 
 import backend.llm as llm_mod
 import backend.rules as rules_mod
+
+
+def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mode: str) -> List[Dict]:
+    """Parse LLM timeline segmentation output into structured segments.
+    
+    Expected format from LLM:
+    0.50-2.30: work
+    3.10-3.10: using_phone
+    3.80-5.20: work
+    
+    Returns list of segments with start_time, end_time, label, captions.
+    """
+    segments = []
+    
+    # Extract segment lines matching pattern: [number]-[number]: [label]
+    pattern = r'(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*:\s*(\w+)'
+    matches = re.findall(pattern, llm_output)
+    
+    if not matches:
+        # Fallback: if LLM output is malformed, create single segment with normalized label
+        label = rules_mod.normalize_label_text(llm_output, output_mode=classifier_mode)
+        if all_captions:
+            return [{
+                'stage': 'segment',
+                'start_time': all_captions[0]['t'],
+                'end_time': all_captions[-1]['t'],
+                'label': label,
+                'captions': [c['caption'] for c in all_captions],
+                'timestamps': [c['t'] for c in all_captions],
+                'duration': all_captions[-1]['t'] - all_captions[0]['t'],
+                'timeline': '\n'.join([f"<t={c['t']:.2f}> {c['caption']}" for c in all_captions])
+            }]
+        return []
+    
+    # Process each segment
+    for start_str, end_str, label_str in matches:
+        start_time = float(start_str)
+        end_time = float(end_str)
+        label = rules_mod.normalize_label_text(label_str, output_mode=classifier_mode)
+        
+        # Find captions within this time range
+        segment_captions = [
+            c for c in all_captions 
+            if start_time <= c['t'] <= end_time
+        ]
+        
+        if segment_captions:
+            segments.append({
+                'stage': 'segment',
+                'start_time': start_time,
+                'end_time': end_time,
+                'label': label,
+                'captions': [c['caption'] for c in segment_captions],
+                'timestamps': [c['t'] for c in segment_captions],
+                'duration': end_time - start_time,
+                'timeline': '\n'.join([f"<t={c['t']:.2f}> {c['caption']}" for c in segment_captions])
+            })
+    
+    return segments
+
+
+def merge_segments_with_pending(
+    new_segments: List[Dict[str, Any]],
+    pending_segment: Optional[Dict[str, Any]],
+    *,
+    merge_gap_sec: float = 0.2,
+) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """Merge the head of `new_segments` with a carried pending segment.
+
+    Strategy: keep the tail segment un-emitted (pending) so the next window
+    can extend it; emit all other segments immediately.
+    """
+    emitted: List[Dict[str, Any]] = []
+    segs = list(new_segments)
+
+    # Pre-merge pending with first new segment if label matches and gap small
+    if pending_segment and segs:
+        head = segs[0]
+        gap = head['start_time'] - pending_segment['end_time']
+        if pending_segment.get('label') == head.get('label') and gap <= merge_gap_sec:
+            pending_segment['end_time'] = head['end_time']
+            pending_segment['duration'] = pending_segment['end_time'] - pending_segment['start_time']
+            pending_segment['captions'] = pending_segment.get('captions', []) + head.get('captions', [])
+            pending_segment['timestamps'] = pending_segment.get('timestamps', []) + head.get('timestamps', [])
+            pending_segment['timeline'] = pending_segment.get('timeline', '') + ("\n" if pending_segment.get('timeline') else "") + head.get('timeline', '')
+            pending_segment['llm_output'] = head.get('llm_output') or pending_segment.get('llm_output')
+            segs = segs[1:]
+        else:
+            emitted.append(pending_segment)
+            pending_segment = None
+
+    # Emit all but the last segment; keep last as pending for possible merge with next window
+    if segs:
+        for seg in segs[:-1]:
+            emitted.append(seg)
+        pending_segment = segs[-1]
+
+    return emitted, pending_segment
 
 
 def normalize_caption_output(captioner, output: Any) -> str:
@@ -110,12 +209,12 @@ def build_classify_prompt_template(classifier_source_norm: str, classifier_mode:
         return classifier_prompt or (llm_mod.VLM_BASE_PROMPT_TEMPLATE + "\n" + label_tpl + "\n" + llm_mod.RULES_PROMPT_TEMPLATE)
     if classifier_source_norm == 'bow':
         return None
-    # 'llm' mode: use text-only prompts (no vision tokens)
+    # 'llm' mode: use timeline segmentation prompts that analyze temporal patterns
     if classifier_source_norm == 'llm':
         if classifier_mode == 'multi':
-            return classifier_prompt or llm_mod.LLM_CLASSIFY_SINGLE_CAPTION_MULTI
+            return classifier_prompt or llm_mod.LLM_SEGMENT_TIMELINE_MULTI
         else:  # binary
-            return classifier_prompt or llm_mod.LLM_CLASSIFY_SINGLE_CAPTION_BINARY
+            return classifier_prompt or llm_mod.LLM_SEGMENT_TIMELINE_BINARY
     return classifier_prompt or rules_mod.get_label_template(classifier_mode)
 
 

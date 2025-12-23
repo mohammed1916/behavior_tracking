@@ -41,34 +41,56 @@ Answer:
 """
 
 # Text-only LLM prompts (for analyzing TEXT descriptions, not images)
-# Used when classifier_source='llm' - LLM receives aggregated text captions
-LLM_CLASSIFY_SINGLE_CAPTION_BINARY = """You are a text classifier analyzing a description of a person's activity.
+# Used when classifier_source='llm' - LLM receives aggregated text captions with temporal context
+LLM_SEGMENT_TIMELINE_BINARY = """You are analyzing a timeline of activity descriptions to identify distinct segments.
 
-Classify the following description as either 'work' or 'idle':
+Timeline of observations:
+{caption}
 
-Description: {caption}
+Task: Identify continuous activity segments based on temporal patterns, merging adjacent or near-adjacent spans with the same label.
 
-Rules:
-- work: Person is actively engaged in hands-on electronics, drone assembly, or using tools
-- idle: Person is not engaged in any task, standing/sitting without interaction
+Labels:
+- work: Person actively engaged in hands-on tasks (electronics, assembly, tools)
+- idle: Person not engaged in tasks, standing/sitting without interaction
 
-Respond with exactly one word: work or idle
+Instructions:
+1. Analyze the entire timeline to find where activities change.
+2. Merge any adjacent or near-adjacent spans that share the same label into one segment.
+3. Output segments in chronological order, ONE per line: [start_time]-[end_time]: label
+4. Use the exact timestamps from the timeline; do not invent times.
+5. Include all observed activity; if only one activity, output one segment.
+
+Example output format:
+0.50-2.30: work
+3.10-3.10: idle
+3.80-5.20: work
 
 Answer:"""
 
-LLM_CLASSIFY_SINGLE_CAPTION_MULTI = """You are a text classifier analyzing a description of a person's activity.
+LLM_SEGMENT_TIMELINE_MULTI = """You are analyzing a timeline of activity descriptions to identify distinct segments.
 
-Classify the following description into exactly ONE label:
+Timeline of observations:
+{caption}
 
-Description: {caption}
+Task: Identify continuous activity segments based on temporal patterns, merging adjacent or near-adjacent spans with the same label.
 
 Labels:
-- assembling_drone: Working with tools, drone parts, wires, screws, or assembly tasks
-- idle: Standing or sitting without doing any task, arms resting
+- assembling_drone: Working with tools, drone parts, wires, screws, assembly tasks
 - using_phone: Holding or interacting with a phone
+- idle: Standing/sitting without doing any task, arms resting
 - unknown: Activity cannot be confidently identified
 
-Respond with exactly one label: assembling_drone, idle, using_phone, or unknown
+Instructions:
+1. Analyze the entire timeline to find where activities change.
+2. Merge any adjacent or near-adjacent spans that share the same label into one segment.
+3. Output segments in chronological order, ONE per line: [start_time]-[end_time]: label
+4. Use the exact timestamps from the timeline; do not invent times.
+5. Include all observed activity; if only one activity, output one segment.
+
+Example output format:
+0.50-2.30: assembling_drone
+3.10-3.10: using_phone
+3.80-5.20: assembling_drone
 
 Answer:"""
 
