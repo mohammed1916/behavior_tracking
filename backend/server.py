@@ -175,7 +175,10 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 # LLM analyzes the full timeline to identify segments
                 rendered = (cls_prompt or "").format(caption=timeline, prompt=prompt)
                 text_llm = llm_mod.get_local_text_llm()
-                llm_res = text_llm(rendered, max_new_tokens=256)
+                # Use low max_new_tokens to prevent LLM from adding explanatory text
+                # Typical segment output: "0.50-2.30: work" (20-30 tokens per line)
+                # 10-15 segments would be 200-450 tokens, but we limit to 100 to force brevity
+                llm_res = text_llm(rendered, max_new_tokens=100)
 
                 # Extract raw LLM output
                 if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict):
@@ -342,6 +345,27 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 for seg_event in segments:
                                     collected_segments.append(seg_event)
                                     yield _sse_event(seg_event)
+                                    
+                                    # Emit sample-update events for frames in this segment
+                                    # so frontend can populate idle_frames/work_frames from LLM segments
+                                    segment_label = seg_event.get('label')
+                                    segment_start = seg_event.get('start_time', 0)
+                                    segment_end = seg_event.get('end_time', 0)
+                                    
+                                    # Find samples in this segment time range
+                                    for sample in collected_samples:
+                                        sample_time = sample.get('time_sec', 0)
+                                        if segment_start <= sample_time <= segment_end:
+                                            # Emit sample-update event with derived label
+                                            if segment_label and sample.get('label') is None:
+                                                sample['label'] = segment_label
+                                                collected_idle.append(sample['frame_index']) if segment_label == 'idle' else collected_work.append(sample['frame_index'])
+                                                yield _sse_event({
+                                                    "stage": "sample_update",
+                                                    "frame_index": sample['frame_index'],
+                                                    "time_sec": sample_time,
+                                                    "label": segment_label
+                                                })
                                 
                                 # Start fresh window with current sample
                                 current_window = evidence_mod.EvidenceWindow(
@@ -660,7 +684,10 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 # LLM analyzes the full timeline to identify segments
                 rendered = (cls_prompt or "").format(caption=timeline, prompt=prompt)
                 text_llm = llm_mod.get_local_text_llm()
-                llm_res = text_llm(rendered, max_new_tokens=256)
+                # Use low max_new_tokens to prevent LLM from adding explanatory text
+                # Typical segment output: "0.50-2.30: work" (20-30 tokens per line)
+                # 10-15 segments would be 200-450 tokens, but we limit to 100 to force brevity
+                llm_res = text_llm(rendered, max_new_tokens=100)
                 
                 # Extract raw LLM output
                 if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict):
@@ -798,6 +825,27 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                             for seg_event in segments:
                                 collected_segments.append(seg_event)
                                 yield _sse_event(seg_event)
+                                
+                                # Emit sample-update events for frames in this segment
+                                # so frontend can populate idle_frames/work_frames from LLM segments
+                                segment_label = seg_event.get('label')
+                                segment_start = seg_event.get('start_time', 0)
+                                segment_end = seg_event.get('end_time', 0)
+                                
+                                # Find samples in this segment time range
+                                for sample in collected_samples:
+                                    sample_time = sample.get('time_sec', 0)
+                                    if segment_start <= sample_time <= segment_end:
+                                        # Emit sample-update event with derived label
+                                        if segment_label and sample.get('label') is None:
+                                            sample['label'] = segment_label
+                                            collected_idle.append(sample['frame_index']) if segment_label == 'idle' else collected_work.append(sample['frame_index'])
+                                            yield _sse_event({
+                                                "stage": "sample_update",
+                                                "frame_index": sample['frame_index'],
+                                                "time_sec": sample_time,
+                                                "label": segment_label
+                                            })
                             
                             # Start fresh window with current sample
                             current_window = evidence_mod.EvidenceWindow(

@@ -53,19 +53,17 @@ Labels:
 - work: Person actively engaged in hands-on tasks (electronics, assembly, tools)
 - idle: Person not engaged in tasks, standing/sitting without interaction
 
-Instructions:
-1. Analyze the entire timeline to find where activities change.
-2. Merge any adjacent or near-adjacent spans that share the same label into one segment.
-3. Output segments in chronological order, ONE per line: [start_time]-[end_time]: label
-4. Use the exact timestamps from the timeline; do not invent times.
-5. Include all observed activity; if only one activity, output one segment.
+CRITICAL INSTRUCTIONS:
+1. Output ONLY the segment lines, nothing else - NO preamble, NO explanation, NO thinking
+2. Each line must be: [start_time]-[end_time]: label (e.g., 0.50-2.30: work)
+3. Use exact timestamps from the timeline; do not invent or approximate times
+4. Merge adjacent same-label spans; ensure start_time < end_time
+5. Output in chronological order
 
-Example output format:
+Output format (ONLY these lines):
 0.50-2.30: work
 3.10-3.10: idle
-3.80-5.20: work
-
-Answer:"""
+3.80-5.20: work"""
 
 LLM_SEGMENT_TIMELINE_MULTI = """You are analyzing a timeline of activity descriptions to identify distinct segments.
 
@@ -80,19 +78,18 @@ Labels:
 - idle: Standing/sitting without doing any task, arms resting
 - unknown: Activity cannot be confidently identified
 
-Instructions:
-1. Analyze the entire timeline to find where activities change.
-2. Merge any adjacent or near-adjacent spans that share the same label into one segment.
-3. Output segments in chronological order, ONE per line: [start_time]-[end_time]: label
-4. Use the exact timestamps from the timeline; do not invent times.
-5. Include all observed activity; if only one activity, output one segment.
+CRITICAL INSTRUCTIONS:
+1. Output ONLY the segment lines, nothing else - NO preamble, NO explanation, NO thinking
+2. Each line must be: [start_time]-[end_time]: label (e.g., 0.50-2.30: assembling_drone)
+3. Use exact timestamps from the timeline; do not invent or approximate times
+4. Merge adjacent same-label spans; ensure start_time < end_time
+5. Output in chronological order
 
-Example output format:
+Output format (ONLY these lines):
 0.50-2.30: assembling_drone
 3.10-3.10: using_phone
-3.80-5.20: assembling_drone
+3.80-5.20: assembling_drone"""
 
-Answer:"""
 
 
 

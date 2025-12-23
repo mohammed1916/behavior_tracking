@@ -171,6 +171,21 @@ function App() {
             if (data.label === 'idle') analysis.idle_frames.push(data.frame_index);
             if (data.label === 'work') analysis.work_frames.push(data.frame_index);
             setVlmResult({ message: 'streaming', analysis: { ...analysis } });
+          } else if (data.stage === 'sample_update') {
+            // Handle label updates from LLM segmentation
+            // Find the sample and update its label, then update idle/work frames
+            const sampleIdx = analysis.samples.findIndex(s => s.frame_index === data.frame_index);
+            if (sampleIdx >= 0) {
+              analysis.samples[sampleIdx].label = data.label;
+            }
+            // Add to appropriate frame list if not already there
+            if (data.label === 'idle' && !analysis.idle_frames.includes(data.frame_index)) {
+              analysis.idle_frames.push(data.frame_index);
+            }
+            if (data.label === 'work' && !analysis.work_frames.includes(data.frame_index)) {
+              analysis.work_frames.push(data.frame_index);
+            }
+            setVlmResult({ message: 'streaming', analysis: { ...analysis } });
           } else if (data.stage === 'sample_error') {
             analysis.samples.push({ frame_index: data.frame_index, error: data.error });
             setVlmResult({ message: 'streaming', analysis: { ...analysis } });

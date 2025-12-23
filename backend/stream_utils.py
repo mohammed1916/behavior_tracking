@@ -25,9 +25,24 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
     """
     segments = []
     
-    # Extract segment lines matching pattern: [number]-[number]: [label]
+    # Extract only clean segment lines (ignore any preamble like "Thinking...")
+    # Split output by newlines and process only lines with the segment format
+    segment_lines = []
+    for line in llm_output.split('\n'):
+        line = line.strip()
+        # Skip empty lines and lines that don't look like segments
+        if not line or ':' not in line:
+            continue
+        # Check if line matches pattern: [number]-[number]: [label]
+        if re.match(r'^\d+\.?\d*\s*-\s*\d+\.?\d*\s*:\s*\w+$', line):
+            segment_lines.append(line)
+    
+    matches = []
     pattern = r'(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*:\s*(\w+)'
-    matches = re.findall(pattern, llm_output)
+    for line in segment_lines:
+        m = re.match(pattern, line)
+        if m:
+            matches.append(m.groups())
     
     if not matches:
         # Fallback: if LLM output is malformed, create single segment with normalized label
@@ -45,16 +60,32 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
             }]
         return []
     
-    # Process each segment
+    # Process each segment, skip invalid ranges
     for start_str, end_str, label_str in matches:
-        start_time = float(start_str)
-        end_time = float(end_str)
+        try:
+            start_time = float(start_str)
+            end_time = float(end_str)
+        except (ValueError, TypeError) as e:
+            logging.warning(f'Failed to parse segment timestamps: {start_str}-{end_str}: {e}')
+            continue
+        
+        # Skip invalid ranges: start must be less than end (reject start >= end)
+        if start_time >= end_time:
+            logging.warning(f'Skipping invalid segment: {start_time}-{end_time} (start >= end)')
+            continue
+        
+        # Reject segments outside reasonable bounds (> 1 hour)
+        if end_time > 3600:
+            logging.warning(f'Skipping segment with unreasonable end time: {start_time}-{end_time}')
+            continue
+        
         label = rules_mod.normalize_label_text(label_str, output_mode=classifier_mode)
         
-        # Find captions within this time range
+        # Find captions within this time range (with small tolerance)
+        tolerance = 0.05  # 50ms tolerance for floating point comparison
         segment_captions = [
             c for c in all_captions 
-            if start_time <= c['t'] <= end_time
+            if start_time - tolerance <= c['t'] <= end_time + tolerance
         ]
         
         if segment_captions:
@@ -69,7 +100,23 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
                 'timeline': '\n'.join([f"<t={c['t']:.2f}> {c['caption']}" for c in segment_captions])
             })
     
-    return segments
+    # Remove duplicate/overlapping segments (LLM sometimes outputs overlapping ranges)
+    # Keep segment with earlier start time or (if same start) earlier end time
+    deduplicated = []
+    seen_ranges = set()
+    
+    for seg in segments:
+        start = seg['start_time']
+        end = seg['end_time']
+        # Use a tuple key for exact time matching (with small tolerance)
+        time_key = (round(start, 2), round(end, 2))
+        if time_key not in seen_ranges:
+            deduplicated.append(seg)
+            seen_ranges.add(time_key)
+        else:
+            logging.warning(f'Skipping duplicate segment: {start}-{end}:{seg["label"]} (already seen)')
+    
+    return deduplicated
 
 
 def merge_segments_with_pending(
