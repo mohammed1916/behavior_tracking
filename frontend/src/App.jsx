@@ -697,6 +697,52 @@ function App() {
                           <source src={`http://localhost:8001${vlmResult.analysis.video_url}`} type="video/mp4" />
                         </video>
 
+                        {/* Statistical Summary */}
+                        {(() => {
+                          const fps = vlmResult.analysis.fps || 30;
+                          const idleRanges = vlmResult.analysis.idle_frames && vlmResult.analysis.idle_frames.length > 0 
+                            ? computeRanges(vlmResult.analysis.idle_frames, vlmResult.analysis.samples || [], fps) 
+                            : [];
+                          const workRanges = vlmResult.analysis.work_frames && vlmResult.analysis.work_frames.length > 0 
+                            ? computeRanges(vlmResult.analysis.work_frames, vlmResult.analysis.samples || [], fps) 
+                            : [];
+                          
+                          const totalIdleTime = idleRanges.reduce((sum, r) => sum + (r.endTime - r.startTime), 0);
+                          const totalWorkTime = workRanges.reduce((sum, r) => sum + (r.endTime - r.startTime), 0);
+                          const totalTime = totalIdleTime + totalWorkTime;
+                          
+                          const formatTime = (seconds) => {
+                            const mins = Math.floor(seconds / 60);
+                            const secs = (seconds % 60).toFixed(2);
+                            return `${mins}m ${secs}s`;
+                          };
+                          
+                          const idlePercent = totalTime > 0 ? ((totalIdleTime / totalTime) * 100).toFixed(1) : 0;
+                          const workPercent = totalTime > 0 ? ((totalWorkTime / totalTime) * 100).toFixed(1) : 0;
+                          
+                          return (
+                            <div style={{ marginTop: 16, padding: 12, backgroundColor: cssVars.cardBg, borderRadius: 4, border: `1px solid ${cssVars.border}` }}>
+                              <h5 style={{ marginTop: 0, marginBottom: 12 }}>Summary</h5>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div style={{ padding: 8, backgroundColor: cssVars.workHighlight || 'rgba(76, 175, 80, 0.1)', borderRadius: 4 }}>
+                                  <div style={{ fontSize: 12, color: cssVars.muted }}>Working Time</div>
+                                  <div style={{ fontSize: 18, fontWeight: 'bold', color: 'rgba(76, 175, 80, 1)' }}>{formatTime(totalWorkTime)}</div>
+                                  <div style={{ fontSize: 11, color: cssVars.muted, marginTop: 4 }}>{workPercent}% of total</div>
+                                </div>
+                                <div style={{ padding: 8, backgroundColor: cssVars.idleHighlight || 'rgba(158, 158, 158, 0.1)', borderRadius: 4 }}>
+                                  <div style={{ fontSize: 12, color: cssVars.muted }}>Idle Time</div>
+                                  <div style={{ fontSize: 18, fontWeight: 'bold', color: 'rgba(158, 158, 158, 1)' }}>{formatTime(totalIdleTime)}</div>
+                                  <div style={{ fontSize: 11, color: cssVars.muted, marginTop: 4 }}>{idlePercent}% of total</div>
+                                </div>
+                              </div>
+                              <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${cssVars.border}`, fontSize: 12 }}>
+                                <span style={{ color: cssVars.muted }}>Total Duration: </span>
+                                <span style={{ fontWeight: 'bold' }}>{formatTime(totalTime)}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
                           <div style={{ flex: 1, textAlign: 'left' }}>
                             <strong>Idle Frames</strong>
