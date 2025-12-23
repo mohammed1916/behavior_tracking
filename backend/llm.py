@@ -57,10 +57,20 @@ CRITICAL INSTRUCTIONS:
 1. Output ONLY the segment lines, nothing else - NO preamble, NO explanation, NO thinking
 2. Each line must be: [start_time]-[end_time]: label (e.g., 0.50-2.30: work)
 3. Use exact timestamps from the timeline; do not invent or approximate times
-4. Merge adjacent same-label spans; ensure start_time < end_time
+4. Merge adjacent same-label spans; ensure start_time <= end_time. start_time and end_time MUST be timestamps that appear verbatim in the input; they represent the first and last observation in the segment.
 5. Output in chronological order
 
-Output format (ONLY these lines):
+Example (format and derivation only):
+
+If the sorted input timestamps were:
+<t=0.50> work
+<t=1.20> work
+<t=2.30> work
+<t=3.10> idle
+<t=3.80> work
+<t=5.20> work
+
+Then the output MUST be:
 0.50-2.30: work
 3.10-3.10: idle
 3.80-5.20: work"""

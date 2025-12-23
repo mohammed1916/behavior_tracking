@@ -178,11 +178,11 @@ function App() {
             if (sampleIdx >= 0) {
               analysis.samples[sampleIdx].label = data.label;
             }
-            // Add to appropriate frame list if not already there
-            if (data.label === 'idle' && !analysis.idle_frames.includes(data.frame_index)) {
+            // Add to appropriate frame list
+            if (data.label === 'idle') {
               analysis.idle_frames.push(data.frame_index);
             }
-            if (data.label === 'work' && !analysis.work_frames.includes(data.frame_index)) {
+            if (data.label === 'work') {
               analysis.work_frames.push(data.frame_index);
             }
             setVlmResult({ message: 'streaming', analysis: { ...analysis } });

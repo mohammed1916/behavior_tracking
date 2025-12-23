@@ -66,17 +66,12 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
             start_time = float(start_str)
             end_time = float(end_str)
         except (ValueError, TypeError) as e:
-            logging.warning(f'Failed to parse segment timestamps: {start_str}-{end_str}: {e}')
+            print(f'Failed to parse segment timestamps: {start_str}-{end_str}: {e}')
             continue
         
         # Skip invalid ranges: start must be less than end (reject start >= end)
         if start_time >= end_time:
-            logging.warning(f'Skipping invalid segment: {start_time}-{end_time} (start >= end)')
-            continue
-        
-        # Reject segments outside reasonable bounds (> 1 hour)
-        if end_time > 3600:
-            logging.warning(f'Skipping segment with unreasonable end time: {start_time}-{end_time}')
+            print(f'Skipping invalid segment: {start_time}-{end_time} (start >= end)')
             continue
         
         label = rules_mod.normalize_label_text(label_str, output_mode=classifier_mode)
@@ -85,7 +80,7 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
         tolerance = 0.05  # 50ms tolerance for floating point comparison
         segment_captions = [
             c for c in all_captions 
-            if start_time - tolerance <= c['t'] <= end_time + tolerance
+            if start_time <= c['t'] <= end_time
         ]
         
         if segment_captions:
@@ -114,7 +109,7 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
             deduplicated.append(seg)
             seen_ranges.add(time_key)
         else:
-            logging.warning(f'Skipping duplicate segment: {start}-{end}:{seg["label"]} (already seen)')
+            print(f'Skipping duplicate segment: {start}-{end}:{seg["label"]} (already seen)')
     
     return deduplicated
 
