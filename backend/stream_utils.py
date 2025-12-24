@@ -12,6 +12,9 @@ import re
 import backend.llm as llm_mod
 import backend.rules as rules_mod
 
+# Create module-level logger
+logger = logging.getLogger(__name__)
+
 
 def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mode: str, prompt: Optional[str] = None) -> List[Dict]:
     """Parse LLM timeline segmentation output into structured segments.
@@ -23,6 +26,36 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
     
     Returns list of segments with start_time, end_time, label, captions, prompt.
     """
+    import logging
+    
+    # Strip out thinking/reasoning blocks and preamble before parsing
+    llm_output = llm_output.strip()
+    
+    # Extract valid timestamp set from captions FIRST
+    valid_timestamps = set()
+    for c in all_captions or []:
+        try:
+            valid_timestamps.add(round(float(c.get('t', 0)), 2))
+        except:
+            pass
+    
+    logger.debug(f"[PARSE_LLM] Valid timestamps from input: {sorted(valid_timestamps)}")
+    logger.debug(f"[PARSE_LLM] Raw LLM output (first 300 chars): {llm_output[:300]}")
+    
+    # Remove thinking blocks and keep only actual segments
+    lines = llm_output.split('\n')
+    clean_lines = []
+    for line in lines:
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
+        # Check if this looks like a segment line: X.XX-Y.YY: label
+        if re.match(r'^\d+\.?\d*\s*-\s*\d+\.?\d*\s*:\s*\w+', line_stripped):
+            clean_lines.append(line_stripped)
+    
+    llm_output = '\n'.join(clean_lines)
+    logger.debug(f"[PARSE_LLM] Cleaned segment lines: {llm_output}")
+    
     # Deduplicate incoming captions FIRST by (rounded time, normalized text), preserving order
     def _dedupe_captions(caps: List[Dict]) -> List[Dict]:
         seen = set()
@@ -71,6 +104,8 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
     
     if not matches:
         # Fallback: if LLM output is malformed, create single segment with normalized label
+        logger.warning(f"[PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all {len(all_captions)} captions.")
+        logger.warning(f"[PARSE_LLM] LLM output was: {llm_output[:200]}")
         label = rules_mod.normalize_label_text(llm_output, output_mode=classifier_mode)
         if all_captions:
             return [{
@@ -95,9 +130,29 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
             print(f'Failed to parse segment timestamps: {start_str}-{end_str}: {e}')
             continue
         
+        # Skip segments where timestamps don't exist in input (unless only 1 caption or fuzzy match)
+        start_rounded = round(start_time, 2)
+        end_rounded = round(end_time, 2)
+        
+        # For single-caption windows, be lenient. For multi-caption, require exact or close match
+        if len(all_captions) > 1:
+            if start_rounded not in valid_timestamps:
+                # Check if close to any valid timestamp (within 0.15s)
+                closest_start = min((t for t in valid_timestamps), key=lambda t: abs(t - start_rounded), default=None)
+                if closest_start is None or abs(closest_start - start_rounded) > 0.15:
+                    logger.warning(f'[PARSE_LLM] Skipping segment with invalid start time: {start_time} (not in {sorted(valid_timestamps)})')
+                    continue
+                start_time = closest_start
+            if end_rounded not in valid_timestamps:
+                closest_end = min((t for t in valid_timestamps), key=lambda t: abs(t - end_rounded), default=None)
+                if closest_end is None or abs(closest_end - end_rounded) > 0.15:
+                    logger.warning(f'[PARSE_LLM] Skipping segment with invalid end time: {end_time} (not in {sorted(valid_timestamps)})')
+                    continue
+                end_time = closest_end
+        
         # Skip invalid ranges: start must be less than end (reject start > end)
         if start_time > end_time:
-            print(f'Skipping invalid segment: {start_time}-{end_time} (start > end)')
+            logger.warning(f'[PARSE_LLM] Skipping invalid segment: {start_time}-{end_time} (start > end)')
             continue
         
         label = rules_mod.normalize_label_text(label_str, output_mode=classifier_mode)
@@ -111,6 +166,7 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
         # No need to dedupe again - all_captions is already deduped at entry
         
         if segment_captions:
+            logger.info(f'[PARSE_LLM] Created segment {start_time:.2f}-{end_time:.2f}: {label} with {len(segment_captions)} captions')
             segments.append({
                 'stage': 'segment',
                 'start_time': start_time,
@@ -479,7 +535,7 @@ def start_live_recording(frame, cap, processed_dir: str):
             print('Recording live stream via ffmpeg to %s (fps=%s size=%dx%d)', saved_path, cap_fps, w, h)
             yield {"stage": "debug", "message": f"Recording via ffmpeg to {saved_basename}"}
         except Exception as e:
-            logging.warning('ffmpeg recording failed to start: %s', e)
+            logger.warning('ffmpeg recording failed to start: %s', e)
             ffmpeg_proc = None
             writer = None
             writer_type = None
@@ -495,7 +551,7 @@ def start_live_recording(frame, cap, processed_dir: str):
             try:
                 writer.release()
             except Exception as _e_rel:
-                logging.debug('VideoWriter release failed before fallback: %s', _e_rel)
+                logger.debug('VideoWriter release failed before fallback: %s', _e_rel)
             
             saved_basename = f"live_{uniq}.avi"
             saved_path = os.path.join(processed_dir, saved_basename)

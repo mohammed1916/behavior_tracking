@@ -51,7 +51,6 @@ from backend.stream_utils import (
     probe_saved_video_info,
     start_live_recording,
     parse_llm_segments,
-    merge_segments_with_pending,
 )
 import backend.stream_utils as stream_utils_mod
 
@@ -70,7 +69,7 @@ app.add_middleware(
 )
 
 # configure logging so INFO/DEBUG messages are shown
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s - %(levelname)s %(message)s')
 
 # write logs to a file so the frontend can tail recent activity
 LOG_FILE = "server.log"
@@ -78,12 +77,15 @@ logger = logging.getLogger()
 if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', '') == os.path.abspath(LOG_FILE) for h in logger.handlers):
     fh = logging.FileHandler(LOG_FILE)
     fh.setLevel(logging.INFO)
-    fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    fh.setFormatter(logging.Formatter('%(asctime)s %(name)s - %(levelname)s %(message)s'))
     logger.addHandler(fh)
 
 CLASSIFY_PROMPT_TEMPLATE = llm_mod.CLASSIFY_PROMPT_TEMPLATE
 # DURATION_PROMPT_TEMPLATE = llm_mod.DURATION_PROMPT_TEMPLATE
 TASK_COMPLETION_PROMPT_TEMPLATE = llm_mod.TASK_COMPLETION_PROMPT_TEMPLATE
+
+# Create module-level logger for actual logging calls
+module_logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = "uploads"
 PROCESSED_DIR = "processed"
@@ -140,34 +142,26 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             classifier_source_norm = (classifier_source or 'llm').lower()
             effective_use_llm = (classifier_source_norm == 'llm')
 
-            # Time-windowed aggregation state and config (no semantic similarity)
+            # Caption-count aggregation: batch 4 captions per window, no time-based closing
             current_window = None
-            last_sample_time = None
-            pending_segment = None
-            max_window_sec = 4.0
-            silence_timeout_sec = 1.5
-            # Allow single-sample windows so sparse sampling still yields segments
+            max_samples_per_window = 4
             min_samples = 1
 
-            pending_segment = None
-
-            def _close_window_if_needed(elapsed_time: float):
-                nonlocal current_window, last_sample_time
+            def _close_window_if_needed():
+                """Close window when it reaches 4 captions; no time-based logic."""
+                nonlocal current_window
                 if current_window is None:
                     return None
-                gap = elapsed_time - last_sample_time if last_sample_time is not None else 0
-                duration = elapsed_time - current_window.start_time
-                if gap > silence_timeout_sec or duration >= max_window_sec:
+                if len(current_window.samples) >= max_samples_per_window:
                     window = current_window
                     current_window = None
-                    last_sample_time = None
                     return window
                 return None
 
-            def _finalize_window(window, cls_prompt, pending_segment):
-                """Analyze window timeline; merge head/tail with pending across windows."""
+            def _finalize_window(window, cls_prompt):
+                """Analyze window timeline and return segments."""
                 if window is None or len(window.samples) < min_samples:
-                    return [], pending_segment
+                    return []
 
                 # Build timeline string with all captions
                 timeline = window.to_timeline()
@@ -185,6 +179,10 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     llm_output = llm_res[0].get('generated_text', str(llm_res))
                 else:
                     llm_output = str(llm_res)
+                
+                # DEBUG: Log raw LLM output and captions sent
+                module_logger.info(f"[LLM_INPUT] captions: {[s['caption'][:40] for s in window.samples]}")
+                module_logger.info(f"[LLM_OUTPUT] {llm_output.replace(chr(10), ' ')[:200]}")
 
                 # Parse LLM output into structured segments
                 all_captions = [{'t': s['t'], 'caption': s['caption']} for s in window.samples]
@@ -194,9 +192,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 for seg in segments:
                     seg['llm_output'] = llm_output
 
-                # Merge with pending tail from previous window
-                to_emit, pending_segment = merge_segments_with_pending(segments, pending_segment)
-                return to_emit, pending_segment
+                return segments
 
             while app.state.webcam_event.is_set():
                 ret, frame = cap.read()
@@ -228,7 +224,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             if saved_path and os.path.exists(saved_path):
                                 os.remove(saved_path)
                         except Exception as _e_rm:
-                            logging.debug('Failed to remove partial recording file: %s', _e_rm)
+                            module_logger.debug('Failed to remove partial recording file: %s', _e_rm)
                 # If writer is active, write the raw frame (BGR)
                 if writer is not None:
                     if writer_type == 'ffmpeg' and ffmpeg_proc is not None and ffmpeg_proc.stdin:
@@ -242,7 +238,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             try:
                                 ffmpeg_proc.stdin.close()
                             except Exception as _e_close:
-                                logging.debug('Failed to close ffmpeg stdin after broken pipe: %s', _e_close)
+                                module_logger.debug('Failed to close ffmpeg stdin after broken pipe: %s', _e_close)
                             yield _sse_event({"stage": "debug", "message": "ffmpeg broken pipe during live recording; disabled recording"})
                             ffmpeg_proc = None
                             writer = None
@@ -261,7 +257,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             try:
                                 _dbg_msgs.append(str(m))
                             except Exception as _e_dbg:
-                                logging.debug('Failed to collect debug message: %s', _e_dbg)
+                                module_logger.debug('Failed to collect debug message: %s', _e_dbg)
                         out = call_captioner(captioner, img, vlm_prompt, on_debug=_dbg)
                         if _dbg_msgs:
                             for _m in _dbg_msgs:
@@ -311,7 +307,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                             if b64:
                                 payload['image'] = b64
                         except Exception as e:
-                            logging.debug('Failed to encode frame for SSE image: %s', e)
+                            module_logger.debug('Failed to encode frame for SSE image: %s', e)
                         yield _sse_event(payload)
 
                         # Collect for DB saving
@@ -332,16 +328,15 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                 )
                             
                             current_window.add_sample(elapsed_time, caption)
-                            last_sample_time = elapsed_time
                             
-                            # Check if window should close (silence or max duration)
-                            closed_window = _close_window_if_needed(elapsed_time)
+                            # Check if window reaches 4 captions
+                            closed_window = _close_window_if_needed()
                             if closed_window is not None:
-                                # Window closed: segment timeline and merge across windows
+                                # Window closed: segment timeline
                                 cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
-                                segments, pending_segment = _finalize_window(closed_window, cls_prompt, pending_segment)
+                                segments = _finalize_window(closed_window, cls_prompt)
                                 
-                                # Emit ready segments (pending is held for next window)
+                                # Emit segments
                                 for seg_event in segments:
                                     collected_segments.append(seg_event)
                                     yield _sse_event(seg_event)
@@ -382,48 +377,41 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                     closing_window = current_window
                     current_window = None
                     cls_prompt_final = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
-                    segments, pending_segment = _finalize_window(closing_window, cls_prompt_final, pending_segment)
+                    segments = _finalize_window(closing_window, cls_prompt_final)
                     for seg_event in segments:
                         collected_segments.append(seg_event)
                         try:
                             yield _sse_event(seg_event)
                         except Exception:
                             pass
-                # Flush any pending segment
-                if pending_segment is not None:
-                    collected_segments.append(pending_segment)
-                    try:
-                        yield _sse_event(pending_segment)
-                    except Exception:
-                        pass
             
             # release resources
             try:
                 cap.release()
             except Exception as _e_rel:
-                logging.debug('cap.release() failed: %s', _e_rel)
+                module_logger.debug('cap.release() failed: %s', _e_rel)
             try:
                 if writer_type == 'ffmpeg' and ffmpeg_proc is not None:
                     try:
                         ffmpeg_proc.stdin.close()
                     except Exception as _e_close:
-                        logging.debug('ffmpeg stdin close failed: %s', _e_close)
+                        module_logger.debug('ffmpeg stdin close failed: %s', _e_close)
                     try:
                         ffmpeg_proc.wait(timeout=10)
                     except Exception as _e_wait:
-                        logging.debug('ffmpeg wait failed: %s', _e_wait)
+                        module_logger.debug('ffmpeg wait failed: %s', _e_wait)
                         try:
                             ffmpeg_proc.kill()
                         except Exception as _e_kill:
-                            logging.debug('ffmpeg kill failed: %s', _e_kill)
+                            module_logger.debug('ffmpeg kill failed: %s', _e_kill)
                 else:
                     if writer is not None:
                         try:
                             writer.release()
                         except Exception as _e_rel:
-                            logging.debug('writer.release() failed: %s', _e_rel)
+                            module_logger.debug('writer.release() failed: %s', _e_rel)
             except Exception as _e_any:
-                logging.debug('Error during teardown: %s', _e_any)
+                module_logger.debug('Error during teardown: %s', _e_any)
             
             # Save to DB at the end (similar to vlm_local_stream)
             try:
@@ -432,7 +420,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                 if saved_path and os.path.exists(saved_path):
                     vid_info, err = probe_saved_video_info(saved_path, vid_info['fps'], frame_counter, elapsed_time)
                     if err:
-                        logging.debug('Failed to probe saved recording for metadata: %s', err)
+                        module_logger.debug('Failed to probe saved recording for metadata: %s', err)
                         yield _sse_event({"stage": "debug", "message": f"Video probe failed; using defaults: {err}"})
                 aid = str(uuid.uuid4())
                 filename_for_db = saved_basename if saved_basename else f"live_webcam_{aid}.mp4"
@@ -620,6 +608,15 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 max_samples = min(30, max(1, frame_count))
                 indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
 
+            # Estimate sampling cadence (seconds) from selected frame indices to size LLM windows.
+            sample_times_sec = sorted({fi / (fps if fps > 0 else 30.0) for fi in indices})
+            if len(sample_times_sec) >= 2:
+                sample_interval_est = min((b - a) for a, b in zip(sample_times_sec, sample_times_sec[1:]) if (b - a) > 0)
+            else:
+                sample_interval_est = 2.0
+            silence_timeout_sec = max(sample_interval_est + 0.2, 2.5)
+            max_samples_per_window = 4
+
             captioner = captioner_mod.get_captioner_for_model(model)
             if captioner is None:
                 yield _sse_event({"stage": "alert", "message": f"no local captioner available for model '{model}'"})
@@ -647,33 +644,29 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             collected_idle = []
             collected_work = []
             collected_segments = []
-            pending_segment = None
             
-            # Time-windowed aggregation state and config (no semantic similarity)
+            # Caption-count aggregation: batch 4 captions per window, no time-based closing
             current_window = None
-            last_sample_time = None
-            max_window_sec = 4.0
-            silence_timeout_sec = 1.5
-            # Allow single-sample windows so sparse sampling still yields segments
+            max_samples_per_window = 4
             min_samples = 1
 
-            def _close_window_if_needed(current_time: float):
-                nonlocal current_window, last_sample_time
+            def _close_window_if_needed():
+                """Close window when it reaches 4 captions; no time-based logic."""
+                nonlocal current_window
                 if current_window is None:
                     return None
-                gap = current_time - last_sample_time if last_sample_time is not None else 0
-                duration = current_time - current_window.start_time
-                if gap > silence_timeout_sec or duration >= max_window_sec:
+                if len(current_window.samples) >= max_samples_per_window:
                     window = current_window
                     current_window = None
-                    last_sample_time = None
                     return window
                 return None
 
-            def _finalize_window(window, cls_prompt, pending_segment):
+            def _finalize_window(window, cls_prompt):
                 """Analyze full timeline with temporal context using LLM to identify segments."""
                 if window is None or len(window.samples) < min_samples:
-                    return [], pending_segment
+                    return []
+                
+                module_logger.info(f"[VLM_WINDOW_CLOSED] n_samples={len(window.samples)} times={[s['t'] for s in window.samples]}")
                 
                 # Build timeline string with all captions
                 timeline = window.to_timeline()
@@ -692,6 +685,10 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 else:
                     llm_output = str(llm_res)
                 
+                # DEBUG: Log raw LLM output and captions sent
+                module_logger.info(f"[LLM_INPUT] captions: {[s['caption'][:40] for s in window.samples]}")
+                module_logger.info(f"[LLM_OUTPUT] {llm_output.replace(chr(10), ' ')[:200]}")
+                
                 # Parse LLM output into structured segments
                 all_captions = [{'t': s['t'], 'caption': s['caption']} for s in window.samples]
                 segments = stream_utils_mod.parse_llm_segments(llm_output, all_captions, classifier_mode, prompt=rendered)
@@ -700,8 +697,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 for seg in segments:
                     seg['llm_output'] = llm_output
 
-                to_emit, pending_segment = merge_segments_with_pending(segments, pending_segment)
-                return to_emit, pending_segment
+                return segments
             
             for fi in indices:
                 try:
@@ -736,7 +732,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         try:
                             _dbg_msgs.append(str(m))
                         except Exception as _e_dbg:
-                            logging.debug('Failed to collect debug message: %s', _e_dbg)
+                            module_logger.debug('Failed to collect debug message: %s', _e_dbg)
                     out = call_captioner(captioner, img, vlm_prompt, on_debug=_dbg)
                     if _dbg_msgs:
                         for _m in _dbg_msgs:
@@ -811,14 +807,18 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                         current_window.add_sample(time_sec, caption)
                         last_sample_time = time_sec
                         
-                        # Check if window should close (silence or max duration)
-                        closed_window = _close_window_if_needed(time_sec)
+                        # Check if window reaches 4 captions
+                        closed_window = _close_window_if_needed()
                         if closed_window is not None:
-                            # Window closed: segment timeline and merge across windows
-                            cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
-                            segments, pending_segment = _finalize_window(closed_window, cls_prompt, pending_segment)
+                            # DEBUG: Log what's in the closed window
+                            window_captions = [f"{s['t']:.2f}" for s in closed_window.samples]
+                            module_logger.info(f"[VLM_WINDOW_CLOSED] n_samples={len(closed_window.samples)} times={window_captions}")
                             
-                            # Emit ready segments (pending is held for next window)
+                            # Window closed: segment timeline
+                            cls_prompt = classify_prompt_template or rules_mod.get_label_template(classifier_mode)
+                            segments = _finalize_window(closed_window, cls_prompt)
+                            
+                            # Emit segments
                             for seg_event in segments:
                                 collected_segments.append(seg_event)
                                 yield _sse_event(seg_event)
@@ -844,13 +844,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                                                 "label": segment_label
                                             })
                             
-                            # Start fresh window with current sample
-                            current_window = evidence_mod.EvidenceWindow(
-                                start_time=time_sec,
-                                end_time=time_sec
-                            )
-                            current_window.add_sample(time_sec, caption)
-                            last_sample_time = time_sec
+                            # Start fresh EMPTY window - don't re-add current sample (it was in closed window)
+                            # Next sample will be the first in the new window, avoiding boundary duplication
+                            current_window = None
 
                     yield _sse_event(payload)
                 except Exception as e:
@@ -862,20 +858,13 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                     closing_window = current_window
                     current_window = None
                     cls_prompt_final = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
-                    segments, pending_segment = _finalize_window(closing_window, cls_prompt_final, pending_segment)
+                    segments = _finalize_window(closing_window, cls_prompt_final)
                     for seg_event in segments:
                         collected_segments.append(seg_event)
                         try:
                             yield _sse_event(seg_event)
                         except Exception:
                             pass
-                # Flush any pending segment
-                if pending_segment is not None:
-                    collected_segments.append(pending_segment)
-                    try:
-                        yield _sse_event(pending_segment)
-                    except Exception:
-                        pass
             cap2.release()
 
             # Persist the final collected analysis to DB

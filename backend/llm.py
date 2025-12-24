@@ -42,38 +42,40 @@ Answer:
 
 # Text-only LLM prompts (for analyzing TEXT descriptions, not images)
 # Used when classifier_source='llm' - LLM receives aggregated text captions with temporal context
-LLM_SEGMENT_TIMELINE_BINARY = """You are analyzing a timeline of activity descriptions to identify distinct segments.
+LLM_SEGMENT_TIMELINE_BINARY = """Classify and group the following activity observations into segments.
 
-Timeline of observations:
+Timeline of observations (DO NOT INVENT TIMESTAMPS):
 {caption}
 
-Task: Identify continuous activity segments based on temporal patterns, merging adjacent or near-adjacent spans with the same label.
+Your task:
+1. Read each timestamp and description
+2. Classify each as EITHER 'work' OR 'idle'
+3. Group CONSECUTIVE observations with the SAME classification
+4. Output one segment line per group
 
-Labels:
-- work: Person actively engaged in hands-on tasks (electronics, assembly, tools)
-- idle: Person not engaged in tasks, standing/sitting without interaction
+Classification rules:
+- work: Person actively engaged in hands-on tasks, using tools, assembling, working on electronics, manipulating objects
+- idle: Person not engaged, standing/sitting without active tasks
 
-CRITICAL INSTRUCTIONS:
-1. Output ONLY the segment lines, nothing else - NO preamble, NO explanation, NO thinking
-2. Each line must be: [start_time]-[end_time]: label (e.g., 0.50-2.30: work)
-3. Use exact timestamps from the timeline; do not invent or approximate times
-4. Merge adjacent same-label spans; ensure start_time <= end_time. start_time and end_time MUST be timestamps that appear verbatim in the input; they represent the first and last observation in the segment.
-5. Output in chronological order
+OUTPUT FORMAT (exactly one line per segment, NOTHING ELSE):
+start_time-end_time: classification
 
-Example (format and derivation only):
+CRITICAL: Use ONLY the exact timestamps from the timeline above.
+CRITICAL: Do NOT invent, approximate, or combine timestamps.
+CRITICAL: Use ONLY the timestamps that appear in the input.
 
-If the sorted input timestamps were:
-<t=0.50> work
-<t=1.20> work
-<t=2.30> work
-<t=3.10> idle
-<t=3.80> work
-<t=5.20> work
+Example (if input had these timestamps):
+<t=0.50> work activity
+<t=1.20> work activity
+<t=2.30> work activity
+<t=3.10> idle activity
+<t=4.00> idle activity
 
-Then the output MUST be:
+Then output would be:
 0.50-2.30: work
-3.10-3.10: idle
-3.80-5.20: work"""
+3.10-4.00: idle
+
+Now analyze the given timeline and output segments:"""
 
 LLM_SEGMENT_TIMELINE_MULTI = """You are analyzing a timeline of activity descriptions to identify distinct segments.
 
