@@ -13,7 +13,7 @@ import backend.llm as llm_mod
 import backend.rules as rules_mod
 
 
-def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mode: str) -> List[Dict]:
+def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mode: str, prompt: Optional[str] = None) -> List[Dict]:
     """Parse LLM timeline segmentation output into structured segments.
     
     Expected format from LLM:
@@ -21,8 +21,33 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
     3.10-3.10: using_phone
     3.80-5.20: work
     
-    Returns list of segments with start_time, end_time, label, captions.
+    Returns list of segments with start_time, end_time, label, captions, prompt.
     """
+    # Deduplicate incoming captions FIRST by (rounded time, normalized text), preserving order
+    def _dedupe_captions(caps: List[Dict]) -> List[Dict]:
+        seen = set()
+        out: List[Dict] = []
+        for c in caps or []:
+            t_raw = c.get('t')
+            if t_raw is None:
+                continue
+            try:
+                t = float(t_raw)
+            except Exception:
+                continue
+            txt = (c.get('caption') or '').strip()
+            if not txt:
+                continue
+            key = (round(t, 2), txt.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({'t': t, 'caption': c.get('caption')})
+        return out
+
+    # Dedupe all_captions immediately before any processing
+    all_captions = _dedupe_captions(all_captions)
+    
     segments = []
     
     # Extract only clean segment lines (ignore any preamble like "Thinking...")
@@ -56,7 +81,8 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
                 'captions': [c['caption'] for c in all_captions],
                 'timestamps': [c['t'] for c in all_captions],
                 'duration': all_captions[-1]['t'] - all_captions[0]['t'],
-                'timeline': '\n'.join([f"<t={c['t']:.2f}> {c['caption']}" for c in all_captions])
+                'timeline': '\n'.join([f"<t={c['t']:.2f}> {c['caption']}" for c in all_captions]),
+                'prompt': prompt
             }]
         return []
     
@@ -69,9 +95,9 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
             print(f'Failed to parse segment timestamps: {start_str}-{end_str}: {e}')
             continue
         
-        # Skip invalid ranges: start must be less than end (reject start >= end)
-        if start_time >= end_time:
-            print(f'Skipping invalid segment: {start_time}-{end_time} (start >= end)')
+        # Skip invalid ranges: start must be less than end (reject start > end)
+        if start_time > end_time:
+            print(f'Skipping invalid segment: {start_time}-{end_time} (start > end)')
             continue
         
         label = rules_mod.normalize_label_text(label_str, output_mode=classifier_mode)
@@ -82,6 +108,7 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
             c for c in all_captions 
             if start_time <= c['t'] <= end_time
         ]
+        # No need to dedupe again - all_captions is already deduped at entry
         
         if segment_captions:
             segments.append({
@@ -92,7 +119,8 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
                 'captions': [c['caption'] for c in segment_captions],
                 'timestamps': [c['t'] for c in segment_captions],
                 'duration': end_time - start_time,
-                'timeline': '\n'.join([f"<t={c['t']:.2f}> {c['caption']}" for c in segment_captions])
+                'timeline': '\n'.join([f"<t={c['t']:.2f}> {c['caption']}" for c in segment_captions]),
+                'prompt': prompt
             })
     
     # Remove duplicate/overlapping segments (LLM sometimes outputs overlapping ranges)
@@ -128,6 +156,47 @@ def merge_segments_with_pending(
     emitted: List[Dict[str, Any]] = []
     segs = list(new_segments)
 
+    # Helper to dedupe caption/timestamp pairs with aggressive boundary matching
+    def _dedupe_pairs(ts: List[Any], caps: List[str]) -> Tuple[List[Any], List[str]]:
+        """Remove duplicate (timestamp, caption) pairs.
+        
+        Two entries are considered duplicates if:
+        - Timestamps are within 0.1s of each other AND
+        - Caption text matches (case-insensitive, trimmed)
+        """
+        out_ts: List[Any] = []
+        out_caps: List[str] = []
+        
+        for i, (t, c) in enumerate(zip(ts or [], caps or [])):
+            try:
+                curr_t = float(t)
+            except Exception:
+                continue
+            curr_c = (c or '').strip()
+            if not curr_c:
+                continue
+            curr_c_norm = curr_c.lower()
+            
+            # Check if this (t, c) is a duplicate of any already-added entry
+            is_dup = False
+            for prev_t, prev_c in zip(out_ts, out_caps):
+                try:
+                    prev_t_f = float(prev_t)
+                except Exception:
+                    continue
+                prev_c_norm = (prev_c or '').strip().lower()
+                
+                # Consider duplicate if timestamps within 0.1s and text matches
+                if abs(curr_t - prev_t_f) <= 0.1 and curr_c_norm == prev_c_norm:
+                    is_dup = True
+                    break
+            
+            if not is_dup:
+                out_ts.append(t)
+                out_caps.append(c)
+        
+        return out_ts, out_caps
+
     # Pre-merge pending with first new segment if label matches and gap small
     if pending_segment and segs:
         head = segs[0]
@@ -135,9 +204,12 @@ def merge_segments_with_pending(
         if pending_segment.get('label') == head.get('label') and gap <= merge_gap_sec:
             pending_segment['end_time'] = head['end_time']
             pending_segment['duration'] = pending_segment['end_time'] - pending_segment['start_time']
-            pending_segment['captions'] = pending_segment.get('captions', []) + head.get('captions', [])
-            pending_segment['timestamps'] = pending_segment.get('timestamps', []) + head.get('timestamps', [])
-            pending_segment['timeline'] = pending_segment.get('timeline', '') + ("\n" if pending_segment.get('timeline') else "") + head.get('timeline', '')
+            caps = (pending_segment.get('captions', []) or []) + (head.get('captions', []) or [])
+            ts = (pending_segment.get('timestamps', []) or []) + (head.get('timestamps', []) or [])
+            ts, caps = _dedupe_pairs(ts, caps)
+            pending_segment['captions'] = caps
+            pending_segment['timestamps'] = ts
+            pending_segment['timeline'] = '\n'.join([f"<t={float(t):.2f}> {c}" for t, c in zip(ts, caps)])
             pending_segment['llm_output'] = head.get('llm_output') or pending_segment.get('llm_output')
             segs = segs[1:]
         else:
@@ -353,7 +425,7 @@ def encode_frame_for_sse_image(frame, jpeg_quality: int = 80, max_width: Optiona
     return None
 
 
-def probe_saved_video_info(saved_path: str, default_fps: float, frame_count: int, duration: float) -> (Dict[str, Any], Optional[str]):
+def probe_saved_video_info(saved_path: str, default_fps: float, frame_count: int, duration: float) -> Tuple[Dict[str, Any], Optional[str]]:
     """Probe saved video file for metadata via OpenCV. Returns (vid_info, error_msg)."""
     vid_info = {'fps': default_fps, 'frame_count': frame_count, 'width': None, 'height': None, 'duration': duration}
     err = None

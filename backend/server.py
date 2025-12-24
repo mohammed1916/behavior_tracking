@@ -188,7 +188,7 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
 
                 # Parse LLM output into structured segments
                 all_captions = [{'t': s['t'], 'caption': s['caption']} for s in window.samples]
-                segments = stream_utils_mod.parse_llm_segments(llm_output, all_captions, classifier_mode)
+                segments = stream_utils_mod.parse_llm_segments(llm_output, all_captions, classifier_mode, prompt=rendered)
 
                 # Add llm_output to each segment for debugging
                 for seg in segments:
@@ -367,13 +367,10 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
                                                     "label": segment_label
                                                 })
                                 
-                                # Start fresh window with current sample
-                                current_window = evidence_mod.EvidenceWindow(
-                                    start_time=elapsed_time,
-                                    end_time=elapsed_time
-                                )
-                                current_window.add_sample(elapsed_time, caption)
-                                last_sample_time = elapsed_time
+                                # Start fresh EMPTY window - don't re-add current sample (it was in closed window)
+                                # Next sample will be the first in the new window, avoiding boundary duplication
+                                current_window = None
+                                last_sample_time = None
                         
                         last_inference_time = time.time()
                     except Exception as e:
@@ -697,7 +694,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 
                 # Parse LLM output into structured segments
                 all_captions = [{'t': s['t'], 'caption': s['caption']} for s in window.samples]
-                segments = stream_utils_mod.parse_llm_segments(llm_output, all_captions, classifier_mode)
+                segments = stream_utils_mod.parse_llm_segments(llm_output, all_captions, classifier_mode, prompt=rendered)
 
                 # Add llm_output to each segment for debugging
                 for seg in segments:

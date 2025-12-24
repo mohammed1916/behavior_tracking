@@ -57,6 +57,27 @@ export default function SegmentDisplay({ segments = [] }) {
             </div>
           )}
 
+          {seg.prompt && (
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.9em', color: 'var(--muted)' }}>
+                View LLM Prompt
+              </summary>
+              <pre style={{ 
+                marginTop: 6, 
+                padding: 8, 
+                backgroundColor: 'var(--code-bg)', 
+                borderRadius: 4, 
+                fontSize: '0.85em',
+                maxHeight: 200,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}>
+                {seg.prompt}
+              </pre>
+            </details>
+          )}
+
           {seg.timeline && (
             <details style={{ marginTop: 8 }}>
               <summary style={{ cursor: 'pointer', fontSize: '0.9em', color: 'var(--muted)' }}>

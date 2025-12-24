@@ -55,6 +55,7 @@ def init_db():
         timeline TEXT,
         label TEXT,
         llm_output TEXT,
+        prompt TEXT,
         FOREIGN KEY(analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
     )
     ''')
@@ -90,14 +91,15 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
             ))
     if segments:
         for seg in segments:
-            cur.execute('''INSERT INTO segments (analysis_id, start_time, end_time, duration, timeline, label, llm_output) VALUES (?, ?, ?, ?, ?, ?, ?)''', (
+            cur.execute('''INSERT INTO segments (analysis_id, start_time, end_time, duration, timeline, label, llm_output, prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (
                 analysis_id,
                 seg.get('start_time'),
                 seg.get('end_time'),
                 seg.get('duration'),
                 seg.get('timeline'),
                 seg.get('label'),
-                seg.get('llm_output')
+                seg.get('llm_output'),
+                seg.get('prompt')
             ))
     conn.commit()
     conn.close()
@@ -155,7 +157,7 @@ def get_analysis_from_db(aid):
         analysis['idle_ranges'] = []
         analysis['work_ranges'] = []
     # Retrieve segments if they exist
-    cur.execute('SELECT start_time, end_time, duration, timeline, label, llm_output FROM segments WHERE analysis_id=? ORDER BY start_time ASC', (aid,))
+    cur.execute('SELECT start_time, end_time, duration, timeline, label, llm_output, prompt FROM segments WHERE analysis_id=? ORDER BY start_time ASC', (aid,))
     seg_rows = cur.fetchall()
     segments = []
     for seg in seg_rows:
@@ -165,7 +167,8 @@ def get_analysis_from_db(aid):
             'duration': seg[2],
             'timeline': seg[3],
             'label': seg[4],
-            'llm_output': seg[5]
+            'llm_output': seg[5],
+            'prompt': seg[6]
         })
     analysis['segments'] = segments
 
