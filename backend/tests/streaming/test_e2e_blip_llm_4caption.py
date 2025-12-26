@@ -5,6 +5,13 @@ End-to-end test: VLM+LLM streaming with BLIP model and 4-caption windows.
 This test uploads a video and processes it through the `/backend/vlm_local_stream`
 endpoint with the BLIP captioner and LLM-based segmentation (4 captions per window).
 
+Notes (current behavior):
+- Windowing is by caption count only (exactly 4 per window), no timeouts.
+- Segments are parsed from LLM output per window.
+- Duplicates can occur if LLM repeats lines or fuzzy snapping maps to identical ranges.
+- Backend now de-dups within-window and across-windows by (start,end,label).
+- This test independently checks for duplicates using exact keys (no fuzzy checks).
+
 Usage:
     python -m pytest backend/tests/streaming/test_e2e_blip_llm_4caption.py -v -s
 
@@ -144,7 +151,7 @@ def test_blip_llm_4caption_streaming():
 
     upload_data = upload_resp.json()
     filename = upload_data.get('filename')
-    print(f"✓ Uploaded as: {filename}")
+    print(f"[OK] Uploaded as: {filename}")
 
     # Step 2: Stream processing with VLM + LLM (4-caption windows)
     print("\n[2] Processing video with BLIP + LLM (4-caption windows)...")
@@ -160,6 +167,8 @@ def test_blip_llm_4caption_streaming():
     segment_count = 0
     sample_count = 0
     analysis_id = None
+    seen_seg = set()
+    dup_count = 0
 
     try:
         with requests.get(stream_url, stream=True, timeout=300) as resp:
@@ -201,15 +210,27 @@ def test_blip_llm_4caption_streaming():
                         print(f"  [SEG{segment_count}] {start:.2f}-{end:.2f}s ({duration:.2f}s) label={label} captions={len(captions)}")
                         for cap in captions[:2]:
                             print(f"       - {cap[:70]}")
+                        # Dedup check with exact keys (no fuzzy rounding beyond 2 decimals)
+                        try:
+                            k = (round(float(start or 0), 2), round(float(end or 0), 2), str(label or '').lower())
+                        except Exception:
+                            k = None
+                        if k is not None:
+                            if k in seen_seg:
+                                dup_count += 1
+                                print(f"  [DUP] duplicate segment seen: {k}")
+                            else:
+                                seen_seg.add(k)
                     
                     elif stage == 'finished':
-                        print(f"\n✓ Processing complete!")
+                        print(f"\n[OK] Processing complete!")
                         analysis_id = payload.get('stored_analysis_id')
                         if analysis_id:
                             print(f"  Stored analysis ID: {analysis_id}")
                         print(f"\n=== Summary ===")
                         print(f"  Total samples: {sample_count}")
                         print(f"  Total segments: {segment_count}")
+                        print(f"  Duplicate segments detected (exact match): {dup_count}")
                     
                     elif stage == 'alert':
                         print(f"  ⚠ {payload.get('message')}")
@@ -224,7 +245,12 @@ def test_blip_llm_4caption_streaming():
         print(f"Request error: {e}")
         return False
 
-    print("\n✓ Test completed!")
+    print("\n[OK] Test completed!")
+    # Assert: no duplicates detected by exact keys
+    if dup_count > 0:
+        print(f"\n✗ Found {dup_count} duplicate segment(s) by exact (start,end,label).")
+        return False
+    print("\n✓ No duplicate segments detected by exact (start,end,label).")
     return analysis_id is not None
 
 

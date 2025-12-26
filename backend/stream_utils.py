@@ -134,21 +134,14 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
         start_rounded = round(start_time, 2)
         end_rounded = round(end_time, 2)
         
-        # For single-caption windows, be lenient. For multi-caption, require exact or close match
+        # Strict matching: require segment boundaries to exactly match known timestamps
         if len(all_captions) > 1:
             if start_rounded not in valid_timestamps:
-                # Check if close to any valid timestamp (within 0.15s)
-                closest_start = min((t for t in valid_timestamps), key=lambda t: abs(t - start_rounded), default=None)
-                if closest_start is None or abs(closest_start - start_rounded) > 0.15:
-                    logger.warning(f'[PARSE_LLM] Skipping segment with invalid start time: {start_time} (not in {sorted(valid_timestamps)})')
-                    continue
-                start_time = closest_start
+                logger.warning(f'[PARSE_LLM] Skipping segment with invalid start time: {start_time} (not in {sorted(valid_timestamps)})')
+                continue
             if end_rounded not in valid_timestamps:
-                closest_end = min((t for t in valid_timestamps), key=lambda t: abs(t - end_rounded), default=None)
-                if closest_end is None or abs(closest_end - end_rounded) > 0.15:
-                    logger.warning(f'[PARSE_LLM] Skipping segment with invalid end time: {end_time} (not in {sorted(valid_timestamps)})')
-                    continue
-                end_time = closest_end
+                logger.warning(f'[PARSE_LLM] Skipping segment with invalid end time: {end_time} (not in {sorted(valid_timestamps)})')
+                continue
         
         # Skip invalid ranges: start must be less than end (reject start > end)
         if start_time > end_time:
@@ -179,22 +172,27 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
                 'prompt': prompt
             })
     
-    # Remove duplicate/overlapping segments (LLM sometimes outputs overlapping ranges)
-    # Keep segment with earlier start time or (if same start) earlier end time
-    deduplicated = []
+    # Remove duplicate/overlapping segments (LLM sometimes repeats ranges or fuzzy snapping
+    # converges multiple lines to identical boundaries). De-dup by (start,end,label).
+    deduplicated: List[Dict] = []
     seen_ranges = set()
-    
+    dup_count = 0
+
     for seg in segments:
-        start = seg['start_time']
-        end = seg['end_time']
-        # Use a tuple key for exact time matching (with small tolerance)
-        time_key = (round(start, 2), round(end, 2))
+        start = float(seg['start_time'])
+        end = float(seg['end_time'])
+        lbl = (seg.get('label') or '').lower()
+        # Key with rounded boundaries and label to prevent cross-label collisions
+        time_key = (round(start, 2), round(end, 2), lbl)
         if time_key not in seen_ranges:
             deduplicated.append(seg)
             seen_ranges.add(time_key)
         else:
-            print(f'Skipping duplicate segment: {start}-{end}:{seg["label"]} (already seen)')
-    
+            dup_count += 1
+
+    if dup_count > 0:
+        logger.debug(f"[PARSE_LLM] Removed {dup_count} duplicate segment(s) in window")
+
     return deduplicated
 
 

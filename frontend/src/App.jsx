@@ -697,29 +697,62 @@ function App() {
                           <source src={`http://localhost:8001${vlmResult.analysis.video_url}`} type="video/mp4" />
                         </video>
 
-                        {/* Statistical Summary */}
+                        {/* Statistical Summary (expand windows to midpoints for continuity) */}
                         {(() => {
                           const fps = vlmResult.analysis.fps || 30;
-                          const idleRanges = vlmResult.analysis.idle_frames && vlmResult.analysis.idle_frames.length > 0 
-                            ? computeRanges(vlmResult.analysis.idle_frames, vlmResult.analysis.samples || [], fps) 
-                            : [];
-                          const workRanges = vlmResult.analysis.work_frames && vlmResult.analysis.work_frames.length > 0 
-                            ? computeRanges(vlmResult.analysis.work_frames, vlmResult.analysis.samples || [], fps) 
-                            : [];
-                          
-                          const totalIdleTime = idleRanges.reduce((sum, r) => sum + (r.endTime - r.startTime), 0);
-                          const totalWorkTime = workRanges.reduce((sum, r) => sum + (r.endTime - r.startTime), 0);
-                          const totalTime = totalIdleTime + totalWorkTime;
-                          
+                          const samples = vlmResult.analysis.samples || [];
+                          const segments = (vlmResult.analysis.segments || []).slice().sort((a, b) => (a.start_time || 0) - (b.start_time || 0));
+                          const idleFrames = vlmResult.analysis.idle_frames || [];
+                          const workFrames = vlmResult.analysis.work_frames || [];
+
+                          // Determine video duration (prefer backend value)
+                          const videoDuration = (() => {
+                            const d = vlmResult.analysis.duration;
+                            if (typeof d === 'number' && d > 0) return d;
+                            const lastSampleTime = samples.length > 0 ? (samples[samples.length - 1].time_sec || 0) : 0;
+                            return lastSampleTime;
+                          })();
+
+                          // If segments are available, expand each window to the midpoint with neighbors to produce continuous coverage
+                          let totalWorkTime = 0;
+                          let totalIdleTime = 0;
+                          if (segments.length > 0 && videoDuration > 0) {
+                            for (let i = 0; i < segments.length; i++) {
+                              const cur = segments[i] || {};
+                              const prev = i > 0 ? segments[i - 1] : null;
+                              const next = i < segments.length - 1 ? segments[i + 1] : null;
+                              const curStart = Number(cur.start_time || 0);
+                              const curEnd = Number(cur.end_time != null ? cur.end_time : curStart);
+                              const prevEnd = prev ? Number(prev.end_time != null ? prev.end_time : prev.start_time || 0) : 0;
+                              const nextStart = next ? Number(next.start_time || curEnd) : Number(videoDuration);
+
+                              // Midpoint expansion: newStart = mid(prevEnd, curStart); newEnd = mid(curEnd, nextStart)
+                              let newStart = (prevEnd + curStart) / 2;
+                              let newEnd = (curEnd + nextStart) / 2;
+                              // Clamp and ensure non-negative, ordered
+                              newStart = Math.max(0, Math.min(newStart, Number(videoDuration)));
+                              newEnd = Math.max(newStart, Math.min(newEnd, Number(videoDuration)));
+                              const dur = Math.max(0, newEnd - newStart);
+                              const lbl = String(cur.label || '').toLowerCase();
+                              if (lbl === 'work') totalWorkTime += dur; else if (lbl === 'idle') totalIdleTime += dur;
+                            }
+                          } else {
+                            // Fallback: derive ranges from frames and compute covered time
+                            const idleRanges = idleFrames.length > 0 ? computeRanges(idleFrames, samples, fps) : [];
+                            const workRanges = workFrames.length > 0 ? computeRanges(workFrames, samples, fps) : [];
+                            totalIdleTime = idleRanges.reduce((sum, r) => sum + Math.max(0, (r.endTime - r.startTime)), 0);
+                            totalWorkTime = workRanges.reduce((sum, r) => sum + Math.max(0, (r.endTime - r.startTime)), 0);
+                          }
+
                           const formatTime = (seconds) => {
                             const mins = Math.floor(seconds / 60);
                             const secs = (seconds % 60).toFixed(2);
                             return `${mins}m ${secs}s`;
                           };
-                          
-                          const idlePercent = totalTime > 0 ? ((totalIdleTime / totalTime) * 100).toFixed(1) : 0;
-                          const workPercent = totalTime > 0 ? ((totalWorkTime / totalTime) * 100).toFixed(1) : 0;
-                          
+
+                          const idlePercent = videoDuration > 0 ? ((totalIdleTime / videoDuration) * 100).toFixed(1) : 0;
+                          const workPercent = videoDuration > 0 ? ((totalWorkTime / videoDuration) * 100).toFixed(1) : 0;
+
                           return (
                             <div style={{ marginTop: 16, padding: 12, backgroundColor: cssVars.cardBg, borderRadius: 4, border: `1px solid ${cssVars.border}` }}>
                               <h5 style={{ marginTop: 0, marginBottom: 12 }}>Summary</h5>
@@ -737,7 +770,7 @@ function App() {
                               </div>
                               <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${cssVars.border}`, fontSize: 12 }}>
                                 <span style={{ color: cssVars.muted }}>Total Duration: </span>
-                                <span style={{ fontWeight: 'bold' }}>{formatTime(totalTime)}</span>
+                                <span style={{ fontWeight: 'bold' }}>{formatTime(videoDuration || (totalWorkTime + totalIdleTime))}</span>
                               </div>
                             </div>
                           );

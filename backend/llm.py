@@ -42,47 +42,37 @@ Answer:
 
 # Text-only LLM prompts (for analyzing TEXT descriptions, not images)
 # Used when classifier_source='llm' - LLM receives aggregated text captions with temporal context
-LLM_SEGMENT_TIMELINE_BINARY = """Classify and group the following activity observations into segments.
+LLM_SEGMENT_TIMELINE_BINARY = """You are analyzing a timeline of activity descriptions to identify distinct segments.
 
-Timeline of observations (DO NOT INVENT TIMESTAMPS):
+Timeline of observations:
 {caption}
 
-Your task:
-1. Read each timestamp and description
-2. Classify each as EITHER 'work' OR 'idle'
-3. Group CONSECUTIVE observations with the SAME classification
-4. Output one segment line per group
+Task: Identify continuous activity segments based on temporal patterns.
 
-Classification rules:
-- work: Person actively engaged in hands-on tasks, using tools, assembling, working on electronics, manipulating objects
-- idle: Person not engaged, standing/sitting without active tasks
+Labels:
+- work: Person actively engaged in hands-on tasks (electronics, assembly, tools)
+- idle: Person not engaged in tasks, standing/sitting without interaction
 
-OUTPUT FORMAT (exactly one line per segment, NOTHING ELSE):
-start_time-end_time: classification
+Instructions:
+1. Analyze the timeline to identify when activities change
+2. Group consecutive similar activities into segments
+3. Output ONE segment per line in format: [start_time]-[end_time]: label
+4. Use the exact timestamps from the timeline
+5. If only one activity throughout, output one segment
 
-CRITICAL: Use ONLY the exact timestamps from the timeline above.
-CRITICAL: Do NOT invent, approximate, or combine timestamps.
-CRITICAL: Use ONLY the timestamps that appear in the input.
-
-Example (if input had these timestamps):
-<t=0.50> work activity
-<t=1.20> work activity
-<t=2.30> work activity
-<t=3.10> idle activity
-<t=4.00> idle activity
-
-Then output would be:
+Example output format:
 0.50-2.30: work
-3.10-4.00: idle
+3.10-3.10: idle
+3.80-5.20: work
 
-Now analyze the given timeline and output segments:"""
+Answer:"""
 
 LLM_SEGMENT_TIMELINE_MULTI = """You are analyzing a timeline of activity descriptions to identify distinct segments.
 
 Timeline of observations:
 {caption}
 
-Task: Identify continuous activity segments based on temporal patterns, merging adjacent or near-adjacent spans with the same label.
+Task: Identify continuous activity segments based on temporal patterns.
 
 Labels:
 - assembling_drone: Working with tools, drone parts, wires, screws, assembly tasks
@@ -90,18 +80,19 @@ Labels:
 - idle: Standing/sitting without doing any task, arms resting
 - unknown: Activity cannot be confidently identified
 
-CRITICAL INSTRUCTIONS:
-1. Output ONLY the segment lines, nothing else - NO preamble, NO explanation, NO thinking
-2. Each line must be: [start_time]-[end_time]: label (e.g., 0.50-2.30: assembling_drone)
-3. Use exact timestamps from the timeline; do not invent or approximate times
-4. Merge adjacent same-label spans; ensure start_time < end_time
-5. Output in chronological order
+Instructions:
+1. Analyze the timeline to identify when activities change
+2. Group consecutive similar activities into segments  
+3. Output ONE segment per line in format: [start_time]-[end_time]: label
+4. Use the exact timestamps from the timeline
+5. If only one activity throughout, output one segment
 
-Output format (ONLY these lines):
+Example output format:
 0.50-2.30: assembling_drone
 3.10-3.10: using_phone
-3.80-5.20: assembling_drone"""
+3.80-5.20: assembling_drone
 
+Answer:"""
 
 
 
