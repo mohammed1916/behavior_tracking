@@ -516,3 +516,314 @@ ValueError: Image features and image tokens do not match: tokens: 0, features 8
 2025-12-24 15:17:57,849 backend.server - INFO [LLM_INPUT] captions: ['arafed worker in a factory with boxes an', 'arafed worker in a factory with a mask o']
 2025-12-24 15:17:57,850 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either work or idle and then group consecutive ones. The timestamps are given as t=60.00 and t=62.13. The first observation is an 
 2025-12-24 15:17:57,850 backend.stream_utils - INFO [PARSE_LLM] Created segment 60.00-62.13: work with 1 captions
+2025-12-24 15:59:14,391 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['0.00', '2.13', '4.27', '6.40']
+2025-12-24 15:59:14,392 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[0.0, 2.1333333333333333, 4.266666666666667, 6.4]
+2025-12-24 15:59:23,399 backend.server - INFO [LLM_INPUT] captions: ['arafed image of a man working in a facto', 'there is a man that is standing in front', 'arafed man working on a car in a factory', 'there are many people standing around a ']
+2025-12-24 15:59:23,400 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. The user provided a timeline of observations and wants me to classify each into 'work' or 'idle' and group consecutive ones. Let me start by reading each timestamp and des
+2025-12-24 15:59:23,400 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,401 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,401 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,402 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,402 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,402 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,403 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,403 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,403 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,404 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,404 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,404 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,404 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,405 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,405 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,405 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,405 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 15:59:23,406 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 15:59:23,406 backend.stream_utils - INFO [PARSE_LLM] Created segment 4.27-6.40: work with 1 captions
+2025-12-24 15:59:24,358 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['8.57', '10.70', '12.83', '15.00']
+2025-12-24 15:59:24,358 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[8.566666666666666, 10.7, 12.833333333333334, 15.0]
+2025-12-24 15:59:26,973 backend.server - INFO [LLM_INPUT] captions: ['there is a man standing in front of a co', 'there is a man that is standing in front', 'arafed man standing in a factory with a ', 'there is a man that is standing in a roo']
+2025-12-24 15:59:26,973 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either 'work' or 'idle' and then group consecutive ones. Let me start by looking at each timestamp and description.  First observa
+2025-12-24 15:59:26,974 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 15:59:26,974 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 15:59:26,974 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 15:59:26,975 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 15:59:26,975 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 15:59:26,975 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 15:59:26,975 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 15:59:26,975 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 15:59:26,975 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 15:59:27,855 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['17.13', '19.27', '21.43', '23.57']
+2025-12-24 15:59:27,855 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[17.133333333333333, 19.266666666666666, 21.433333333333334, 23.566666666666666]
+2025-12-24 15:59:34,123 backend.server - INFO [LLM_INPUT] captions: ['there is a computer monitor sitting on a', 'arafed worker in a factory working on a ', 'arafed worker in a factory working on a ', 'arafed man in blue shirt standing in fro']
+2025-12-24 15:59:34,123 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the user provided a timeline of observations and wants me to classify each into 'work' or 'idle' and then group consecutive ones. Let me start by readi
+2025-12-24 15:59:34,124 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,124 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,124 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,125 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,125 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,125 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,125 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,126 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,126 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,126 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,126 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,127 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:34,127 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 2.3 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 15:59:35,482 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['25.70', '27.83', '30.00', '32.13']
+2025-12-24 15:59:35,483 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[25.7, 27.833333333333332, 30.0, 32.13333333333333]
+2025-12-24 15:59:39,319 backend.server - INFO [LLM_INPUT] captions: ['there are two men standing in a room wit', 'there is a man in a blue shirt standing ', 'arafed man standing in a factory with a ', 'arafed man in a factory with a laptop an']
+2025-12-24 15:59:39,319 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the task is to classify each activity observation into 'work' or 'idle' and then group consecutive ones with the same classification. Let me start by r
+2025-12-24 15:59:39,319 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [25.7, 27.83, 30.0, 32.13])
+2025-12-24 15:59:40,288 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['34.27', '36.43', '38.57', '40.70']
+2025-12-24 15:59:40,288 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[34.266666666666666, 36.43333333333333, 38.56666666666667, 40.7]
+2025-12-24 15:59:42,404 backend.server - INFO [LLM_INPUT] captions: ['arafed man holding a large piece of plas', 'there is a man that is standing in a fac', 'arafed man standing in a factory with a ', 'arafed man in a blue shirt and mask work']
+2025-12-24 15:59:42,404 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem step by step. First, I need to read each timestamp and description, then classify each as either 'work' or 'idle'. Then group consecutive observations with 
+2025-12-24 15:59:42,405 backend.stream_utils - INFO [PARSE_LLM] Created segment 34.27-40.70: work with 3 captions
+2025-12-24 15:59:42,405 backend.stream_utils - INFO [PARSE_LLM] Created segment 34.27-40.70: work with 3 captions
+2025-12-24 15:59:43,284 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['42.87', '45.00', '47.13', '49.27']
+2025-12-24 15:59:43,284 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[42.86666666666667, 45.0, 47.13333333333333, 49.266666666666666]
+2025-12-24 15:59:45,339 backend.server - INFO [LLM_INPUT] captions: ['arafed man in a factory working on a mac', 'arafed man in a factory looking at a mac', 'arafed man standing in a factory with a ', 'arafed man in a blue shirt and mask stan']
+2025-12-24 15:59:45,340 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each activity observation into either 'work' or 'idle' and then group consecutive ones. Let me start by looking at each timestamp and the description.  
+2025-12-24 15:59:45,340 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [42.87, 45.0, 47.13, 49.27])
+2025-12-24 15:59:45,340 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 3.1 (not in [42.87, 45.0, 47.13, 49.27])
+2025-12-24 15:59:45,340 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 4.0 (not in [42.87, 45.0, 47.13, 49.27])
+2025-12-24 15:59:45,340 backend.stream_utils - INFO [PARSE_LLM] Created segment 47.13-49.27: work with 2 captions
+2025-12-24 15:59:46,270 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['51.43', '53.57', '55.70', '57.87']
+2025-12-24 15:59:46,272 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[51.43333333333333, 53.56666666666667, 55.7, 57.86666666666667]
+2025-12-24 15:59:49,112 backend.server - INFO [LLM_INPUT] captions: ['arafed man standing in a factory with a ', 'arafed man in a blue shirt is walking th', 'arafed worker in a factory with a mask o', 'there is a man that is standing in a sto']
+2025-12-24 15:59:49,112 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the task is to classify each observation into either 'work' or 'idle' and then group consecutive ones with the same classification. Then, output each s
+2025-12-24 15:59:49,112 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 15:59:49,113 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 3.1 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 15:59:49,113 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 15:59:49,113 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 3.1 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 15:59:49,597 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=2 times=[60.0, 62.13333333333333]
+2025-12-24 15:59:51,467 backend.server - INFO [LLM_INPUT] captions: ['arafed worker in a factory with boxes an', 'arafed worker in a factory with a mask o']
+2025-12-24 15:59:51,467 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each activity observation into either 'work' or 'idle' and then group consecutive ones with the same classification. The input has two timestamps: one w
+2025-12-24 16:20:07,966 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['0.00', '2.00', '4.00', '6.00']
+2025-12-24 16:20:07,967 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[0.0, 2.0, 4.0, 6.0]
+2025-12-24 16:20:12,969 backend.server - INFO [LLM_INPUT] captions: ['arafed image of a man working in a facto', 'someone is working on a laptop with a lo', 'arafed worker working on a machine in a ', 'arafed man standing in a factory with a ']
+2025-12-24 16:20:12,971 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either 'work' or 'idle' and then group consecutive ones. The timeline has four timestamps: t=0.00, t=2.00, t=4.00, t=6.00. Let me 
+2025-12-24 16:20:12,971 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.00: work with 2 captions
+2025-12-24 16:20:12,972 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.00-4.00: work with 2 captions
+2025-12-24 16:20:12,972 backend.stream_utils - INFO [PARSE_LLM] Created segment 4.00-6.00: work with 2 captions
+2025-12-24 16:20:12,972 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.00: work with 2 captions
+2025-12-24 16:20:12,972 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.00-4.00: work with 2 captions
+2025-12-24 16:20:12,972 backend.stream_utils - INFO [PARSE_LLM] Created segment 4.00-6.00: work with 2 captions
+2025-12-24 16:20:13,874 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['8.00', '10.00', '12.00', '14.00']
+2025-12-24 16:20:13,874 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[8.0, 10.0, 12.0, 14.0]
+2025-12-24 16:20:16,523 backend.server - INFO [LLM_INPUT] captions: ['there is a man standing in front of a co', 'someone is holding a cat in a glove whil', 'arafed man standing in a factory with a ', 'arafed worker working on a machine in a ']
+2025-12-24 16:20:16,523 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the user wants me to classify each observation into 'work' or 'idle' and then group consecutive ones. Let me start by reading through the timeline and 
+2025-12-24 16:20:16,524 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.00-10.00: work with 2 captions
+2025-12-24 16:20:16,524 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.00-12.00: idle with 2 captions
+2025-12-24 16:20:16,524 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.00-14.00: work with 2 captions
+2025-12-24 16:20:16,524 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.00-10.00: work with 2 captions
+2025-12-24 16:20:16,524 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.00-12.00: idle with 2 captions
+2025-12-24 16:20:16,524 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.00-14.00: work with 2 captions
+2025-12-24 16:20:17,348 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['16.00', '18.00', '20.00', '22.00']
+2025-12-24 16:20:17,348 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[16.0, 18.0, 20.0, 22.0]
+2025-12-24 16:20:19,335 backend.server - INFO [LLM_INPUT] captions: ['there is a truck that is parked in a gar', 'there is a computer monitor sitting on a', 'arafed worker in a factory working on a ', 'arafed worker in a factory working on a ']
+2025-12-24 16:20:19,336 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either 'work' or 'idle' and then group consecutive ones. Let me start by looking at each timestamp and description.  First observa
+2025-12-24 16:20:19,336 backend.stream_utils - INFO [PARSE_LLM] Created segment 16.00-18.00: idle with 2 captions
+2025-12-24 16:20:19,336 backend.stream_utils - INFO [PARSE_LLM] Created segment 18.00-20.00: work with 2 captions
+2025-12-24 16:20:19,336 backend.stream_utils - INFO [PARSE_LLM] Created segment 20.00-22.00: work with 2 captions
+2025-12-24 16:20:19,337 backend.stream_utils - INFO [PARSE_LLM] Created segment 16.00-18.00: idle with 2 captions
+2025-12-24 16:20:19,337 backend.stream_utils - INFO [PARSE_LLM] Created segment 18.00-20.00: work with 2 captions
+2025-12-24 16:20:19,337 backend.stream_utils - INFO [PARSE_LLM] Created segment 20.00-22.00: work with 2 captions
+2025-12-24 16:20:20,252 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['24.00', '26.00', '28.00', '30.00']
+2025-12-24 16:20:20,252 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[24.0, 26.0, 28.0, 30.0]
+2025-12-24 16:20:25,890 backend.server - INFO [LLM_INPUT] captions: ['araffes in a factory with a dog and a ma', 'there are people standing in a bus with ', 'arafed man in a factory working on a mac', 'arafed man standing in a factory with a ']
+2025-12-24 16:20:25,890 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, I need to classify each activity observation into either 'work' or 'idle' and then group consecutive ones. Let me start by reading through the timeline
+2025-12-24 16:20:25,890 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [24.0, 26.0, 28.0, 30.0])
+2025-12-24 16:20:25,891 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 3.1 (not in [24.0, 26.0, 28.0, 30.0])
+2025-12-24 16:20:25,891 backend.stream_utils - INFO [PARSE_LLM] Created segment 24.00-26.00: work with 2 captions
+2025-12-24 16:20:25,891 backend.stream_utils - INFO [PARSE_LLM] Created segment 26.00-28.00: idle with 2 captions
+2025-12-24 16:20:25,891 backend.stream_utils - INFO [PARSE_LLM] Created segment 28.00-30.00: work with 2 captions
+2025-12-24 16:20:25,891 backend.stream_utils - INFO [PARSE_LLM] Created segment 24.00-26.00: work with 2 captions
+2025-12-24 16:20:25,891 backend.stream_utils - INFO [PARSE_LLM] Created segment 26.00-28.00: idle with 2 captions
+2025-12-24 16:20:25,891 backend.stream_utils - INFO [PARSE_LLM] Created segment 28.00-30.00: work with 2 captions
+2025-12-24 16:20:25,891 backend.stream_utils - INFO [PARSE_LLM] Created segment 24.00-26.00: work with 2 captions
+2025-12-24 16:20:25,891 backend.stream_utils - INFO [PARSE_LLM] Created segment 26.00-28.00: idle with 2 captions
+2025-12-24 16:20:25,892 backend.stream_utils - INFO [PARSE_LLM] Created segment 28.00-30.00: work with 2 captions
+2025-12-24 16:20:25,892 backend.stream_utils - INFO [PARSE_LLM] Created segment 24.00-26.00: work with 2 captions
+2025-12-24 16:20:25,892 backend.stream_utils - INFO [PARSE_LLM] Created segment 26.00-28.00: idle with 2 captions
+2025-12-24 16:20:25,892 backend.stream_utils - INFO [PARSE_LLM] Created segment 28.00-30.00: work with 2 captions
+2025-12-24 16:20:26,808 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['32.00', '34.00', '36.00', '38.00']
+2025-12-24 16:20:26,809 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[32.0, 34.0, 36.0, 38.0]
+2025-12-24 16:20:29,164 backend.server - INFO [LLM_INPUT] captions: ['arafed man in a factory with a laptop an', 'arafed man in a factory holding a large ', 'there is a man that is standing in a fac', 'arafed man standing in a factory with a ']
+2025-12-24 16:20:29,164 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the user has provided a timeline with several observations, and I need to classify each into either 'work' or 'idle' and group consecutive ones. Let me
+2025-12-24 16:20:29,165 backend.stream_utils - INFO [PARSE_LLM] Created segment 32.00-34.00: work with 2 captions
+2025-12-24 16:20:29,165 backend.stream_utils - INFO [PARSE_LLM] Created segment 34.00-36.00: work with 2 captions
+2025-12-24 16:20:29,165 backend.stream_utils - INFO [PARSE_LLM] Created segment 36.00-38.00: work with 2 captions
+2025-12-24 16:20:30,161 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['40.00', '42.00', '44.00', '46.00']
+2025-12-24 16:20:30,162 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[40.0, 42.0, 44.0, 46.0]
+2025-12-24 16:20:31,932 backend.server - INFO [LLM_INPUT] captions: ['arafed man standing in a factory with a ', 'arafed man in a blue shirt and mask work', 'arafed man in a factory looking at machi', 'arafed man standing in a factory with a ']
+2025-12-24 16:20:31,933 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each activity observation into either 'work' or 'idle' and then group consecutive ones with the same classification. The timestamps are given as t=40.00
+2025-12-24 16:20:31,933 backend.stream_utils - INFO [PARSE_LLM] Created segment 40.00-46.00: work with 4 captions
+2025-12-24 16:20:32,862 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['48.00', '50.00', '52.00', '54.00']
+2025-12-24 16:20:32,863 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[48.0, 50.0, 52.0, 54.0]
+2025-12-24 16:20:34,953 backend.server - INFO [LLM_INPUT] captions: ['arafed man in blue shirt standing in fro', 'arafed man in a factory with a mask on t', 'arafed man standing in a factory with a ', 'arafed worker in a factory with a lot of']
+2025-12-24 16:20:34,953 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either 'work' or 'idle' and then group consecutive ones with the same classification. The user provided a timeline with timestamps
+2025-12-24 16:20:34,953 backend.stream_utils - INFO [PARSE_LLM] Created segment 48.00-54.00: work with 4 captions
+2025-12-24 16:20:35,857 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['56.00', '58.00', '60.00', '62.00']
+2025-12-24 16:20:35,858 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[56.0, 58.0, 60.0, 62.0]
+2025-12-24 16:20:39,402 backend.server - INFO [LLM_INPUT] captions: ['arafed worker in a factory with a mask o', 'there is a man that is standing in a sto', 'arafed worker in a factory with boxes an', 'arafed worker in a factory with a mask o']
+2025-12-24 16:20:39,403 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either 'work' or 'idle' and then group consecutive ones. Let me start by looking at each timestamp and description.  First, the fi
+2025-12-24 16:20:39,403 backend.stream_utils - INFO [PARSE_LLM] Created segment 56.00-58.00: work with 2 captions
+2025-12-24 16:20:39,403 backend.stream_utils - INFO [PARSE_LLM] Created segment 56.00-58.00: work with 2 captions
+2025-12-24 16:20:39,403 backend.stream_utils - INFO [PARSE_LLM] Created segment 60.00-62.00: work with 2 captions
+2025-12-24 16:20:39,404 backend.stream_utils - INFO [PARSE_LLM] Created segment 56.00-58.00: work with 2 captions
+2025-12-24 16:20:39,404 backend.stream_utils - INFO [PARSE_LLM] Created segment 60.00-62.00: work with 2 captions
+2025-12-24 16:20:39,404 backend.stream_utils - INFO [PARSE_LLM] Created segment 56.00-58.00: work with 2 captions
+2025-12-24 16:20:39,404 backend.stream_utils - INFO [PARSE_LLM] Created segment 60.00-62.00: work with 2 captions
+2025-12-24 16:20:39,627 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=1 times=[64.0]
+2025-12-24 16:20:41,322 backend.server - INFO [LLM_INPUT] captions: ['arafed man in a factory with a machine i']
+2025-12-24 16:20:41,322 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the user provided a timeline with some observations and wants me to classify them into work or idle and group consecutive ones. Let me start by reading
+2025-12-24 16:24:02,130 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['0.00', '2.13', '4.27', '6.40']
+2025-12-24 16:24:02,141 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[0.0, 2.1333333333333333, 4.266666666666667, 6.4]
+2025-12-24 16:24:05,275 backend.server - INFO [LLM_INPUT] captions: ['arafed image of a man working in a facto', 'there is a man that is standing in front', 'arafed man working on a car in a factory', 'there are many people standing around a ']
+2025-12-24 16:24:05,276 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem step by step. The user provided a timeline with several observations and wants me to classify them into 'work' or 'idle' and group consecutive ones. Let me 
+2025-12-24 16:24:05,277 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-4.27: work with 3 captions
+2025-12-24 16:24:05,277 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-4.27: work with 3 captions
+2025-12-24 16:24:05,278 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-4.27: work with 3 captions
+2025-12-24 16:24:07,183 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['8.57', '10.70', '12.83', '15.00']
+2025-12-24 16:24:07,183 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[8.566666666666666, 10.7, 12.833333333333334, 15.0]
+2025-12-24 16:24:10,248 backend.server - INFO [LLM_INPUT] captions: ['there is a man standing in front of a co', 'there is a man that is standing in front', 'arafed man standing in a factory with a ', 'there is a man that is standing in a roo']
+2025-12-24 16:24:10,248 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either work or idle and then group consecutive ones with the same classification. The input has four timestamps and descriptions. 
+2025-12-24 16:24:10,250 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 16:24:10,251 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 16:24:10,252 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 16:24:10,252 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 16:24:10,253 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 16:24:10,254 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 16:24:10,255 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 16:24:10,256 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 16:24:10,257 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 16:24:10,258 backend.stream_utils - INFO [PARSE_LLM] Created segment 15.00-15.00: work with 1 captions
+2025-12-24 16:24:12,333 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['17.13', '19.27', '21.43', '23.57']
+2025-12-24 16:24:12,334 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[17.133333333333333, 19.266666666666666, 21.433333333333334, 23.566666666666666]
+2025-12-24 16:24:16,576 backend.server - INFO [LLM_INPUT] captions: ['there is a computer monitor sitting on a', 'arafed worker in a factory working on a ', 'arafed worker in a factory working on a ', 'arafed man in blue shirt standing in fro']
+2025-12-24 16:24:16,576 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into 'work' or 'idle' and then group consecutive ones. Let me start by looking at each timestamp and description.  First, the timeline 
+2025-12-24 16:24:16,576 backend.stream_utils - INFO [PARSE_LLM] Created segment 17.13-19.27: idle with 2 captions
+2025-12-24 16:24:16,577 backend.stream_utils - INFO [PARSE_LLM] Created segment 17.13-19.27: idle with 2 captions
+2025-12-24 16:24:16,577 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 16:24:16,577 backend.stream_utils - INFO [PARSE_LLM] Created segment 17.13-19.27: idle with 2 captions
+2025-12-24 16:24:16,577 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 16:24:16,578 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [17.13, 19.27, 21.43, 23.57])
+2025-12-24 16:24:18,310 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['25.70', '27.83', '30.00', '32.13']
+2025-12-24 16:24:18,310 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[25.7, 27.833333333333332, 30.0, 32.13333333333333]
+2025-12-24 16:24:22,312 backend.server - INFO [LLM_INPUT] captions: ['there are two men standing in a room wit', 'there is a man in a blue shirt standing ', 'arafed man standing in a factory with a ', 'arafed man in a factory with a laptop an']
+2025-12-24 16:24:22,312 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the user provided a timeline of observations and wants me to classify each into 'work' or 'idle' and group consecutive ones. Let me start by reading th
+2025-12-24 16:24:22,312 backend.stream_utils - INFO [PARSE_LLM] Created segment 25.70-27.83: work with 1 captions
+2025-12-24 16:24:22,313 backend.stream_utils - INFO [PARSE_LLM] Created segment 27.83-30.00: work with 2 captions
+2025-12-24 16:24:22,313 backend.stream_utils - INFO [PARSE_LLM] Created segment 30.00-32.13: work with 1 captions
+2025-12-24 16:24:22,313 backend.stream_utils - INFO [PARSE_LLM] Created segment 25.70-27.83: work with 1 captions
+2025-12-24 16:24:22,314 backend.stream_utils - INFO [PARSE_LLM] Created segment 27.83-30.00: work with 2 captions
+2025-12-24 16:24:22,314 backend.stream_utils - INFO [PARSE_LLM] Created segment 30.00-32.13: work with 1 captions
+2025-12-24 16:24:22,314 backend.stream_utils - INFO [PARSE_LLM] Created segment 25.70-27.83: work with 1 captions
+2025-12-24 16:24:22,315 backend.stream_utils - INFO [PARSE_LLM] Created segment 27.83-30.00: work with 2 captions
+2025-12-24 16:24:22,315 backend.stream_utils - INFO [PARSE_LLM] Created segment 30.00-32.13: work with 1 captions
+2025-12-24 16:24:24,407 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['34.27', '36.43', '38.57', '40.70']
+2025-12-24 16:24:24,407 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[34.266666666666666, 36.43333333333333, 38.56666666666667, 40.7]
+2025-12-24 16:24:26,540 backend.server - INFO [LLM_INPUT] captions: ['arafed man holding a large piece of plas', 'there is a man that is standing in a fac', 'arafed man standing in a factory with a ', 'arafed man in a blue shirt and mask work']
+2025-12-24 16:24:26,540 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either 'work' or 'idle' and then group consecutive ones. The timestamps are given as t=... and each description is about a person 
+2025-12-24 16:24:26,540 backend.stream_utils - INFO [PARSE_LLM] Created segment 34.27-38.57: work with 2 captions
+2025-12-24 16:24:26,540 backend.stream_utils - INFO [PARSE_LLM] Created segment 38.57-40.70: work with 1 captions
+2025-12-24 16:24:28,473 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['42.87', '45.00', '47.13', '49.27']
+2025-12-24 16:24:28,473 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[42.86666666666667, 45.0, 47.13333333333333, 49.266666666666666]
+2025-12-24 16:24:30,660 backend.server - INFO [LLM_INPUT] captions: ['arafed man in a factory working on a mac', 'arafed man in a factory looking at a mac', 'arafed man standing in a factory with a ', 'arafed man in a blue shirt and mask stan']
+2025-12-24 16:24:30,660 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each of these activity observations into either 'work' or 'idle' and then group consecutive ones with the same classification. Let me start by looking a
+2025-12-24 16:24:30,661 backend.stream_utils - INFO [PARSE_LLM] Created segment 42.87-45.00: work with 1 captions
+2025-12-24 16:24:30,662 backend.stream_utils - INFO [PARSE_LLM] Created segment 45.00-47.13: work with 1 captions
+2025-12-24 16:24:30,662 backend.stream_utils - INFO [PARSE_LLM] Created segment 47.13-49.27: work with 2 captions
+2025-12-24 16:24:30,663 backend.stream_utils - INFO [PARSE_LLM] Created segment 42.87-45.00: work with 1 captions
+2025-12-24 16:24:30,664 backend.stream_utils - INFO [PARSE_LLM] Created segment 45.00-47.13: work with 1 captions
+2025-12-24 16:24:30,664 backend.stream_utils - INFO [PARSE_LLM] Created segment 47.13-49.27: work with 2 captions
+2025-12-24 16:24:32,421 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['51.43', '53.57', '55.70', '57.87']
+2025-12-24 16:24:32,423 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[51.43333333333333, 53.56666666666667, 55.7, 57.86666666666667]
+2025-12-24 16:24:37,087 backend.server - INFO [LLM_INPUT] captions: ['arafed man standing in a factory with a ', 'arafed man in a blue shirt is walking th', 'arafed worker in a factory with a mask o', 'there is a man that is standing in a sto']
+2025-12-24 16:24:37,088 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, I need to classify each activity observation into either 'work' or 'idle' and then group consecutive ones. Let me start by reading through the timeline
+2025-12-24 16:24:37,088 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 16:24:37,089 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 3.1 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 16:24:37,089 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 16:24:37,090 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 3.1 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 16:24:37,090 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 16:24:37,091 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 3.1 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 16:24:37,091 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 0.5 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 16:24:37,092 backend.stream_utils - WARNING [PARSE_LLM] Skipping segment with invalid start time: 3.1 (not in [51.43, 53.57, 55.7, 57.87])
+2025-12-24 16:24:38,065 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=2 times=[60.0, 62.13333333333333]
+2025-12-24 16:24:40,296 backend.server - INFO [LLM_INPUT] captions: ['arafed worker in a factory with boxes an', 'arafed worker in a factory with a mask o']
+2025-12-24 16:24:40,297 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each activity observation into either 'work' or 'idle' and then group consecutive ones with the same classification. The input has two timestamps: one i
+2025-12-24 16:32:38,974 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['0.00', '2.13', '4.27', '6.40']
+2025-12-24 16:32:38,974 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[0.0, 2.1333333333333333, 4.266666666666667, 6.4]
+2025-12-24 16:32:44,117 backend.server - INFO [LLM_INPUT] captions: ['arafed image of a man working in a facto', 'there is a man that is standing in front', 'arafed man working on a car in a factory', 'there are many people standing around a ']
+2025-12-24 16:32:44,117 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the user provided a timeline with several observations, and I need to classify each into 'work' or 'idle' and group consecutive ones. Let me start by r
+2025-12-24 16:32:44,118 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 16:32:44,118 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 16:32:44,118 backend.stream_utils - INFO [PARSE_LLM] Created segment 4.27-6.40: idle with 1 captions
+2025-12-24 16:32:44,118 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 16:32:44,118 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 16:32:44,119 backend.stream_utils - INFO [PARSE_LLM] Created segment 4.27-6.40: idle with 1 captions
+2025-12-24 16:32:44,119 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 16:32:44,119 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 16:32:44,119 backend.stream_utils - INFO [PARSE_LLM] Created segment 4.27-6.40: idle with 1 captions
+2025-12-24 16:32:44,119 backend.stream_utils - INFO [PARSE_LLM] Created segment 0.00-2.13: work with 1 captions
+2025-12-24 16:32:44,119 backend.stream_utils - INFO [PARSE_LLM] Created segment 2.13-4.27: work with 2 captions
+2025-12-24 16:32:44,119 backend.stream_utils - INFO [PARSE_LLM] Created segment 4.27-6.40: idle with 1 captions
+2025-12-24 16:32:45,064 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['8.57', '10.70', '12.83', '15.00']
+2025-12-24 16:32:45,064 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[8.566666666666666, 10.7, 12.833333333333334, 15.0]
+2025-12-24 16:32:47,914 backend.server - INFO [LLM_INPUT] captions: ['there is a man standing in front of a co', 'there is a man that is standing in front', 'arafed man standing in a factory with a ', 'there is a man that is standing in a roo']
+2025-12-24 16:32:47,914 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into either work or idle and then group consecutive ones. Let me start by looking at each timestamp and description.  First observation
+2025-12-24 16:32:47,915 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 16:32:47,915 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 16:32:47,915 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 16:32:47,916 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 16:32:47,916 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 16:32:47,916 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 16:32:47,917 backend.stream_utils - INFO [PARSE_LLM] Created segment 8.57-10.70: work with 1 captions
+2025-12-24 16:32:47,917 backend.stream_utils - INFO [PARSE_LLM] Created segment 10.70-12.83: work with 1 captions
+2025-12-24 16:32:47,917 backend.stream_utils - INFO [PARSE_LLM] Created segment 12.83-15.00: work with 2 captions
+2025-12-24 16:32:49,624 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['17.13', '19.27', '21.43', '23.57']
+2025-12-24 16:32:49,624 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[17.133333333333333, 19.266666666666666, 21.433333333333334, 23.566666666666666]
+2025-12-24 16:32:51,686 backend.server - INFO [LLM_INPUT] captions: ['there is a computer monitor sitting on a', 'arafed worker in a factory working on a ', 'arafed worker in a factory working on a ', 'arafed man in blue shirt standing in fro']
+2025-12-24 16:32:51,686 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let me try to figure this out. The user wants me to classify each activity observation into 'work' or 'idle' and then group consecutive ones. Let me start by looking at each timestam
+2025-12-24 16:32:51,687 backend.stream_utils - WARNING [PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all 4 captions.
+2025-12-24 16:32:51,687 backend.stream_utils - WARNING [PARSE_LLM] LLM output was: 
+2025-12-24 16:32:52,674 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['25.70', '27.83', '30.00', '32.13']
+2025-12-24 16:32:52,675 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[25.7, 27.833333333333332, 30.0, 32.13333333333333]
+2025-12-24 16:32:55,138 backend.server - INFO [LLM_INPUT] captions: ['there are two men standing in a room wit', 'there is a man in a blue shirt standing ', 'arafed man standing in a factory with a ', 'arafed man in a factory with a laptop an']
+2025-12-24 16:32:55,138 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each activity observation into either 'work' or 'idle' and group consecutive ones. Let me start by reading each timestamp and description carefully.  Fi
+2025-12-24 16:32:55,139 backend.stream_utils - INFO [PARSE_LLM] Created segment 25.70-32.13: work with 3 captions
+2025-12-24 16:32:56,071 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['34.27', '36.43', '38.57', '40.70']
+2025-12-24 16:32:56,072 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[34.266666666666666, 36.43333333333333, 38.56666666666667, 40.7]
+2025-12-24 16:33:02,029 backend.server - INFO [LLM_INPUT] captions: ['arafed man holding a large piece of plas', 'there is a man that is standing in a fac', 'arafed man standing in a factory with a ', 'arafed man in a blue shirt and mask work']
+2025-12-24 16:33:02,029 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this problem. So, the user wants me to classify and group the activity observations into segments based on their timestamps and classification rules. Let me start by rea
+2025-12-24 16:33:02,029 backend.stream_utils - INFO [PARSE_LLM] Created segment 34.27-40.70: work with 3 captions
+2025-12-24 16:33:02,029 backend.stream_utils - INFO [PARSE_LLM] Created segment 34.27-40.70: work with 3 captions
+2025-12-24 16:33:02,923 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['42.87', '45.00', '47.13', '49.27']
+2025-12-24 16:33:02,923 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[42.86666666666667, 45.0, 47.13333333333333, 49.266666666666666]
+2025-12-24 16:33:05,143 backend.server - INFO [LLM_INPUT] captions: ['arafed man in a factory working on a mac', 'arafed man in a factory looking at a mac', 'arafed man standing in a factory with a ', 'arafed man in a blue shirt and mask stan']
+2025-12-24 16:33:05,143 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into 'work' or 'idle' and then group consecutive ones. Let's start by looking at each timestamp and description.  First observation: t=
+2025-12-24 16:33:05,143 backend.stream_utils - INFO [PARSE_LLM] Created segment 42.87-47.13: work with 1 captions
+2025-12-24 16:33:05,144 backend.stream_utils - INFO [PARSE_LLM] Created segment 47.13-49.27: work with 2 captions
+2025-12-24 16:33:05,144 backend.stream_utils - INFO [PARSE_LLM] Created segment 42.87-47.13: work with 1 captions
+2025-12-24 16:33:05,144 backend.stream_utils - INFO [PARSE_LLM] Created segment 47.13-49.27: work with 2 captions
+2025-12-24 16:33:05,144 backend.stream_utils - INFO [PARSE_LLM] Created segment 42.87-47.13: work with 1 captions
+2025-12-24 16:33:05,144 backend.stream_utils - INFO [PARSE_LLM] Created segment 47.13-49.27: work with 2 captions
+2025-12-24 16:33:06,026 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=['51.43', '53.57', '55.70', '57.87']
+2025-12-24 16:33:06,026 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=4 times=[51.43333333333333, 53.56666666666667, 55.7, 57.86666666666667]
+2025-12-24 16:33:08,675 backend.server - INFO [LLM_INPUT] captions: ['arafed man standing in a factory with a ', 'arafed man in a blue shirt is walking th', 'arafed worker in a factory with a mask o', 'there is a man that is standing in a sto']
+2025-12-24 16:33:08,676 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's tackle this. First, I need to classify each observation into either 'work' or 'idle'. Then group consecutive ones with the same classification and output each segment.  So the 
+2025-12-24 16:33:08,676 backend.stream_utils - INFO [PARSE_LLM] Created segment 51.43-53.57: work with 2 captions
+2025-12-24 16:33:08,676 backend.stream_utils - INFO [PARSE_LLM] Created segment 55.70-57.87: work with 2 captions
+2025-12-24 16:33:08,677 backend.stream_utils - INFO [PARSE_LLM] Created segment 51.43-53.57: work with 2 captions
+2025-12-24 16:33:08,677 backend.stream_utils - INFO [PARSE_LLM] Created segment 55.70-57.87: work with 2 captions
+2025-12-24 16:33:08,677 backend.stream_utils - INFO [PARSE_LLM] Created segment 51.43-53.57: work with 2 captions
+2025-12-24 16:33:08,678 backend.stream_utils - INFO [PARSE_LLM] Created segment 55.70-57.87: work with 2 captions
+2025-12-24 16:33:08,678 backend.stream_utils - INFO [PARSE_LLM] Created segment 51.43-53.57: work with 2 captions
+2025-12-24 16:33:08,678 backend.stream_utils - INFO [PARSE_LLM] Created segment 55.70-57.87: work with 2 captions
+2025-12-24 16:33:08,678 backend.stream_utils - INFO [PARSE_LLM] Created segment 51.43-53.57: work with 2 captions
+2025-12-24 16:33:08,679 backend.stream_utils - INFO [PARSE_LLM] Created segment 55.70-57.87: work with 2 captions
+2025-12-24 16:33:10,014 backend.server - INFO [VLM_WINDOW_CLOSED] n_samples=2 times=[60.0, 62.13333333333333]
+2025-12-24 16:33:12,227 backend.server - INFO [LLM_INPUT] captions: ['arafed worker in a factory with boxes an', 'arafed worker in a factory with a mask o']
+2025-12-24 16:33:12,227 backend.server - INFO [LLM_OUTPUT] Thinking... Okay, let's see. I need to classify each observation into 'work' or 'idle' and then group consecutive ones. Let me start by looking at the timeline provided.  First, the timestamps are giv
+2025-12-24 16:33:12,228 backend.stream_utils - INFO [PARSE_LLM] Created segment 60.00-62.13: work with 1 captions
