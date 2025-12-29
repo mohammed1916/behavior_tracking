@@ -53,7 +53,6 @@ from backend.stream_utils import (
     parse_llm_segments,
 )
 from backend.stream_processor import create_stream_generator
-import backend.stream_utils as stream_utils_mod
 
 # Timing/segmenting defaults (tunable)
 MIN_SEGMENT_SEC = 0.5  # ignore segments shorter than this
@@ -95,33 +94,6 @@ VLM_UPLOAD_DIR = "vlm_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
-
-
-def _finalize_window_common(window, cls_prompt, prompt, classifier_mode, min_samples):
-    """Shared LLM segmentation for a caption window."""
-    if window is None or len(window.samples) < min_samples:
-        return []
-
-    timeline = window.to_timeline()
-    rendered = (cls_prompt or "").format(caption=timeline, prompt=prompt)
-    text_llm = llm_mod.get_local_text_llm()
-    llm_res = text_llm(rendered, max_new_tokens=100)
-
-    if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict):
-        llm_output = llm_res[0].get('generated_text', str(llm_res))
-    else:
-        llm_output = str(llm_res)
-
-    module_logger.info(f"[LLM_INPUT] captions: {[s['caption'][:40] for s in window.samples]}")
-    module_logger.info(f"[LLM_OUTPUT] {llm_output.replace(chr(10), ' ')[:200]}")
-
-    all_captions = [{'t': s['t'], 'caption': s['caption']} for s in window.samples]
-    segments = stream_utils_mod.parse_llm_segments(llm_output, all_captions, classifier_mode, prompt=rendered)
-
-    for seg in segments:
-        seg['llm_output'] = llm_output
-
-    return segments
 
 # Shared helpers to keep stream endpoints consistent
 @app.get("/backend/stream_pose")

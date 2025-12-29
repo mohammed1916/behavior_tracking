@@ -64,10 +64,16 @@ Segmentation rules:
 Output format:
 [start_time]-[end_time]: label
 
-Example Output:
+Example Input:
+<t=0.50> ...VLM captions...
+<t=2.30> ...VLM captions...
+<t=3.10> ...VLM captions...
+<t=5.20> ...VLM captions...
+
+Dummy timestamp based Example Output:
 0.50-2.30: work
 3.10-3.10: idle
-3.80-5.20: work
+5.20-5.20: work
 
 Instructions:
 1. Process observations in chronological order.
@@ -75,7 +81,7 @@ Instructions:
 3. Merge consecutive observations with identical labels.
 4. Use only the timestamps provided in the input timeline.
 
-Timeline to analyze:
+Timeline to analyze based on above example format with real timestamps:
 {caption}
 
 Answer:
@@ -106,12 +112,12 @@ Output format:
 [start_time]-[end_time]: label
 
 Example Input:
-<t=8.57> a man standing in front of a counter with bottles
-<t=10.70> a man standing in front of a machine
-<t=12.83> a man standing in a factory holding a camera
-<t=15.00> a man standing in a room with a table
+<t=8.57> ...VLM captions...
+<t=10.70> ...VLM captions...
+<t=12.83> ...VLM captions...
+<t=15.00> ...VLM captions...
 
-Example Output:
+Dummy timestamp based Example Output:
 8.57-15.00: idle
 
 Instructions:
@@ -120,7 +126,7 @@ Instructions:
 3. Merge consecutive observations with the same label.
 4. Use only the timestamps provided in the input.
 
-Timeline to analyze:
+Timeline to analyze based on above example format with real timestamps:
 {caption}
 
 Answer:

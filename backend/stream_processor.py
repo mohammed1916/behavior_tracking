@@ -14,8 +14,6 @@ from PIL import Image
 
 import backend.db as db_mod
 import backend.llm as llm_mod
-import backend.rules as rules_mod
-import backend.evidence as evidence_mod
 import backend.captioner as captioner_mod
 from backend.stream_utils import (
     normalize_caption_output,
@@ -57,15 +55,12 @@ def get_frame_caption(frame, captioner, vlm_prompt: str) -> str:
 class CaptionTimeline:
     """Stores timestamped captions and provides text formatting for LLM consumption."""
     
-    def __init__(self, start_time: float, end_time: float):
-        self.start_time = start_time
-        self.end_time = end_time
+    def __init__(self):
         self.samples: List[Dict[str, Any]] = []
     
     def add_sample(self, time_sec: float, caption: str) -> None:
         """Add a timestamped caption sample."""
         self.samples.append({'t': time_sec, 'caption': caption})
-        self.end_time = time_sec
     
     def to_timeline_text(self) -> str:
         """Convert samples to formatted timeline text for LLM."""
@@ -362,12 +357,9 @@ def create_stream_generator(
                 
                 # Window aggregation (LLM mode only)
                 if classifier_source_norm == 'llm':
-                    print(f"Adding sample to window at t={elapsed_time:.2f}s: {caption[:50]}...")
+                    logger.debug(f"Adding sample to window at t={elapsed_time:.2f}s: {caption[:50]}...")
                     if current_window is None:
-                        current_window = CaptionTimeline(
-                            start_time=elapsed_time,
-                            end_time=elapsed_time,
-                        )
+                        current_window = CaptionTimeline()
                     
                     current_window.add_sample(elapsed_time, caption)
                     
