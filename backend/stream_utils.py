@@ -31,15 +31,15 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
     # Strip out thinking/reasoning blocks and preamble before parsing
     llm_output = llm_output.strip()
     
-    # Extract valid timestamp set from captions FIRST
-    valid_timestamps = set()
-    for c in all_captions or []:
-        try:
-            valid_timestamps.add(round(float(c.get('t', 0)), 2))
-        except:
-            pass
+    # # Extract valid timestamp set from captions FIRST
+    # valid_timestamps = set()
+    # for c in all_captions or []:
+    #     try:
+    #         valid_timestamps.add(round(float(c.get('t', 0)), 2))
+    #     except:
+    #         pass
     
-    logger.debug(f"[PARSE_LLM] Valid timestamps from input: {sorted(valid_timestamps)}")
+    # logger.debug(f"[PARSE_LLM] Valid timestamps from input: {sorted(valid_timestamps)}")
     logger.debug(f"[PARSE_LLM] Raw LLM output (first 300 chars): {llm_output[:300]}")
     
     # Remove thinking blocks and keep only actual segments
@@ -134,19 +134,19 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
         start_rounded = round(start_time, 2)
         end_rounded = round(end_time, 2)
         
-        # Strict matching: require segment boundaries to exactly match known timestamps
-        if len(all_captions) > 1:
-            if start_rounded not in valid_timestamps:
-                logger.warning(f'[PARSE_LLM] Skipping segment with invalid start time: {start_time} (not in {sorted(valid_timestamps)})')
-                continue
-            if end_rounded not in valid_timestamps:
-                logger.warning(f'[PARSE_LLM] Skipping segment with invalid end time: {end_time} (not in {sorted(valid_timestamps)})')
-                continue
+        # # Strict matching: require segment boundaries to exactly match known timestamps
+        # if len(all_captions) > 1:
+        #     if start_rounded not in valid_timestamps:
+        #         logger.warning(f'[PARSE_LLM] Skipping segment with invalid start time: {start_time} (not in {sorted(valid_timestamps)})')
+        #         continue
+        #     if end_rounded not in valid_timestamps:
+        #         logger.warning(f'[PARSE_LLM] Skipping segment with invalid end time: {end_time} (not in {sorted(valid_timestamps)})')
+        #         continue
         
         # Skip invalid ranges: start must be less than end (reject start > end)
-        if start_time > end_time:
-            logger.warning(f'[PARSE_LLM] Skipping invalid segment: {start_time}-{end_time} (start > end)')
-            continue
+        # if start_time > end_time:
+        #     logger.warning(f'[PARSE_LLM] Skipping invalid segment: {start_time}-{end_time} (start > end)')
+        #     continue
         
         label = rules_mod.normalize_label_text(label_str, output_mode=classifier_mode)
         
@@ -154,7 +154,7 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
         tolerance = 0.05  # 50ms tolerance for floating point comparison
         segment_captions = [
             c for c in all_captions 
-            if start_time <= c['t'] <= end_time
+            # if start_time <= c['t'] <= end_time
         ]
         # No need to dedupe again - all_captions is already deduped at entry
         
@@ -178,22 +178,23 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
     seen_ranges = set()
     dup_count = 0
 
-    for seg in segments:
-        start = float(seg['start_time'])
-        end = float(seg['end_time'])
-        lbl = (seg.get('label') or '').lower()
-        # Key with rounded boundaries and label to prevent cross-label collisions
-        time_key = (round(start, 2), round(end, 2), lbl)
-        if time_key not in seen_ranges:
-            deduplicated.append(seg)
-            seen_ranges.add(time_key)
-        else:
-            dup_count += 1
+    # for seg in segments:
+    #     start = float(seg['start_time'])
+    #     end = float(seg['end_time'])
+    #     lbl = (seg.get('label') or '').lower()
+    #     # Key with rounded boundaries and label to prevent cross-label collisions
+    #     time_key = (round(start, 2), round(end, 2), lbl)
+    #     if time_key not in seen_ranges:
+    #         deduplicated.append(seg)
+    #         seen_ranges.add(time_key)
+    #     else:
+    #         dup_count += 1
 
-    if dup_count > 0:
-        logger.debug(f"[PARSE_LLM] Removed {dup_count} duplicate segment(s) in window")
+    # if dup_count > 0:
+    #     logger.debug(f"[PARSE_LLM] Removed {dup_count} duplicate segment(s) in window")
 
-    return deduplicated
+    # return deduplicated
+    return segments
 
 
 def merge_segments_with_pending(

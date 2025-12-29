@@ -42,57 +42,90 @@ Answer:
 
 # Text-only LLM prompts (for analyzing TEXT descriptions, not images)
 # Used when classifier_source='llm' - LLM receives aggregated text captions with temporal context
-LLM_SEGMENT_TIMELINE_BINARY = """You are analyzing a timeline of activity descriptions to identify distinct segments.
+LLM_SEGMENT_TIMELINE_BINARY = """
+You are analyzing a sequence of timestamped visual-language model (VLM) captions.
+Each timestamp represents a single observation frame, not a true time interval.
 
-Timeline of observations:
-{caption}
-
-Task: Identify continuous activity segments based on temporal patterns.
+Task:
+Group consecutive observations into continuous activity segments using binary activity labels.
 
 Labels:
-- work: Person actively engaged in hands-on tasks (electronics, assembly, tools)
-- idle: Person not engaged in tasks, standing/sitting without interaction
+- work: Person actively engaged in hands-on tasks (e.g., electronics work, assembly, using tools)
+- idle: Person not engaged in any task; standing or sitting without interaction
 
-Instructions:
-1. Analyze the timeline to identify when activities change
-2. Group consecutive similar activities into segments
-3. Output ONE segment per line in format: [start_time]-[end_time]: label
-4. Use the exact timestamps from the timeline
-5. If only one activity throughout, output one segment
+Segmentation rules:
+- Treat each <t=...> entry as one observation.
+- Assign exactly one label (work or idle) to each observation.
+- If consecutive observations receive the same label, merge them into a single segment.
+- The segment start time is the timestamp of the first observation in the merged group.
+- The segment end time is the timestamp of the last observation in the merged group.
+- Do NOT infer or invent durations beyond the given timestamps.
 
-Example output format:
+Output format:
+[start_time]-[end_time]: label
+
+Example Output:
 0.50-2.30: work
 3.10-3.10: idle
 3.80-5.20: work
 
-Answer:"""
+Instructions:
+1. Process observations in chronological order.
+2. Detect activity changes based on semantic meaning, not wording differences.
+3. Merge consecutive observations with identical labels.
+4. Use only the timestamps provided in the input timeline.
 
-LLM_SEGMENT_TIMELINE_MULTI = """You are analyzing a timeline of activity descriptions to identify distinct segments.
-
-Timeline of observations:
+Timeline to analyze:
 {caption}
 
-Task: Identify continuous activity segments based on temporal patterns.
+Answer:
+"""
+
+LLM_SEGMENT_TIMELINE_MULTI = """
+You are analyzing a sequence of timestamped visual-language model (VLM) captions.
+Each timestamp represents a single observation frame, not a true time interval.
+
+Task:
+Group consecutive observations into continuous activity segments based on activity consistency.
 
 Labels:
-- assembling_drone: Working with tools, drone parts, wires, screws, assembly tasks
-- using_phone: Holding or interacting with a phone
-- idle: Standing/sitting without doing any task, arms resting
+- idle: Standing or sitting without performing a task
+- using_phone: Holding or interacting with a phone or camera-like device
+- assembling_drone: Working with tools or assembling drone components
 - unknown: Activity cannot be confidently identified
 
+Segmentation rules:
+- Treat each <t=...> entry as a single observation.
+- Assign one label to each observation.
+- If consecutive observations receive the same label, merge them into one segment.
+- The segment start time is the timestamp of the first observation in the merged group.
+- The segment end time is the timestamp of the last observation in the merged group.
+- Do NOT invent new timestamps or durations.
+
+Output format:
+[start_time]-[end_time]: label
+
+Example Input:
+<t=8.57> a man standing in front of a counter with bottles
+<t=10.70> a man standing in front of a machine
+<t=12.83> a man standing in a factory holding a camera
+<t=15.00> a man standing in a room with a table
+
+Example Output:
+8.57-15.00: idle
+
 Instructions:
-1. Analyze the timeline to identify when activities change
-2. Group consecutive similar activities into segments  
-3. Output ONE segment per line in format: [start_time]-[end_time]: label
-4. Use the exact timestamps from the timeline
-5. If only one activity throughout, output one segment
+1. Process the observations in chronological order.
+2. Detect activity changes based on semantics, not wording differences.
+3. Merge consecutive observations with the same label.
+4. Use only the timestamps provided in the input.
 
-Example output format:
-0.50-2.30: assembling_drone
-3.10-3.10: using_phone
-3.80-5.20: assembling_drone
+Timeline to analyze:
+{caption}
 
-Answer:"""
+Answer:
+"""
+
 
 
 
