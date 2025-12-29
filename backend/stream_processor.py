@@ -33,6 +33,104 @@ from backend.stream_utils import (
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# MODULAR COMPONENTS: VLM Inference, Timeline, and Activity Segmentation
+# ============================================================================
+
+def get_frame_caption(frame, captioner, vlm_prompt: str) -> str:
+    """Extract caption from a single frame using VLM.
+    
+    Args:
+        frame: OpenCV frame (BGR numpy array)
+        captioner: Captioner instance
+        vlm_prompt: Prompt for the VLM
+    
+    Returns:
+        Normalized caption string
+    """
+    img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    out = call_captioner(captioner, img, vlm_prompt, on_debug=None)
+    caption = normalize_caption_output(captioner, out)
+    return caption
+
+
+class CaptionTimeline:
+    """Stores timestamped captions and provides text formatting for LLM consumption."""
+    
+    def __init__(self, start_time: float, end_time: float):
+        self.start_time = start_time
+        self.end_time = end_time
+        self.samples: List[Dict[str, Any]] = []
+    
+    def add_sample(self, time_sec: float, caption: str) -> None:
+        """Add a timestamped caption sample."""
+        self.samples.append({'t': time_sec, 'caption': caption})
+        self.end_time = time_sec
+    
+    def to_timeline_text(self) -> str:
+        """Convert samples to formatted timeline text for LLM."""
+        lines = []
+        for sample in self.samples:
+            lines.append(f"t={sample['t']:.1f}s: {sample['caption']}")
+        return "\n".join(lines)
+    
+    def __len__(self) -> int:
+        return len(self.samples)
+
+
+def segment_activities(
+    timeline_text: str,
+    llm_prompt_template: str,
+    user_prompt: str,
+    classifier_mode: str,
+    caption_samples: List[Dict[str, Any]],
+    min_samples: int = 1
+) -> List[Dict[str, Any]]:
+    """Segment activities from timeline text using LLM reasoning.
+    
+    Args:
+        timeline_text: Formatted timeline of captions
+        llm_prompt_template: Template for classification prompt
+        user_prompt: User's custom prompt
+        classifier_mode: 'binary' or 'multi'
+        caption_samples: List of {'t': float, 'caption': str} for parsing
+        min_samples: Minimum samples required
+    
+    Returns:
+        List of segment dictionaries with start_time, end_time, label, etc.
+    """
+    if not timeline_text or len(caption_samples) < min_samples:
+        return []
+    
+    rendered = llm_prompt_template.format(caption=timeline_text, prompt=user_prompt)
+    
+    try:
+        text_llm = llm_mod.get_local_text_llm()
+        llm_res = text_llm(rendered, max_new_tokens=100)
+        
+        if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict):
+            llm_output = llm_res[0].get('generated_text', str(llm_res))
+        else:
+            llm_output = str(llm_res)
+        
+        logger.info(f"[LLM_INPUT] captions: {[s['caption'][:40] for s in caption_samples]}")
+        logger.info(f"[LLM_OUTPUT] {llm_output.replace(chr(10), ' ')[:200]}")
+        
+        # Import here to avoid circular dependency
+        from backend.stream_utils import parse_llm_segments
+        
+        segments = parse_llm_segments(llm_output, caption_samples, classifier_mode, prompt=rendered)
+        
+        for seg in segments:
+            seg['llm_output'] = llm_output
+        
+        return segments
+    
+    except Exception as e:
+        logger.exception('Failed to segment activities: %s', e)
+        return []
+
+
 def create_stream_generator(
     video_source: cv2.VideoCapture,
     model: str,
@@ -118,6 +216,10 @@ def create_stream_generator(
     min_samples = 1
     seen_seg_keys = set()
     
+    # Pre-build VLM prompt and classification template (used for all frames)
+    vlm_prompt = build_vlm_prompt_for_source(classifier_source_norm, classifier_mode, classifier_prompt)
+    classify_prompt_template = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
+    
     # Recording state (webcam only)
     writer = None
     writer_type = None
@@ -192,15 +294,10 @@ def create_stream_generator(
                 continue
             
             try:
-                # Convert and caption
-                img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                vlm_prompt = build_vlm_prompt_for_source(classifier_source_norm, classifier_mode, classifier_prompt)
+                # VLM inference: single call per frame
+                caption = get_frame_caption(frame, captioner, vlm_prompt)
                 
-                out = call_captioner(captioner, img, vlm_prompt, on_debug=None)
-                caption = normalize_caption_output(captioner, out)
-                
-                # Get label
-                classify_prompt_template = build_classify_prompt_template(classifier_source_norm, classifier_mode, classifier_prompt)
+                # Text-based classification: caption → label
                 label, cls_text = per_sample_label_for_source(
                     classifier_source_norm,
                     classifier_mode,
@@ -267,7 +364,7 @@ def create_stream_generator(
                 if classifier_source_norm == 'llm':
                     print(f"Adding sample to window at t={elapsed_time:.2f}s: {caption[:50]}...")
                     if current_window is None:
-                        current_window = evidence_mod.EvidenceWindow(
+                        current_window = CaptionTimeline(
                             start_time=elapsed_time,
                             end_time=elapsed_time,
                         )
@@ -275,12 +372,14 @@ def create_stream_generator(
                     current_window.add_sample(elapsed_time, caption)
                     
                     # Check window closure
-                    if len(current_window.samples) >= max_samples_per_window:
-                        segments = _finalize_window(
-                            current_window,
+                    if len(current_window) >= max_samples_per_window:
+                        timeline_text = current_window.to_timeline_text()
+                        segments = segment_activities(
+                            timeline_text,
                             classify_prompt_template,
                             prompt,
                             classifier_mode,
+                            current_window.samples,
                             min_samples,
                         )
                         
@@ -312,11 +411,13 @@ def create_stream_generator(
         
         # Flush remaining window
         if classifier_source_norm == 'llm' and current_window is not None:
-            segments = _finalize_window(
-                current_window,
+            timeline_text = current_window.to_timeline_text()
+            segments = segment_activities(
+                timeline_text,
                 classify_prompt_template,
                 prompt,
                 classifier_mode,
+                current_window.samples,
                 min_samples,
             )
             for seg_event in segments:
@@ -463,40 +564,7 @@ def _file_frame_generator(cap, frame_indices):
             pass
 
 
-def _finalize_window(window, cls_prompt, prompt, classifier_mode, min_samples):
-    """Finalize LLM window and return segments."""
-    if window is None or len(window.samples) < min_samples:
-        return []
-    
-    timeline = window.to_timeline()
-    rendered = (cls_prompt or "").format(caption=timeline, prompt=prompt)
-    
-    try:
-        text_llm = llm_mod.get_local_text_llm()
-        llm_res = text_llm(rendered, max_new_tokens=100)
-        
-        if isinstance(llm_res, list) and llm_res and isinstance(llm_res[0], dict):
-            llm_output = llm_res[0].get('generated_text', str(llm_res))
-        else:
-            llm_output = str(llm_res)
-        
-        logger.info(f"[LLM_INPUT] captions: {[s['caption'][:40] for s in window.samples]}")
-        logger.info(f"[LLM_OUTPUT] {llm_output.replace(chr(10), ' ')[:200]}")
-        
-        # Import here to avoid circular dependency
-        from backend.stream_utils import parse_llm_segments
-        
-        all_captions = [{'t': s['t'], 'caption': s['caption']} for s in window.samples]
-        segments = parse_llm_segments(llm_output, all_captions, classifier_mode, prompt=rendered)
-        
-        for seg in segments:
-            seg['llm_output'] = llm_output
-        
-        return segments
-    
-    except Exception as e:
-        logger.exception('Failed to finalize window: %s', e)
-        return []
+
 
 
 def _cleanup_recording(writer, writer_type, ffmpeg_proc):
