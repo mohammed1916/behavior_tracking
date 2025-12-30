@@ -57,18 +57,26 @@ def calculate_work_idle_stats(samples, duration, fps_hint=None):
 
     work_percentage = (work_duration / total_duration * 100) if total_duration > 0 else 0.0
     idle_percentage = (idle_duration / total_duration * 100) if total_duration > 0 else 0.0
+    
+    # Calculate unclassified time (gaps between labeled segments)
+    classified_duration = work_duration + idle_duration
+    unclassified_duration = max(0, total_duration - classified_duration)
+    unclassified_percentage = (unclassified_duration / total_duration * 100) if total_duration > 0 else 0.0
 
     stats = {
         'work_duration_sec': round(work_duration, 2),
         'idle_duration_sec': round(idle_duration, 2),
         'work_percentage': round(work_percentage, 1),
-        'idle_percentage': round(idle_percentage, 1)
+        'idle_percentage': round(idle_percentage, 1),
+        'unclassified_duration_sec': round(unclassified_duration, 2),
+        'unclassified_percentage': round(unclassified_percentage, 1)
     }
 
     logger.info(
-        "[STATS] samples=%d duration=%.2f fps=%.2f work=%.2fs idle=%.2fs work%%=%.1f idle%%=%.1f",
+        "[STATS] samples=%d duration=%.2f fps=%.2f work=%.2fs idle=%.2fs unclass=%.2fs work%%=%.1f idle%%=%.1f unclass%%=%.1f",
         len(samples), total_duration, fps, stats['work_duration_sec'], stats['idle_duration_sec'],
-        stats['work_percentage'], stats['idle_percentage']
+        stats['unclassified_duration_sec'], stats['work_percentage'], stats['idle_percentage'],
+        stats['unclassified_percentage']
     )
 
     return stats
@@ -86,17 +94,23 @@ def _stats_from_segments(segments, duration):
     total_duration = duration or max_end or 0.0
     total_duration = total_duration if total_duration > 0 else 1.0
 
+    classified_dur = work_dur + idle_dur
+    unclassified_dur = max(0, total_duration - classified_dur)
+    
     stats = {
         'work_duration_sec': round(work_dur, 2),
         'idle_duration_sec': round(idle_dur, 2),
         'work_percentage': round((work_dur / total_duration) * 100, 1),
         'idle_percentage': round((idle_dur / total_duration) * 100, 1),
+        'unclassified_duration_sec': round(unclassified_dur, 2),
+        'unclassified_percentage': round((unclassified_dur / total_duration) * 100, 1),
     }
 
     logger.info(
-        "[STATS_SEGMENTS] segs=%d duration=%.2f work=%.2fs idle=%.2fs work%%=%.1f idle%%=%.1f",
+        "[STATS_SEGMENTS] segs=%d duration=%.2f work=%.2fs idle=%.2fs unclass=%.2fs work%%=%.1f idle%%=%.1f unclass%%=%.1f",
         len(segments), total_duration, stats['work_duration_sec'], stats['idle_duration_sec'],
-        stats['work_percentage'], stats['idle_percentage']
+        stats['unclassified_duration_sec'], stats['work_percentage'], stats['idle_percentage'],
+        stats['unclassified_percentage']
     )
     return stats
 
@@ -123,7 +137,9 @@ def init_db():
         work_duration_sec REAL,
         idle_duration_sec REAL,
         work_percentage REAL,
-        idle_percentage REAL
+        idle_percentage REAL,
+        unclassified_duration_sec REAL,
+        unclassified_percentage REAL
     )
     ''')
     # Backward-compat: add missing stats columns if the DB was created before these fields existed.
@@ -135,6 +151,8 @@ def init_db():
             ('idle_duration_sec', 'REAL', 0),
             ('work_percentage', 'REAL', 0),
             ('idle_percentage', 'REAL', 0),
+            ('unclassified_duration_sec', 'REAL', 0),
+            ('unclassified_percentage', 'REAL', 0),
         ]
         for name, typ, default_val in missing_stats:
             if name not in cols:
@@ -189,14 +207,14 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
     else:
         stats = _stats_from_segments(segments or [], duration or 0) or calculate_work_idle_stats([], duration or 0, fps_hint=fps_hint)
     logger.info(
-        "[STATS_SAVE] analysis=%s duration=%.2f fps=%.2f work=%.2fs idle=%.2fs work%%=%.1f idle%%=%.1f",
+        "[STATS_SAVE] analysis=%s duration=%.2f fps=%.2f work=%.2fs idle=%.2fs unclass=%.2fs work%%=%.1f idle%%=%.1f unclass%%=%.1f",
         analysis_id, duration or 0, fps_hint or 0,
-        stats['work_duration_sec'], stats['idle_duration_sec'],
-        stats['work_percentage'], stats['idle_percentage']
+        stats['work_duration_sec'], stats['idle_duration_sec'], stats['unclassified_duration_sec'],
+        stats['work_percentage'], stats['idle_percentage'], stats['unclassified_percentage']
     )
     
-    cur.execute('''INSERT OR REPLACE INTO analyses (id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+    cur.execute('''INSERT OR REPLACE INTO analyses (id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage, unclassified_duration_sec, unclassified_percentage)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
         analysis_id, filename, model, prompt, video_url,
         video_info.get('fps') if video_info else None,
         video_info.get('frame_count') if video_info else None,
@@ -208,7 +226,9 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
         stats['work_duration_sec'],
         stats['idle_duration_sec'],
         stats['work_percentage'],
-        stats['idle_percentage']
+        stats['idle_percentage'],
+        stats['unclassified_duration_sec'],
+        stats['unclassified_percentage']
     ))
     logger.info("[DB_SAVE] analysis %s saved to database", analysis_id)
     if samples:
@@ -244,7 +264,7 @@ def list_analyses_from_db(limit=100):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage FROM analyses ORDER BY created_at DESC LIMIT ?', (limit,))
+    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage, unclassified_duration_sec, unclassified_percentage FROM analyses ORDER BY created_at DESC LIMIT ?', (limit,))
     rows = cur.fetchall()
     conn.close()
     out = []
@@ -254,7 +274,8 @@ def list_analyses_from_db(limit=100):
             'fps': r[5], 'frame_count': r[6], 'width': r[7], 'height': r[8], 'duration': r[9],
             'subtask_id': r[10], 'created_at': r[11],
             'work_duration_sec': r[12], 'idle_duration_sec': r[13],
-            'work_percentage': r[14], 'idle_percentage': r[15]
+            'work_percentage': r[14], 'idle_percentage': r[15],
+            'unclassified_duration_sec': r[16], 'unclassified_percentage': r[17]
         })
     return out
 
@@ -262,7 +283,7 @@ def get_analysis_from_db(aid):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage FROM analyses WHERE id=?', (aid,))
+    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage, unclassified_duration_sec, unclassified_percentage FROM analyses WHERE id=?', (aid,))
     r = cur.fetchone()
     if not r:
         conn.close()
@@ -272,7 +293,8 @@ def get_analysis_from_db(aid):
         'fps': r[5], 'frame_count': r[6], 'width': r[7], 'height': r[8], 'duration': r[9],
         'subtask_id': r[10], 'created_at': r[11],
         'work_duration_sec': r[12], 'idle_duration_sec': r[13],
-        'work_percentage': r[14], 'idle_percentage': r[15]
+        'work_percentage': r[14], 'idle_percentage': r[15],
+        'unclassified_duration_sec': r[16], 'unclassified_percentage': r[17]
     }
     cur.execute('SELECT frame_index, time_sec, caption, label, llm_output FROM samples WHERE analysis_id=? ORDER BY frame_index ASC', (aid,))
     rows = cur.fetchall()
