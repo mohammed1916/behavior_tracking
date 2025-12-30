@@ -108,8 +108,8 @@ def segment_activities(
         else:
             llm_output = str(llm_res)
         
-        logger.info(f"[LLM_INPUT] captions: {[s['caption'][:40] for s in caption_samples]}")
-        logger.info(f"[LLM_OUTPUT] {llm_output.replace(chr(10), ' ')[:200]}")
+        # logger.info(f"[LLM_INPUT] captions: {[s['caption'][:40] for s in caption_samples]}")
+        # logger.info(f"[LLM_OUTPUT] {llm_output.replace(chr(10), ' ')[:200]}")
         
         # Import here to avoid circular dependency
         from backend.stream_utils import parse_llm_segments

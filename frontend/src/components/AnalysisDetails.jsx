@@ -51,7 +51,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
           <div><strong>Created:</strong> {analysis.created_at}</div>
           
           {/* Work/Idle Statistics */}
-          {analysis.duration && (
+          {(analysis.duration !== undefined && analysis.duration !== null) || analysis.work_duration_sec || analysis.idle_duration_sec ? (
             <div style={{ marginTop: 12, padding: 12, backgroundColor: 'var(--card-bg)', borderRadius: 4, border: '1px solid var(--panel-border)' }}>
               <h5 style={{ marginTop: 0, marginBottom: 12 }}>Summary</h5>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -82,14 +82,17 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                 <span style={{ color: 'var(--muted)' }}>Total Duration: </span>
                 <span style={{ fontWeight: 'bold' }}>
                   {(() => {
-                    const mins = Math.floor((analysis.duration || 0) / 60);
-                    const secs = ((analysis.duration || 0) % 60).toFixed(2);
+                    const total = (analysis.duration !== undefined && analysis.duration !== null)
+                      ? analysis.duration
+                      : (analysis.work_duration_sec || 0) + (analysis.idle_duration_sec || 0);
+                    const mins = Math.floor((total || 0) / 60);
+                    const secs = ((total || 0) % 60).toFixed(2);
                     return `${mins}m ${secs}s`;
                   })()}
                 </span>
               </div>
             </div>
-          )}
+          ) : null}
           
           <div style={{ marginTop: 8 }}>
             <strong>Video:</strong>

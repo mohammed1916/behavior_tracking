@@ -11,46 +11,94 @@ logger = logging.getLogger(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), 'analyses.db')
 _db_initialized = False
 
-def calculate_work_idle_stats(samples, duration):
+def calculate_work_idle_stats(samples, duration, fps_hint=None):
     """Calculate work/idle duration and percentages from samples.
     
     Args:
         samples: List of sample dicts with 'time_sec' and 'label' keys
-        duration: Total video duration in seconds
+        duration: Total video duration in seconds (may be None/0)
+        fps_hint: Optional FPS from video metadata
         
     Returns:
         Dict with work_duration_sec, idle_duration_sec, work_percentage, idle_percentage
     """
-    if not samples or duration <= 0:
+    if not samples:
         return {
             'work_duration_sec': 0.0,
             'idle_duration_sec': 0.0,
             'work_percentage': 0.0,
             'idle_percentage': 0.0
         }
-    
-    # Group consecutive samples by label and compute ranges
+
+    # Fallback duration from samples if missing
+    sample_max_time = max((s.get('time_sec') or 0) for s in samples) if samples else 0
+    total_duration = duration or sample_max_time or 0
+    # Guard against zero to avoid div-by-zero; use 1s minimum
+    total_duration = total_duration if total_duration > 0 else 1.0
+
+    # Group frames by label
     work_frames = [s['frame_index'] for s in samples if s.get('label') == 'work']
     idle_frames = [s['frame_index'] for s in samples if s.get('label') == 'idle']
-    
-    # Compute ranges from frames
-    fps = max(1.0, max([s.get('frame_index', 0) for s in samples] or [1]) / duration) if duration > 0 else 30.0
+
+    # Estimate fps: prefer hint, else derive from frame/time relation, else default 30
+    fps = fps_hint or None
+    if fps is None or fps <= 0:
+        # try derive using max frame / duration
+        max_frame = max((s.get('frame_index') or 0) for s in samples) if samples else 0
+        fps = (max_frame / total_duration) if total_duration > 0 else 0
+    if fps is None or fps <= 0:
+        fps = 30.0
+
     work_ranges = compute_ranges(work_frames, samples, fps) if work_frames else []
     idle_ranges = compute_ranges(idle_frames, samples, fps) if idle_frames else []
-    
-    # Sum durations
+
     work_duration = sum(max(0, r.get('endTime', 0) - r.get('startTime', 0)) for r in work_ranges)
     idle_duration = sum(max(0, r.get('endTime', 0) - r.get('startTime', 0)) for r in idle_ranges)
-    
-    work_percentage = (work_duration / duration * 100) if duration > 0 else 0.0
-    idle_percentage = (idle_duration / duration * 100) if duration > 0 else 0.0
-    
-    return {
+
+    work_percentage = (work_duration / total_duration * 100) if total_duration > 0 else 0.0
+    idle_percentage = (idle_duration / total_duration * 100) if total_duration > 0 else 0.0
+
+    stats = {
         'work_duration_sec': round(work_duration, 2),
         'idle_duration_sec': round(idle_duration, 2),
         'work_percentage': round(work_percentage, 1),
         'idle_percentage': round(idle_percentage, 1)
     }
+
+    logger.info(
+        "[STATS] samples=%d duration=%.2f fps=%.2f work=%.2fs idle=%.2fs work%%=%.1f idle%%=%.1f",
+        len(samples), total_duration, fps, stats['work_duration_sec'], stats['idle_duration_sec'],
+        stats['work_percentage'], stats['idle_percentage']
+    )
+
+    return stats
+
+
+def _stats_from_segments(segments, duration):
+    """Fallback stats computation when only segments are available."""
+    if not segments:
+        return None
+
+    work_dur = sum(max(0.0, float(s.get('duration') or 0.0)) for s in segments if (s.get('label') or '').lower() == 'work')
+    idle_dur = sum(max(0.0, float(s.get('duration') or 0.0)) for s in segments if (s.get('label') or '').lower() == 'idle')
+
+    max_end = max((float(s.get('end_time') or 0.0) for s in segments), default=0.0)
+    total_duration = duration or max_end or 0.0
+    total_duration = total_duration if total_duration > 0 else 1.0
+
+    stats = {
+        'work_duration_sec': round(work_dur, 2),
+        'idle_duration_sec': round(idle_dur, 2),
+        'work_percentage': round((work_dur / total_duration) * 100, 1),
+        'idle_percentage': round((idle_dur / total_duration) * 100, 1),
+    }
+
+    logger.info(
+        "[STATS_SEGMENTS] segs=%d duration=%.2f work=%.2fs idle=%.2fs work%%=%.1f idle%%=%.1f",
+        len(segments), total_duration, stats['work_duration_sec'], stats['idle_duration_sec'],
+        stats['work_percentage'], stats['idle_percentage']
+    )
+    return stats
 
 def init_db():
     global _db_initialized
@@ -78,6 +126,22 @@ def init_db():
         idle_percentage REAL
     )
     ''')
+    # Backward-compat: add missing stats columns if the DB was created before these fields existed.
+    try:
+        cur.execute('PRAGMA table_info(analyses)')
+        cols = {row[1] for row in cur.fetchall()}
+        missing_stats = [
+            ('work_duration_sec', 'REAL', 0),
+            ('idle_duration_sec', 'REAL', 0),
+            ('work_percentage', 'REAL', 0),
+            ('idle_percentage', 'REAL', 0),
+        ]
+        for name, typ, default_val in missing_stats:
+            if name not in cols:
+                cur.execute(f"ALTER TABLE analyses ADD COLUMN {name} {typ} DEFAULT {default_val}")
+    except Exception:
+        # If migration fails, leave DB as-is to avoid breaking existing data
+        pass
     # Tasks and subtasks are stored in the vector store (backend/vector_store.py)
     cur.execute('''
     CREATE TABLE IF NOT EXISTS samples (
@@ -115,9 +179,21 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
     cur = conn.cursor()
     created = datetime.utcnow().isoformat() + 'Z'
     
-    # Calculate work/idle statistics
+    # Calculate work/idle statistics (use duration from metadata or fallback to samples)
     duration = video_info.get('duration') if video_info else 0
-    stats = calculate_work_idle_stats(samples or [], duration or 0)
+    fps_hint = video_info.get('fps') if video_info else None
+    # Prefer labeled samples; if missing, fall back to segments-based stats
+    labeled_samples = [s for s in (samples or []) if (s.get('label') or '').lower() in ('work', 'idle')]
+    if labeled_samples:
+        stats = calculate_work_idle_stats(labeled_samples, duration or 0, fps_hint=fps_hint)
+    else:
+        stats = _stats_from_segments(segments or [], duration or 0) or calculate_work_idle_stats([], duration or 0, fps_hint=fps_hint)
+    logger.info(
+        "[STATS_SAVE] analysis=%s duration=%.2f fps=%.2f work=%.2fs idle=%.2fs work%%=%.1f idle%%=%.1f",
+        analysis_id, duration or 0, fps_hint or 0,
+        stats['work_duration_sec'], stats['idle_duration_sec'],
+        stats['work_percentage'], stats['idle_percentage']
+    )
     
     cur.execute('''INSERT OR REPLACE INTO analyses (id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
@@ -134,9 +210,11 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
         stats['work_percentage'],
         stats['idle_percentage']
     ))
+    logger.info("[DB_SAVE] analysis %s saved to database", analysis_id)
     if samples:
+        logger.info("[DB_SAVE] analysis %s saving %d samples to database", analysis_id, len(samples))
         for s in samples:
-            cur.execute('''INSERT INTO samples (analysis_id, frame_index, time_sec, caption, label, llm_output) VALUES (?, ?, ?, ?, ?, ?)''', (
+            cur.execute('''INSERT or REPLACE INTO samples (analysis_id, frame_index, time_sec, caption, label, llm_output) VALUES (?, ?, ?, ?, ?, ?)''', (
                 analysis_id,
                 s.get('frame_index'),
                 s.get('time_sec'),
@@ -144,9 +222,11 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
                 s.get('label'),
                 s.get('llm_output')
             ))
+    logger.info("[DB_SAVE] analysis %s samples saved to database", analysis_id)
     if segments:
+        logger.info("[DB_SAVE] analysis %s saving %d segments to database", analysis_id, len(segments))
         for seg in segments:
-            cur.execute('''INSERT INTO segments (analysis_id, start_time, end_time, duration, timeline, label, llm_output, prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (
+            cur.execute('''INSERT or REPLACE INTO segments (analysis_id, start_time, end_time, duration, timeline, label, llm_output, prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (
                 analysis_id,
                 seg.get('start_time'),
                 seg.get('end_time'),
@@ -156,6 +236,7 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
                 seg.get('llm_output'),
                 seg.get('prompt')
             ))
+    logger.info("[DB_SAVE_COMPLETE] analysis %s saved to database", analysis_id)
     conn.commit()
     conn.close()
 
