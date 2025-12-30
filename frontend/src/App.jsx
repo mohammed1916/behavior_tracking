@@ -38,7 +38,6 @@ function App() {
     return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const [evaluationMode, setEvaluationMode] = useState('combined');
-  const [advCompareTimings, setAdvCompareTimings] = useState(true);
   const [advJpegQuality, setAdvJpegQuality] = useState(80);
   const [advMaxWidth, setAdvMaxWidth] = useState('');
   const [advSaveRecording, setAdvSaveRecording] = useState(false);
@@ -133,13 +132,13 @@ function App() {
       // include classifier mode and optional prompt so server can use same label mode as live view
       if (vlmClassifierMode) url += `&classifier_mode=${encodeURIComponent(vlmClassifierMode)}`;
       if (vlmClassifierPrompt) url += `&classifier_prompt=${encodeURIComponent(vlmClassifierPrompt)}`;
-      // attach task/subtask selection and compare/eval mode
+      // attach task/subtask selection and evaluation mode
       if (selectedTaskIds && selectedTaskIds.length > 0) {
-        url += `&task_id=${encodeURIComponent(selectedTaskIds.join(','))}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+        url += `&task_id=${encodeURIComponent(selectedTaskIds.join(','))}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else if (advSubtaskId) {
-        url += `&subtask_id=${encodeURIComponent(advSubtaskId)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+        url += `&subtask_id=${encodeURIComponent(advSubtaskId)}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else {
-        url += `&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+        url += `&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       }
       if (processingMode && processingMode !== 'default') {
         url += `&processing_mode=${encodeURIComponent(processingMode)}`;
@@ -514,13 +513,14 @@ function App() {
                       <div>
                         <label>Evaluation Mode:</label>
                         <div>
-                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="combined" checked={evaluationMode==='combined'} onChange={(e) => setEvaluationMode(e.target.value)} /> Combined (LLM + timing)</label>
-                          <label><input type="radio" name="evalmode" value="llm_only" checked={evaluationMode==='llm_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> LLM only</label>
+                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="none" checked={evaluationMode==='none'} onChange={(e) => setEvaluationMode(e.target.value)} /> None</label>
+                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="timing_only" checked={evaluationMode==='timing_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> Timing only</label>
+                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="llm_only" checked={evaluationMode==='llm_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> LLM only</label>
+                          <label><input type="radio" name="evalmode" value="combined" checked={evaluationMode==='combined'} onChange={(e) => setEvaluationMode(e.target.value)} /> Combined (LLM + timing)</label>
                         </div>
-                      </div>
-                      <div>
-                        <label>Compare Timings:</label>
-                        <input type="checkbox" checked={advCompareTimings} onChange={(e) => setAdvCompareTimings(e.target.checked)} />
+                        <small style={{ color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+                          How to evaluate subtask completion: timing compares work duration, LLM uses reasoning, combined uses both.
+                        </small>
                       </div>
                       <div>
                         <label>Processing Mode:</label>
@@ -635,7 +635,7 @@ function App() {
                     classifierPrompt={vlmClassifierPrompt}
                     selectedSubtask={''}
                     subtaskId={advSubtaskId}
-                    compareTimings={advCompareTimings}
+                    evaluationMode={evaluationMode}
                     jpegQuality={advJpegQuality}
                     maxWidth={advMaxWidth}
                     saveRecording={advSaveRecording}

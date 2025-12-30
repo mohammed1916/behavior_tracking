@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import SegmentDisplay from './SegmentDisplay';
 
-export default function LiveView({ model: propModel = '', prompt: propPrompt = '', classifierSource: propClassifierSource = 'llm', selectedSubtask = '', subtaskId = '', compareTimings = false, jpegQuality = 80, maxWidth = '', saveRecording = false, enableMediapipe = false, enableYolo = false, classifier: propClassifier = null, classifierMode: propClassifierMode = null, classifierPrompt: propClassifierPrompt = null }) {
+export default function LiveView({ model: propModel = '', prompt: propPrompt = '', classifierSource: propClassifierSource = 'llm', selectedSubtask = '', subtaskId = '', evaluationMode = 'combined', jpegQuality = 80, maxWidth = '', saveRecording = false, enableMediapipe = false, enableYolo = false, classifier: propClassifier = null, classifierMode: propClassifierMode = null, classifierPrompt: propClassifierPrompt = null }) {
   const [running, setRunning] = useState(false);
   const imgRef = useRef(null);
   const eventSourceRef = useRef(null);
@@ -51,7 +51,7 @@ export default function LiveView({ model: propModel = '', prompt: propPrompt = '
     // Use the parent-provided prompt (no local duplicate)
     if (propPrompt) params.set('prompt', propPrompt);
     if (subtaskId) params.set('subtask_id', subtaskId);
-    if (compareTimings) params.set('compare_timings', 'true');
+    if (evaluationMode) params.set('evaluation_mode', evaluationMode);
     if (jpegQuality) params.set('jpeg_quality', String(jpegQuality));
     if (maxWidth) params.set('max_width', String(maxWidth));
     if (saveRecording) params.set('save_video', 'true');

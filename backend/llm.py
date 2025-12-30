@@ -169,7 +169,7 @@ def get_local_text_llm():
                     out_bytes = p.stdout or b''
                     try:
                         out = out_bytes.decode('utf-8', errors='replace').strip()
-                        print('Ollama decoded output: %s', out)
+                        # print('Ollama decoded output: %s', out)
                     except Exception:
                         print('Ollama output decoding failed, using raw bytes string')
                         out = str(out_bytes)

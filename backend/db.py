@@ -7,8 +7,50 @@ import logging
 from backend.vector_store import STORE as vector_store
 from backend.llm import get_local_text_llm, TASK_COMPLETION_PROMPT_TEMPLATE
 
+logger = logging.getLogger(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), 'analyses.db')
 _db_initialized = False
+
+def calculate_work_idle_stats(samples, duration):
+    """Calculate work/idle duration and percentages from samples.
+    
+    Args:
+        samples: List of sample dicts with 'time_sec' and 'label' keys
+        duration: Total video duration in seconds
+        
+    Returns:
+        Dict with work_duration_sec, idle_duration_sec, work_percentage, idle_percentage
+    """
+    if not samples or duration <= 0:
+        return {
+            'work_duration_sec': 0.0,
+            'idle_duration_sec': 0.0,
+            'work_percentage': 0.0,
+            'idle_percentage': 0.0
+        }
+    
+    # Group consecutive samples by label and compute ranges
+    work_frames = [s['frame_index'] for s in samples if s.get('label') == 'work']
+    idle_frames = [s['frame_index'] for s in samples if s.get('label') == 'idle']
+    
+    # Compute ranges from frames
+    fps = max(1.0, max([s.get('frame_index', 0) for s in samples] or [1]) / duration) if duration > 0 else 30.0
+    work_ranges = compute_ranges(work_frames, samples, fps) if work_frames else []
+    idle_ranges = compute_ranges(idle_frames, samples, fps) if idle_frames else []
+    
+    # Sum durations
+    work_duration = sum(max(0, r.get('endTime', 0) - r.get('startTime', 0)) for r in work_ranges)
+    idle_duration = sum(max(0, r.get('endTime', 0) - r.get('startTime', 0)) for r in idle_ranges)
+    
+    work_percentage = (work_duration / duration * 100) if duration > 0 else 0.0
+    idle_percentage = (idle_duration / duration * 100) if duration > 0 else 0.0
+    
+    return {
+        'work_duration_sec': round(work_duration, 2),
+        'idle_duration_sec': round(idle_duration, 2),
+        'work_percentage': round(work_percentage, 1),
+        'idle_percentage': round(idle_percentage, 1)
+    }
 
 def init_db():
     global _db_initialized
@@ -29,7 +71,11 @@ def init_db():
         height INTEGER,
         duration REAL,
         subtask_id TEXT,
-        created_at TEXT
+        created_at TEXT,
+        work_duration_sec REAL,
+        idle_duration_sec REAL,
+        work_percentage REAL,
+        idle_percentage REAL
     )
     ''')
     # Tasks and subtasks are stored in the vector store (backend/vector_store.py)
@@ -68,16 +114,25 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     created = datetime.utcnow().isoformat() + 'Z'
-    cur.execute('''INSERT OR REPLACE INTO analyses (id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+    
+    # Calculate work/idle statistics
+    duration = video_info.get('duration') if video_info else 0
+    stats = calculate_work_idle_stats(samples or [], duration or 0)
+    
+    cur.execute('''INSERT OR REPLACE INTO analyses (id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
         analysis_id, filename, model, prompt, video_url,
         video_info.get('fps') if video_info else None,
         video_info.get('frame_count') if video_info else None,
         video_info.get('width') if video_info else None,
         video_info.get('height') if video_info else None,
-        video_info.get('duration') if video_info else None,
+        duration,
         subtask_id,
-        created
+        created,
+        stats['work_duration_sec'],
+        stats['idle_duration_sec'],
+        stats['work_percentage'],
+        stats['idle_percentage']
     ))
     if samples:
         for s in samples:
@@ -108,7 +163,7 @@ def list_analyses_from_db(limit=100):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at FROM analyses ORDER BY created_at DESC LIMIT ?', (limit,))
+    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage FROM analyses ORDER BY created_at DESC LIMIT ?', (limit,))
     rows = cur.fetchall()
     conn.close()
     out = []
@@ -116,7 +171,9 @@ def list_analyses_from_db(limit=100):
         out.append({
             'id': r[0], 'filename': r[1], 'model': r[2], 'prompt': r[3], 'video_url': r[4],
             'fps': r[5], 'frame_count': r[6], 'width': r[7], 'height': r[8], 'duration': r[9],
-            'subtask_id': r[10], 'created_at': r[11]
+            'subtask_id': r[10], 'created_at': r[11],
+            'work_duration_sec': r[12], 'idle_duration_sec': r[13],
+            'work_percentage': r[14], 'idle_percentage': r[15]
         })
     return out
 
@@ -124,7 +181,7 @@ def get_analysis_from_db(aid):
     init_db()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at FROM analyses WHERE id=?', (aid,))
+    cur.execute('SELECT id, filename, model, prompt, video_url, fps, frame_count, width, height, duration, subtask_id, created_at, work_duration_sec, idle_duration_sec, work_percentage, idle_percentage FROM analyses WHERE id=?', (aid,))
     r = cur.fetchone()
     if not r:
         conn.close()
@@ -132,7 +189,9 @@ def get_analysis_from_db(aid):
     analysis = {
         'id': r[0], 'filename': r[1], 'model': r[2], 'prompt': r[3], 'video_url': r[4],
         'fps': r[5], 'frame_count': r[6], 'width': r[7], 'height': r[8], 'duration': r[9],
-        'subtask_id': r[10], 'created_at': r[11]
+        'subtask_id': r[10], 'created_at': r[11],
+        'work_duration_sec': r[12], 'idle_duration_sec': r[13],
+        'work_percentage': r[14], 'idle_percentage': r[15]
     }
     cur.execute('SELECT frame_index, time_sec, caption, label, llm_output FROM samples WHERE analysis_id=? ORDER BY frame_index ASC', (aid,))
     rows = cur.fetchall()
@@ -385,11 +444,8 @@ def _llm_decision_for_task(info, captions, llm=None, subtask_id=None):
     else:
         llm_output = str(resp)
     # Log raw LLM output and captions preview
-    try:
-        print('LLM output for subtask %s: %s', subtask_id or '<anon>', (llm_output or '').replace('\n', ' '))
-        logging.debug('captions_preview: %s', (captions or '')[:1000])
-    except Exception:
-        pass
+    # print('LLM output for subtask %s: %s', subtask_id or '<anon>', (llm_output or '').replace('\n', ' '))
+    # logger.debug('captions_preview: %s', (captions or '')[:1000])
     txt = (llm_output or '').strip().lower()
     affirmatives = ('y', 'yes', 'true', 'work', 'completed', 'done', 'active', 'activity', 'movement')
     negatives = ('n', 'no', 'false', 'idle', 'not', 'inactive', 'still', 'stationary')
@@ -409,7 +465,8 @@ def evaluate_subtasks_completion(captions, llm=None, top_k=5):
     Returns: list of dicts: {subtask_id, task_id, subtask_info, completed (bool), llm_output}
     """
     # normalize captions input
-    print("Running evaluate_subtasks_completion with captions:", captions)
+    
+    # print("Running evaluate_subtasks_completion with captions:", captions)
     if not captions:
         return []
     if isinstance(captions, (list, tuple)):

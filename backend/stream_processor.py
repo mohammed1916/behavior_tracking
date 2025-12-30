@@ -136,7 +136,6 @@ def create_stream_generator(
     classifier_prompt: Optional[str],
     subtask_id: Optional[str],
     task_id: Optional[str],
-    compare_timings: bool,
     evaluation_mode: str,
     jpeg_quality: int,
     max_width: Optional[int],
@@ -168,8 +167,11 @@ def create_stream_generator(
         classifier_prompt: Custom classifier prompt
         subtask_id: Optional subtask ID for monitoring
         task_id: Optional task ID (comma-separated list)
-        compare_timings: Whether to evaluate subtask timing
-        evaluation_mode: 'combined' or 'llm_only'
+        evaluation_mode: How to evaluate subtask completion:
+            - 'none': No subtask evaluation
+            - 'timing_only': Compare work duration against expected duration
+            - 'llm_only': Use LLM reasoning only (ignores timing)
+            - 'combined': Use both LLM reasoning and timing comparison
         jpeg_quality: JPEG encoding quality (1-100)
         max_width: Max width for encoded frames (None=no limit)
         save_video: Whether to record video (webcam only)
@@ -190,6 +192,10 @@ def create_stream_generator(
     Yields:
         SSE event bytes for: started, video_info, samples, segments, finished, etc.
     """
+    
+    # DEBUG: Store all VLM captions and LLM inputs for debugging
+    debug_vlm_captions = []  # List of (timestamp, caption) tuples
+    debug_llm_inputs = []    # List of LLM input prompts
     
     # Normalize classifier source
     classifier_source_norm = (classifier_source or 'llm').lower()
@@ -292,6 +298,10 @@ def create_stream_generator(
                 # VLM inference: single call per frame
                 caption = get_frame_caption(frame, captioner, vlm_prompt)
                 
+                # DEBUG: Store VLM caption
+                debug_vlm_captions.append((elapsed_time, caption))
+                logger.debug(f"[DEBUG_VLM] t={elapsed_time:.2f}s: {caption[:80]}")
+                
                 # Text-based classification: caption → label
                 label, cls_text = per_sample_label_for_source(
                     classifier_source_norm,
@@ -366,6 +376,18 @@ def create_stream_generator(
                     # Check window closure
                     if len(current_window) >= max_samples_per_window:
                         timeline_text = current_window.to_timeline_text()
+                        
+                        # DEBUG: Store LLM input
+                        llm_input_prompt = classify_prompt_template.format(caption=timeline_text, prompt=prompt)
+                        debug_llm_inputs.append({
+                            'time': elapsed_time,
+                            'prompt': llm_input_prompt,
+                            'timeline': timeline_text,
+                            'num_samples': len(current_window.samples)
+                        })
+                        logger.info(f"[DEBUG_LLM_INPUT] Window closed at t={elapsed_time:.2f}s with {len(current_window.samples)} samples")
+                        logger.debug(f"[DEBUG_LLM_INPUT] Timeline: {timeline_text[:200]}")
+                        
                         segments = segment_activities(
                             timeline_text,
                             classify_prompt_template,
@@ -379,7 +401,7 @@ def create_stream_generator(
                             collected_segments.append(seg_event)
                             yield sse_event_fn(seg_event)
                             
-                            # Update samples in segment range
+                            # Update samples in segment range and emit sample_update events
                             segment_label = seg_event.get('label')
                             segment_start = seg_event.get('start_time', 0)
                             segment_end = seg_event.get('end_time', 0)
@@ -389,6 +411,12 @@ def create_stream_generator(
                                 if segment_start <= sample_time <= segment_end:
                                     if segment_label and sample.get('label') is None:
                                         sample['label'] = segment_label
+                                        # Emit sample_update event so frontend can add to idle/work frames
+                                        yield sse_event_fn({
+                                            "stage": "sample_update",
+                                            "frame_index": sample['frame_index'],
+                                            "label": segment_label
+                                        })
                                         if segment_label == 'idle':
                                             collected_idle.append(sample['frame_index'])
                                         else:
@@ -404,6 +432,17 @@ def create_stream_generator(
         # Flush remaining window
         if classifier_source_norm == 'llm' and current_window is not None:
             timeline_text = current_window.to_timeline_text()
+            
+            # DEBUG: Store final LLM input
+            llm_input_prompt = classify_prompt_template.format(caption=timeline_text, prompt=prompt)
+            debug_llm_inputs.append({
+                'time': 'final_flush',
+                'prompt': llm_input_prompt,
+                'timeline': timeline_text,
+                'num_samples': len(current_window.samples)
+            })
+            logger.info(f"[DEBUG_LLM_INPUT] Final window flush with {len(current_window.samples)} samples")
+            
             segments = segment_activities(
                 timeline_text,
                 classify_prompt_template,
@@ -420,6 +459,34 @@ def create_stream_generator(
                     collected_segments.append(seg_event)
                     seen_seg_keys.add(k)
                     yield sse_event_fn(seg_event)
+                    
+                    # Update samples in segment range and emit sample_update events
+                    segment_label = seg_event.get('label')
+                    segment_start = seg_event.get('start_time', 0)
+                    segment_end = seg_event.get('end_time', 0)
+                    
+                    for sample in collected_samples:
+                        sample_time = sample.get('time_sec', 0)
+                        if segment_start <= sample_time <= segment_end:
+                            if segment_label and sample.get('label') is None:
+                                sample['label'] = segment_label
+                                # Emit sample_update event so frontend can add to idle/work frames
+                                yield sse_event_fn({
+                                    "stage": "sample_update",
+                                    "frame_index": sample['frame_index'],
+                                    "label": segment_label
+                                })
+                                if segment_label == 'idle':
+                                    collected_idle.append(sample['frame_index'])
+                                else:
+                                    collected_work.append(sample['frame_index'])
+        
+        # DEBUG: Log summary
+        logger.info(f"[DEBUG_SUMMARY] Total VLM captions: {len(debug_vlm_captions)}")
+        logger.info(f"[DEBUG_SUMMARY] Total LLM inputs: {len(debug_llm_inputs)}")
+        logger.info(f"[DEBUG_SUMMARY] VLM captions: {[(t, c[:40]) for t, c in debug_vlm_captions[:10]]}...")
+        for idx, llm_input in enumerate(debug_llm_inputs):
+            logger.info(f"[DEBUG_SUMMARY] LLM Input #{idx+1} at t={llm_input['time']}: {llm_input['num_samples']} samples, timeline={llm_input['timeline'][:100]}...")
         
         # Cleanup
         if is_webcam:
@@ -461,8 +528,8 @@ def create_stream_generator(
             except Exception:
                 evals = []
             
-            # Update subtask counts
-            if compare_timings and (subtask_id or task_id):
+            # Update subtask counts (if evaluation is enabled)
+            if evaluation_mode != 'none' and (subtask_id or task_id):
                 _update_subtask_counts(
                     subtask_id, task_id, collected_samples, collected_work, fps,
                     evaluation_mode, min_segment_sec, merge_gap_sec,

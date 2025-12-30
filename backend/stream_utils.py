@@ -154,7 +154,7 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
         tolerance = 0.05  # 50ms tolerance for floating point comparison
         segment_captions = [
             c for c in all_captions 
-            # if start_time <= c['t'] <= end_time
+            if start_time - tolerance <= c['t'] <= end_time + tolerance
         ]
         # No need to dedupe again - all_captions is already deduped at entry
         
@@ -178,23 +178,22 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
     seen_ranges = set()
     dup_count = 0
 
-    # for seg in segments:
-    #     start = float(seg['start_time'])
-    #     end = float(seg['end_time'])
-    #     lbl = (seg.get('label') or '').lower()
-    #     # Key with rounded boundaries and label to prevent cross-label collisions
-    #     time_key = (round(start, 2), round(end, 2), lbl)
-    #     if time_key not in seen_ranges:
-    #         deduplicated.append(seg)
-    #         seen_ranges.add(time_key)
-    #     else:
-    #         dup_count += 1
+    for seg in segments:
+        start = float(seg['start_time'])
+        end = float(seg['end_time'])
+        lbl = (seg.get('label') or '').lower()
+        # Key with rounded boundaries and label to prevent cross-label collisions
+        time_key = (round(start, 2), round(end, 2), lbl)
+        if time_key not in seen_ranges:
+            deduplicated.append(seg)
+            seen_ranges.add(time_key)
+        else:
+            dup_count += 1
 
-    # if dup_count > 0:
-    #     logger.debug(f"[PARSE_LLM] Removed {dup_count} duplicate segment(s) in window")
+    if dup_count > 0:
+        logger.info(f"[PARSE_LLM] Removed {dup_count} duplicate segment(s) in window")
 
-    # return deduplicated
-    return segments
+    return deduplicated
 
 
 def merge_segments_with_pending(

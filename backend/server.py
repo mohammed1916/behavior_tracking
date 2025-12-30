@@ -71,7 +71,16 @@ os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 
 # Shared helpers to keep stream endpoints consistent
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('combined'), compare_timings: bool = Query(False), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('none'), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+    """Stream video processing with evaluation modes: 'none', 'timing_only', 'llm_only', or 'combined'.
+    
+    Args:
+        evaluation_mode: How to evaluate subtask completion:
+            - 'none': No subtask evaluation
+            - 'timing_only': Compare work duration against expected duration
+            - 'llm_only': Use LLM reasoning only (ignores timing)
+            - 'combined': Use both LLM reasoning and timing comparison (default)
+    """
     """Stream webcam frames as SSE events with BLIP captioning and optional LLM classification.
     Uses shared streaming generator that supports VLM, BoW, and LLM classifier modes.
     """
@@ -95,7 +104,6 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             classifier_prompt=classifier_prompt,
             subtask_id=subtask_id,
             task_id=task_id,
-            compare_timings=compare_timings,
             evaluation_mode=evaluation_mode,
             jpeg_quality=jpeg_quality,
             max_width=max_width,
@@ -156,7 +164,7 @@ def make_alert_json(message: str, status_code: int = 400):
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), compare_timings: bool = Query(False), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('none'), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -211,8 +219,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 classifier_prompt=classifier_prompt,
                 subtask_id=subtask_id,
                 task_id=task_id,
-                compare_timings=compare_timings,
-                evaluation_mode='combined',
+                evaluation_mode=evaluation_mode,
                 jpeg_quality=80,
                 max_width=None,
                 save_video=False,

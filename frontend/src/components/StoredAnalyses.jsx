@@ -47,8 +47,8 @@ export default function StoredAnalyses({ onView }) {
             <tr>
               <th style={{ textAlign: 'left' }}>Filename</th>
               <th>Model</th>
+              <th>Work / Idle</th>
               <th>Created</th>
-              <th>Duration</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -57,8 +57,16 @@ export default function StoredAnalyses({ onView }) {
               <tr key={a.id} style={{ borderTop: '1px solid var(--panel-border)' }}>
                 <td style={{ padding: '6px 4px' }}>{a.filename}</td>
                 <td style={{ textAlign: 'center' }}>{a.model}</td>
+                <td style={{ textAlign: 'center', fontSize: 12 }}>
+                  <span style={{ color: 'rgba(76, 175, 80, 1)', fontWeight: 'bold' }}>
+                    {(a.work_percentage || 0).toFixed(1)}%
+                  </span>
+                  {' / '}
+                  <span style={{ color: 'rgba(158, 158, 158, 1)', fontWeight: 'bold' }}>
+                    {(a.idle_percentage || 0).toFixed(1)}%
+                  </span>
+                </td>
                 <td style={{ textAlign: 'center' }}>{a.created_at ? new Date(a.created_at).toLocaleString() : ''}</td>
-                <td style={{ textAlign: 'center' }}>{a.duration ? `${Number(a.duration).toFixed(1)}s` : ''}</td>
                 <td style={{ textAlign: 'center' }}>
                   <button onClick={() => onView && onView(a.id)} style={{ marginRight: 8 }}>View</button>
                   <button onClick={() => handleDelete(a.id)}>Delete</button>
