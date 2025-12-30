@@ -168,8 +168,12 @@ function App() {
             if (data.llm_output) {
               analysis.samples[analysis.samples.length - 1].llm_output = data.llm_output;
             }
-            if (data.label === 'idle') analysis.idle_frames.push(data.frame_index);
-            if (data.label === 'work') analysis.work_frames.push(data.frame_index);
+            // Normalize label to lowercase for comparison
+            const normalizedLabel = (data.label || '').toLowerCase().trim();
+            console.log(`Sample received: frame=${data.frame_index}, label="${data.label}" (normalized: "${normalizedLabel}")`);
+            if (normalizedLabel === 'idle') analysis.idle_frames.push(data.frame_index);
+            if (normalizedLabel === 'work') analysis.work_frames.push(data.frame_index);
+            console.log(`Current idle_frames: ${analysis.idle_frames.length}, work_frames: ${analysis.work_frames.length}`);
             setVlmResult({ message: 'streaming', analysis: { ...analysis } });
           } else if (data.stage === 'sample_update') {
             // Handle label updates from LLM segmentation
@@ -178,13 +182,17 @@ function App() {
             if (sampleIdx >= 0) {
               analysis.samples[sampleIdx].label = data.label;
             }
+            // Normalize label to lowercase for comparison
+            const normalizedLabel = (data.label || '').toLowerCase().trim();
+            console.log(`Sample update: frame=${data.frame_index}, label="${data.label}" (normalized: "${normalizedLabel}")`);
             // Add to appropriate frame list
-            if (data.label === 'idle') {
+            if (normalizedLabel === 'idle') {
               analysis.idle_frames.push(data.frame_index);
             }
-            if (data.label === 'work') {
+            if (normalizedLabel === 'work') {
               analysis.work_frames.push(data.frame_index);
             }
+            console.log(`After update - idle_frames: ${analysis.idle_frames.length}, work_frames: ${analysis.work_frames.length}`);
             setVlmResult({ message: 'streaming', analysis: { ...analysis } });
           } else if (data.stage === 'sample_error') {
             analysis.samples.push({ frame_index: data.frame_index, error: data.error });
@@ -832,7 +840,6 @@ function App() {
                         
                       </div>
                     )}
-                    {/* Stored analyses panel is rendered in the left controls now */}
                   </>
                 )}
               </div>
