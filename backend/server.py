@@ -1,25 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import shutil
 import os
 import cv2
 import uuid
-from typing import Optional, Callable
+from typing import Optional
 from fastapi import Query
 import json
 import logging
-import subprocess
-from transformers import pipeline
-import torch
-import sqlite3
-import time
-from PIL import Image
-import numpy as np
-import re
-import base64
-import io
-from datetime import datetime
 import threading
 import backend.rules as rules_mod
 
@@ -35,23 +23,9 @@ app.state.webcam_event = threading.Event()
 
 import backend.llm as llm_mod
 import backend.db as db_mod
-import backend.evidence as evidence_mod
 
 
 import backend.captioner as captioner_mod
-from backend.stream_utils import (
-    normalize_caption_output,
-    call_captioner,
-    build_vlm_prompt_for_source,
-    build_classify_prompt_template,
-    per_sample_label_for_source,
-    merge_and_filter_ranges,
-    compute_sample_interval,
-    encode_frame_for_sse_image,
-    probe_saved_video_info,
-    start_live_recording,
-    parse_llm_segments,
-)
 from backend.stream_processor import create_stream_generator
 
 # Timing/segmenting defaults (tunable)
