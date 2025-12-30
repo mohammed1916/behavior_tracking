@@ -442,16 +442,21 @@ def merge_and_filter_ranges(ranges: List[Dict[str, Any]], min_segment_sec: float
 
 
 def compute_sample_interval(processing_mode: str, sample_interval_sec: Optional[float]) -> float:
-    """Compute sampling interval in seconds given processing mode and optional param."""
-    if (processing_mode or '').strip().lower() == 'every_2s':
+    """Compute sampling interval in seconds given processing mode and optional param.
+    
+    Returns 0 for 'fast' mode to indicate skip custom time-based sampling.
+    Returns 2.0 for 'every_2s' or fallback.
+    Returns provided sample_interval_sec if positive.
+    """
+    mode = (processing_mode or '').strip().lower()
+    if mode == 'fast':
+        return 0  # Signal: use frame-count-based sampling instead
+    if mode == 'every_2s':
         return 2.0
-    try:
-        if sample_interval_sec is not None:
-            v = float(sample_interval_sec)
-            if v > 0:
-                return v
-    except Exception:
-        pass
+    if sample_interval_sec is not None:
+        v = float(sample_interval_sec)
+        if v > 0:
+            return v
     return 2.0
 
 

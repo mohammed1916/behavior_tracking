@@ -42,6 +42,7 @@ function App() {
   const [advMaxWidth, setAdvMaxWidth] = useState('');
   const [advSaveRecording, setAdvSaveRecording] = useState(false);
   const [processingMode, setProcessingMode] = useState('every_2s');
+  const [sampleIntervalSec, setSampleIntervalSec] = useState(2.0);
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
   const [vlmResult, setVlmResult] = useState(null);
@@ -142,6 +143,9 @@ function App() {
       }
       if (processingMode && processingMode !== 'default') {
         url += `&processing_mode=${encodeURIComponent(processingMode)}`;
+      }
+      if (sampleIntervalSec && sampleIntervalSec > 0) {
+        url += `&sample_interval_sec=${encodeURIComponent(sampleIntervalSec)}`;
       }
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
@@ -526,8 +530,13 @@ function App() {
                         <label>Processing Mode:</label>
                         <select value={processingMode} onChange={(e) => setProcessingMode(e.target.value)} style={{ width: '100%' }}>
                           <option value="fast">Fast sampling with mid from total frame count</option>
-                          <option value="every_2s">Sample every 2s</option>
+                          <option value="every_2s">Sample every {sampleIntervalSec.toFixed(2)}s</option>
                         </select>
+                      </div>
+                      <div>
+                        <label>Sample Interval (seconds): {sampleIntervalSec.toFixed(2)}</label>
+                        <input type="range" min={0.5} max={10} step={0.1} value={sampleIntervalSec} onChange={(e) => setSampleIntervalSec(parseFloat(e.target.value) || 2.0)} style={{ width: '100%' }} />
+                        <input type="number" min={0.1} max={60} step={0.5} value={sampleIntervalSec} onChange={(e) => setSampleIntervalSec(parseFloat(e.target.value) || 2.0)} style={{ width: '100%', marginTop: 4 }} placeholder="e.g. 2.0" />
                       </div>
                       <div>
                         <label>JPEG Quality: {advJpegQuality}</label>

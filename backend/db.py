@@ -27,7 +27,9 @@ def calculate_work_idle_stats(samples, duration, fps_hint=None):
             'work_duration_sec': 0.0,
             'idle_duration_sec': 0.0,
             'work_percentage': 0.0,
-            'idle_percentage': 0.0
+            'idle_percentage': 0.0,
+            'unclassified_duration_sec': 0.0,
+            'unclassified_percentage': 0.0
         }
 
     # Fallback duration from samples if missing

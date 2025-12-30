@@ -187,22 +187,23 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             duration = frame_count / (fps if fps > 0 else 30.0)
             
             # Compute frame indices for file-mode processing
-            if sample_interval_sec is not None and sample_interval_sec > 0:
-                try:
-                    step = 2.0 if processing_mode == 'every_2s' else float(sample_interval_sec)
-                    times = []
-                    t = 0.0
-                    while t <= duration:
-                        times.append(t)
-                        t += step
-                    indices = sorted(list({min(frame_count - 1, max(0, int(round(tt * fps)))) for tt in times}))
-                    if not indices:
-                        indices = [0]
-                except Exception as _e_idx:
-                    yield _sse_event({"stage": "debug", "message": f"Sampling indices fallback due to error: {_e_idx}"})
-                    max_samples = min(30, max(1, frame_count))
-                    indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
+            if processing_mode == 'fast':
+                # Fast: sample ~30 frames spread evenly across video
+                max_samples = min(30, max(1, frame_count))
+                indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
+            elif sample_interval_sec is not None and sample_interval_sec > 0:
+                # every_2s or custom interval: sample by time
+                step = float(sample_interval_sec)
+                times = []
+                t = 0.0
+                while t <= duration:
+                    times.append(t)
+                    t += step
+                indices = sorted(list({min(frame_count - 1, max(0, int(round(tt * fps)))) for tt in times}))
+                if not indices:
+                    indices = [0]
             else:
+                # Fallback: sample 30 frames if no mode specified
                 max_samples = min(30, max(1, frame_count))
                 indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
             
