@@ -529,8 +529,9 @@ function App() {
                       <div>
                         <label>Processing Mode:</label>
                         <select value={processingMode} onChange={(e) => setProcessingMode(e.target.value)} style={{ width: '100%' }}>
-                          <option value="fast">Fast sampling with mid from total frame count</option>
+                          <option value="fast">Fast sampling (~30 frames)</option>
                           <option value="every_2s">Sample every {sampleIntervalSec.toFixed(2)}s</option>
+                          <option value="all_frames">All frames (no sampling)</option>
                         </select>
                       </div>
                       <div>

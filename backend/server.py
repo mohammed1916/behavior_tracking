@@ -187,7 +187,10 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
             duration = frame_count / (fps if fps > 0 else 30.0)
             
             # Compute frame indices for file-mode processing
-            if processing_mode == 'fast':
+            if processing_mode == 'all_frames':
+                # All frames: process every frame in the video
+                indices = list(range(frame_count))
+            elif processing_mode == 'fast':
                 # Fast: sample ~30 frames spread evenly across video
                 max_samples = min(30, max(1, frame_count))
                 indices = sorted(list({int(i * frame_count / max_samples) for i in range(max_samples)}))
