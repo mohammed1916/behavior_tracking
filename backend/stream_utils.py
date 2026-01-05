@@ -97,10 +97,30 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
     
     matches = []
     pattern = r'(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*:\s*(\w+)'
+    seen_line_keys = set()
+    skipped_line_count = 0
     for line in segment_lines:
         m = re.match(pattern, line)
         if m:
+            raw_start = m.group(1)
+            raw_end = m.group(2)
+            raw_label = m.group(3)
+            try:
+                key = (round(float(raw_start), 2), round(float(raw_end), 2), raw_label.lower())
+            except Exception:
+                key = None
+            if key is not None and key in seen_line_keys:
+                logger.debug(
+                    f"[PARSE_LLM] Skipping duplicate line (raw): {raw_start}-{raw_end}: {raw_label}"
+                )
+                skipped_line_count += 1
+                continue
+            if key is not None:
+                seen_line_keys.add(key)
             matches.append(m.groups())
+    
+    if skipped_line_count > 0:
+        logger.info(f"[PARSE_LLM] Skipped {skipped_line_count} duplicate line(s) during parsing ({len(matches)} unique lines kept)")
     
     if not matches:
         # Fallback: if LLM output is malformed, create single segment with normalized label
@@ -159,7 +179,6 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
         # No need to dedupe again - all_captions is already deduped at entry
         
         if segment_captions:
-            logger.info(f'[PARSE_LLM] Created segment {start_time:.2f}-{end_time:.2f}: {label} with {len(segment_captions)} captions')
             segments.append({
                 'stage': 'segment',
                 'start_time': start_time,
@@ -187,11 +206,17 @@ def parse_llm_segments(llm_output: str, all_captions: List[Dict], classifier_mod
         if time_key not in seen_ranges:
             deduplicated.append(seg)
             seen_ranges.add(time_key)
+            logger.debug(
+                f"[PARSE_LLM] Created segment {start:.2f}-{end:.2f}: {lbl} "
+                f"with {len(seg.get('captions', []))} captions"
+            )
         else:
             dup_count += 1
 
     if dup_count > 0:
-        logger.info(f"[PARSE_LLM] Removed {dup_count} duplicate segment(s) in window")
+        logger.info(f"[PARSE_LLM] Removed {dup_count} duplicate segment(s) in window ({len(deduplicated)} unique)")
+    elif deduplicated:
+        logger.info(f"[PARSE_LLM] Parsed {len(deduplicated)} unique segment(s) from LLM output")
 
     return deduplicated
 
