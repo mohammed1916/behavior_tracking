@@ -18,7 +18,9 @@ class EvidenceWindow:
 
     def to_timeline(self) -> str:
         lines = []
-        for s in self.samples:
+        # Ensure samples are sorted by time (should already be, but being explicit)
+        sorted_samples = sorted(self.samples, key=lambda s: float(s['t']))
+        for s in sorted_samples:
             lines.append(f"<t={s['t']:.2f}> {s['caption']}")
         return "\n".join(lines)
 

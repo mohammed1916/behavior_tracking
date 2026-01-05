@@ -11,6 +11,11 @@ import SegmentDisplay from './components/SegmentDisplay';
 
 function App() {
 
+  // Helper to detect if error is from server not responding
+  const isServerError = (err) => {
+    return err instanceof TypeError || (err.message && (err.message.includes('Failed to fetch') || err.message.includes('fetch') || err.message.includes('ERR_')));
+  };
+
   // VLM state
   const [vlmModel, setVlmModel] = useState('qwen_local');
   const [vlmAvailableModels, setVlmAvailableModels] = useState([]);
@@ -33,11 +38,11 @@ function App() {
     return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const [evaluationMode, setEvaluationMode] = useState('combined');
-  const [advCompareTimings, setAdvCompareTimings] = useState(true);
   const [advJpegQuality, setAdvJpegQuality] = useState(80);
   const [advMaxWidth, setAdvMaxWidth] = useState('');
   const [advSaveRecording, setAdvSaveRecording] = useState(false);
   const [processingMode, setProcessingMode] = useState('every_2s');
+  const [sampleIntervalSec, setSampleIntervalSec] = useState(2.0);
   const [vlmPrompt, setVlmPrompt] = useState('');
   const [vlmVideo, setVlmVideo] = useState(null);
   const [vlmResult, setVlmResult] = useState(null);
@@ -118,7 +123,7 @@ function App() {
       const fd = new FormData();
       if (vlmVideo) fd.append('video', vlmVideo);
       const up = await fetch('http://localhost:8001/backend/upload_vlm', { method: 'POST', body: fd });
-      if (!up.ok) throw new Error('Upload failed');
+      if (!up.ok) throw new Error('Upload failed: ' + up.status);
       const upj = await up.json();
       const filename = upj.filename;
 
@@ -128,16 +133,19 @@ function App() {
       // include classifier mode and optional prompt so server can use same label mode as live view
       if (vlmClassifierMode) url += `&classifier_mode=${encodeURIComponent(vlmClassifierMode)}`;
       if (vlmClassifierPrompt) url += `&classifier_prompt=${encodeURIComponent(vlmClassifierPrompt)}`;
-      // attach task/subtask selection and compare/eval mode
+      // attach task/subtask selection and evaluation mode
       if (selectedTaskIds && selectedTaskIds.length > 0) {
-        url += `&task_id=${encodeURIComponent(selectedTaskIds.join(','))}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+        url += `&task_id=${encodeURIComponent(selectedTaskIds.join(','))}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else if (advSubtaskId) {
-        url += `&subtask_id=${encodeURIComponent(advSubtaskId)}&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+        url += `&subtask_id=${encodeURIComponent(advSubtaskId)}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       } else {
-        url += `&compare_timings=${advCompareTimings ? 'true' : 'false'}&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
+        url += `&evaluation_mode=${encodeURIComponent(evaluationMode)}`;
       }
       if (processingMode && processingMode !== 'default') {
         url += `&processing_mode=${encodeURIComponent(processingMode)}`;
+      }
+      if (sampleIntervalSec && sampleIntervalSec > 0) {
+        url += `&sample_interval_sec=${encodeURIComponent(sampleIntervalSec)}`;
       }
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
@@ -163,8 +171,31 @@ function App() {
             if (data.llm_output) {
               analysis.samples[analysis.samples.length - 1].llm_output = data.llm_output;
             }
-            if (data.label === 'idle') analysis.idle_frames.push(data.frame_index);
-            if (data.label === 'work') analysis.work_frames.push(data.frame_index);
+            // Normalize label to lowercase for comparison
+            const normalizedLabel = (data.label || '').toLowerCase().trim();
+            console.log(`Sample received: frame=${data.frame_index}, label="${data.label}" (normalized: "${normalizedLabel}")`);
+            if (normalizedLabel === 'idle') analysis.idle_frames.push(data.frame_index);
+            if (normalizedLabel === 'work') analysis.work_frames.push(data.frame_index);
+            console.log(`Current idle_frames: ${analysis.idle_frames.length}, work_frames: ${analysis.work_frames.length}`);
+            setVlmResult({ message: 'streaming', analysis: { ...analysis } });
+          } else if (data.stage === 'sample_update') {
+            // Handle label updates from LLM segmentation
+            // Find the sample and update its label, then update idle/work frames
+            const sampleIdx = analysis.samples.findIndex(s => s.frame_index === data.frame_index);
+            if (sampleIdx >= 0) {
+              analysis.samples[sampleIdx].label = data.label;
+            }
+            // Normalize label to lowercase for comparison
+            const normalizedLabel = (data.label || '').toLowerCase().trim();
+            console.log(`Sample update: frame=${data.frame_index}, label="${data.label}" (normalized: "${normalizedLabel}")`);
+            // Add to appropriate frame list
+            if (normalizedLabel === 'idle') {
+              analysis.idle_frames.push(data.frame_index);
+            }
+            if (normalizedLabel === 'work') {
+              analysis.work_frames.push(data.frame_index);
+            }
+            console.log(`After update - idle_frames: ${analysis.idle_frames.length}, work_frames: ${analysis.work_frames.length}`);
             setVlmResult({ message: 'streaming', analysis: { ...analysis } });
           } else if (data.stage === 'sample_error') {
             analysis.samples.push({ frame_index: data.frame_index, error: data.error });
@@ -202,7 +233,9 @@ function App() {
       };
     } catch (err) {
       console.error('VLM request failed', err);
-      setVlmResult({ error: err.message || String(err) });
+      const isServerDown = err instanceof TypeError || (err.message && err.message.includes('Failed to fetch'));
+      const errorMsg = isServerDown ? 'Server not running or crashed, Please Refresh after some time' : (err.message || String(err));
+      setVlmResult({ error: errorMsg });
       setVlmLoading(false);
     }
   };
@@ -226,6 +259,7 @@ function App() {
       }
     } catch (e) {
       console.warn('Could not fetch local VLM models', e);
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       setVlmAvailableModels([]);
     }
   };
@@ -241,6 +275,7 @@ function App() {
       setStatusLastFetched(Date.now());
     } catch (e) {
       console.warn('Failed to fetch backend status', e);
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
     }
   };
 
@@ -260,6 +295,7 @@ function App() {
         if (!vlmClassifierMode && Object.keys(labelModes || {}).length) setVlmClassifierMode(Object.keys(labelModes)[0]);
       } catch (e) {
         console.warn('Failed to fetch label modes', e);
+        if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       }
     })();
     fetchTasks();
@@ -281,6 +317,7 @@ function App() {
       setPreloadedDevices(modelsMap);
     } catch (e) {
       console.warn('Could not fetch preloaded models', e);
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       setPreloadedDevices({});
     }
   };
@@ -293,6 +330,7 @@ function App() {
       setTasksList(data || []);
     } catch (e) {
       console.warn('Failed to fetch tasks', e);
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       setTasksList([]);
     }
   };
@@ -306,6 +344,7 @@ function App() {
       setSubtasksList(data || []);
     } catch (e) {
       console.warn('Failed to fetch subtasks', e);
+      if (isServerError(e)) alert('Server not running or crashed, Please Refresh after some time');
       setSubtasksList([]);
     }
   };
@@ -333,7 +372,8 @@ function App() {
         fetchPreloadedModels();
       }
     } catch (e) {
-      alert('Load model error: ' + (e.message || String(e)));
+      const msg = isServerError(e) ? 'Server not running or crashed, Please Refresh after some time' : (e.message || String(e));
+      alert('Load model error: ' + msg);
     } finally {
       setModelLoading(false);
     }
@@ -430,7 +470,7 @@ function App() {
                 {vlmAvailableModels.length > 0 ? (
                   vlmAvailableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)
                 ) : (
-                  <option value="">(no local models available)</option>
+                  <option value="">(no local models available, Please try clicking the Refresh models button)</option>
                 )}
               </select>
               <select value={vlmLoadDevice} onChange={(e) => setVlmLoadDevice(e.target.value)} style={{ marginLeft: 8 }} title="Device to load model on">
@@ -477,20 +517,27 @@ function App() {
                       <div>
                         <label>Evaluation Mode:</label>
                         <div>
-                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="combined" checked={evaluationMode==='combined'} onChange={(e) => setEvaluationMode(e.target.value)} /> Combined (LLM + timing)</label>
-                          <label><input type="radio" name="evalmode" value="llm_only" checked={evaluationMode==='llm_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> LLM only</label>
+                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="none" checked={evaluationMode==='none'} onChange={(e) => setEvaluationMode(e.target.value)} /> None</label>
+                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="timing_only" checked={evaluationMode==='timing_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> Timing only</label>
+                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="llm_only" checked={evaluationMode==='llm_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> LLM only</label>
+                          <label><input type="radio" name="evalmode" value="combined" checked={evaluationMode==='combined'} onChange={(e) => setEvaluationMode(e.target.value)} /> Combined (LLM + timing)</label>
                         </div>
-                      </div>
-                      <div>
-                        <label>Compare Timings:</label>
-                        <input type="checkbox" checked={advCompareTimings} onChange={(e) => setAdvCompareTimings(e.target.checked)} />
+                        <small style={{ color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+                          How to evaluate subtask completion: timing compares work duration, LLM uses reasoning, combined uses both.
+                        </small>
                       </div>
                       <div>
                         <label>Processing Mode:</label>
                         <select value={processingMode} onChange={(e) => setProcessingMode(e.target.value)} style={{ width: '100%' }}>
-                          <option value="fast">Fast sampling with mid from total frame count</option>
-                          <option value="every_2s">Sample every 2s</option>
+                          <option value="fast">Fast sampling (~30 frames)</option>
+                          <option value="every_2s">Sample every {sampleIntervalSec.toFixed(2)}s</option>
+                          <option value="all_frames">All frames (no sampling)</option>
                         </select>
+                      </div>
+                      <div>
+                        <label>Sample Interval (seconds): {sampleIntervalSec.toFixed(2)}</label>
+                        <input type="range" min={0.5} max={10} step={0.1} value={sampleIntervalSec} onChange={(e) => setSampleIntervalSec(parseFloat(e.target.value) || 2.0)} style={{ width: '100%' }} />
+                        <input type="number" min={0.1} max={60} step={0.5} value={sampleIntervalSec} onChange={(e) => setSampleIntervalSec(parseFloat(e.target.value) || 2.0)} style={{ width: '100%', marginTop: 4 }} placeholder="e.g. 2.0" />
                       </div>
                       <div>
                         <label>JPEG Quality: {advJpegQuality}</label>
@@ -598,7 +645,7 @@ function App() {
                     classifierPrompt={vlmClassifierPrompt}
                     selectedSubtask={''}
                     subtaskId={advSubtaskId}
-                    compareTimings={advCompareTimings}
+                    evaluationMode={evaluationMode}
                     jpegQuality={advJpegQuality}
                     maxWidth={advMaxWidth}
                     saveRecording={advSaveRecording}
@@ -654,12 +701,98 @@ function App() {
                     {vlmResult.analysis && (vlmResult.analysis.captions || vlmResult.analysis.caption) && (
                       <div><strong>Captions</strong><ul className="captions-list">{vlmResult.analysis.captions ? vlmResult.analysis.captions.map((c, i) => <li key={i}>{c}</li>) : <li>{vlmResult.analysis.caption}</li>}</ul></div>
                     )}
+                    
+                    {/* Temporal Segments - shown during streaming */}
+                    <div style={{ marginTop: 16 }}>
+                      <h5>Temporal Segments (LLM)</h5>
+                      <SegmentDisplay segments={vlmSegments} />
+                    </div>
+
                     {vlmResult.analysis && vlmResult.analysis.video_url && (
                       <div style={{ marginTop: 8 }}>
                         <strong>Preview</strong>
                         <video ref={vlmVideoRef} controls width="100%" style={{ marginTop: 8 }}>
                           <source src={`http://localhost:8001${vlmResult.analysis.video_url}`} type="video/mp4" />
                         </video>
+
+                        {/* Statistical Summary (expand windows to midpoints for continuity) */}
+                        {(() => {
+                          const fps = vlmResult.analysis.fps || 30;
+                          const samples = vlmResult.analysis.samples || [];
+                          const segments = (vlmResult.analysis.segments || []).slice().sort((a, b) => (a.start_time || 0) - (b.start_time || 0));
+                          const idleFrames = vlmResult.analysis.idle_frames || [];
+                          const workFrames = vlmResult.analysis.work_frames || [];
+
+                          // Determine video duration (prefer backend value)
+                          const videoDuration = (() => {
+                            const d = vlmResult.analysis.duration;
+                            if (typeof d === 'number' && d > 0) return d;
+                            const lastSampleTime = samples.length > 0 ? (samples[samples.length - 1].time_sec || 0) : 0;
+                            return lastSampleTime;
+                          })();
+
+                          // If segments are available, expand each window to the midpoint with neighbors to produce continuous coverage
+                          let totalWorkTime = 0;
+                          let totalIdleTime = 0;
+                          if (segments.length > 0 && videoDuration > 0) {
+                            for (let i = 0; i < segments.length; i++) {
+                              const cur = segments[i] || {};
+                              const prev = i > 0 ? segments[i - 1] : null;
+                              const next = i < segments.length - 1 ? segments[i + 1] : null;
+                              const curStart = Number(cur.start_time || 0);
+                              const curEnd = Number(cur.end_time != null ? cur.end_time : curStart);
+                              const prevEnd = prev ? Number(prev.end_time != null ? prev.end_time : prev.start_time || 0) : 0;
+                              const nextStart = next ? Number(next.start_time || curEnd) : Number(videoDuration);
+
+                              // Midpoint expansion: newStart = mid(prevEnd, curStart); newEnd = mid(curEnd, nextStart)
+                              let newStart = (prevEnd + curStart) / 2;
+                              let newEnd = (curEnd + nextStart) / 2;
+                              // Clamp and ensure non-negative, ordered
+                              newStart = Math.max(0, Math.min(newStart, Number(videoDuration)));
+                              newEnd = Math.max(newStart, Math.min(newEnd, Number(videoDuration)));
+                              const dur = Math.max(0, newEnd - newStart);
+                              const lbl = String(cur.label || '').toLowerCase();
+                              if (lbl === 'work') totalWorkTime += dur; else if (lbl === 'idle') totalIdleTime += dur;
+                            }
+                          } else {
+                            // Fallback: derive ranges from frames and compute covered time
+                            const idleRanges = idleFrames.length > 0 ? computeRanges(idleFrames, samples, fps) : [];
+                            const workRanges = workFrames.length > 0 ? computeRanges(workFrames, samples, fps) : [];
+                            totalIdleTime = idleRanges.reduce((sum, r) => sum + Math.max(0, (r.endTime - r.startTime)), 0);
+                            totalWorkTime = workRanges.reduce((sum, r) => sum + Math.max(0, (r.endTime - r.startTime)), 0);
+                          }
+
+                          const formatTime = (seconds) => {
+                            const mins = Math.floor(seconds / 60);
+                            const secs = (seconds % 60).toFixed(2);
+                            return `${mins}m ${secs}s`;
+                          };
+
+                          const idlePercent = videoDuration > 0 ? ((totalIdleTime / videoDuration) * 100).toFixed(1) : 0;
+                          const workPercent = videoDuration > 0 ? ((totalWorkTime / videoDuration) * 100).toFixed(1) : 0;
+
+                          return (
+                            <div style={{ marginTop: 16, padding: 12, backgroundColor: cssVars.cardBg, borderRadius: 4, border: `1px solid ${cssVars.border}` }}>
+                              <h5 style={{ marginTop: 0, marginBottom: 12 }}>Summary</h5>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div style={{ padding: 8, backgroundColor: cssVars.workHighlight || 'rgba(76, 175, 80, 0.1)', borderRadius: 4 }}>
+                                  <div style={{ fontSize: 12, color: cssVars.muted }}>Working Time</div>
+                                  <div style={{ fontSize: 18, fontWeight: 'bold', color: 'rgba(76, 175, 80, 1)' }}>{formatTime(totalWorkTime)}</div>
+                                  <div style={{ fontSize: 11, color: cssVars.muted, marginTop: 4 }}>{workPercent}% of total</div>
+                                </div>
+                                <div style={{ padding: 8, backgroundColor: cssVars.idleHighlight || 'rgba(158, 158, 158, 0.1)', borderRadius: 4 }}>
+                                  <div style={{ fontSize: 12, color: cssVars.muted }}>Idle Time</div>
+                                  <div style={{ fontSize: 18, fontWeight: 'bold', color: 'rgba(158, 158, 158, 1)' }}>{formatTime(totalIdleTime)}</div>
+                                  <div style={{ fontSize: 11, color: cssVars.muted, marginTop: 4 }}>{idlePercent}% of total</div>
+                                </div>
+                              </div>
+                              <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${cssVars.border}`, fontSize: 12 }}>
+                                <span style={{ color: cssVars.muted }}>Total Duration: </span>
+                                <span style={{ fontWeight: 'bold' }}>{formatTime(videoDuration || (totalWorkTime + totalIdleTime))}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
                           <div style={{ flex: 1, textAlign: 'left' }}>
@@ -714,16 +847,9 @@ function App() {
                             ) : (<div style={{ color: cssVars.muted }}>No work frames detected.</div>)}
                           </div>
                         </div>
-
-                        {vlmSegments.length > 0 && (
-                          <div style={{ marginTop: 16 }}>
-                            <h5>Temporal Segments (LLM)</h5>
-                            <SegmentDisplay segments={vlmSegments} />
-                          </div>
-                        )}
+                        
                       </div>
                     )}
-                    {/* Stored analyses panel is rendered in the left controls now */}
                   </>
                 )}
               </div>

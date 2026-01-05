@@ -57,7 +57,9 @@ def collect_sse_events(response_lines):
             buf += line + '\n'
     return events
 
-
+"""
+python -m pytest backend/tests/streaming/test_e2e_vlm_stream.py::test_vlm_to_llm_aggregation_e2e -xvs 2>&1 | tail -150
+"""
 @pytest.mark.timeout(60)
 def test_vlm_local_stream_no_llm(tmp_path, monkeypatch):
     """Test VLM-only mode (no LLM): no segment events should be emitted."""
@@ -81,7 +83,8 @@ def test_vlm_local_stream_no_llm(tmp_path, monkeypatch):
     monkeypatch.setattr(server, 'get_captioner_for_model', lambda model=None, device_override=None: DummyCaptioner(device='cpu'))
 
     with open(sample, 'rb') as fh:
-        files = {'video': ('assembly_idle.mp4', fh, 'video/mp4')}
+        # files = {'video': ('assembly_idle.mp4', fh, 'video/mp4')}
+        files = {'video': ('wire.mp4', fh, 'video/mp4')}
         resp = client.post('/backend/upload_vlm', files=files)
     assert resp.status_code == 200, resp.text
     filename = resp.json().get('filename')
@@ -114,10 +117,10 @@ def test_vlm_to_llm_aggregation_e2e(tmp_path, monkeypatch):
     test_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(test_dir)))
     candidates = [
-        'data/assembly_idle.mp4',
-        'data/assembly_drone/assembly_drone_240_144.mp4',
         'data/assembly_drone/wire.mp4',
     ]
+        # 'data/assembly_idle.mp4',
+        # 'data/assembly_drone/assembly_drone_240_144.mp4',
     sample = None
     for cand in candidates:
         full_path = os.path.join(repo_root, cand)
@@ -130,7 +133,8 @@ def test_vlm_to_llm_aggregation_e2e(tmp_path, monkeypatch):
     monkeypatch.setattr(server, 'get_captioner_for_model', lambda model=None, device_override=None: DummyCaptioner(device='cpu'))
 
     with open(sample, 'rb') as fh:
-        files = {'video': ('assembly_idle.mp4', fh, 'video/mp4')}
+        # files = {'video': ('assembly_idle.mp4', fh, 'video/mp4')}
+        files = {'video': ('wire.mp4', fh, 'video/mp4')}
         resp = client.post('/backend/upload_vlm', files=files)
     assert resp.status_code == 200, resp.text
     filename = resp.json().get('filename')

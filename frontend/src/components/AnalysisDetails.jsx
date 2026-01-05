@@ -49,6 +49,63 @@ export default function AnalysisDetails({ analysisId, onClose }) {
           <div><strong>Filename:</strong> {analysis.filename}</div>
           <div><strong>Model:</strong> {analysis.model}</div>
           <div><strong>Created:</strong> {analysis.created_at}</div>
+          
+          {/* Work/Idle Statistics */}
+          {(analysis.duration !== undefined && analysis.duration !== null) || analysis.work_duration_sec || analysis.idle_duration_sec ? (
+            <div style={{ marginTop: 12, padding: 12, backgroundColor: 'var(--card-bg)', borderRadius: 4, border: '1px solid var(--panel-border)' }}>
+              <h5 style={{ marginTop: 0, marginBottom: 12 }}>Summary</h5>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <div style={{ padding: 8, backgroundColor: 'rgba(76, 175, 80, 0.1)', borderRadius: 4 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>Working Time</div>
+                  <div style={{ fontSize: 18, fontWeight: 'bold', color: 'rgba(76, 175, 80, 1)' }}>
+                    {(() => {
+                      const mins = Math.floor((analysis.work_duration_sec || 0) / 60);
+                      const secs = ((analysis.work_duration_sec || 0) % 60).toFixed(2);
+                      return `${mins}m ${secs}s`;
+                    })()}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{(analysis.work_percentage || 0).toFixed(1)}% of total</div>
+                </div>
+                <div style={{ padding: 8, backgroundColor: 'rgba(158, 158, 158, 0.1)', borderRadius: 4 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>Idle Time</div>
+                  <div style={{ fontSize: 18, fontWeight: 'bold', color: 'rgba(158, 158, 158, 1)' }}>
+                    {(() => {
+                      const mins = Math.floor((analysis.idle_duration_sec || 0) / 60);
+                      const secs = ((analysis.idle_duration_sec || 0) % 60).toFixed(2);
+                      return `${mins}m ${secs}s`;
+                    })()}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{(analysis.idle_percentage || 0).toFixed(1)}% of total</div>
+                </div>
+                <div style={{ padding: 8, backgroundColor: 'rgba(255, 152, 0, 0.1)', borderRadius: 4 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>Unclassified</div>
+                  <div style={{ fontSize: 18, fontWeight: 'bold', color: 'rgba(255, 152, 0, 1)' }}>
+                    {(() => {
+                      const mins = Math.floor((analysis.unclassified_duration_sec || 0) / 60);
+                      const secs = ((analysis.unclassified_duration_sec || 0) % 60).toFixed(2);
+                      return `${mins}m ${secs}s`;
+                    })()}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{(analysis.unclassified_percentage || 0).toFixed(1)}% of total</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>(Transition from Idle to work/work to idle)</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--panel-border)', fontSize: 12 }}>
+                <span style={{ color: 'var(--muted)' }}>Total Duration: </span>
+                <span style={{ fontWeight: 'bold' }}>
+                  {(() => {
+                    const total = (analysis.duration !== undefined && analysis.duration !== null)
+                      ? analysis.duration
+                      : (analysis.work_duration_sec || 0) + (analysis.idle_duration_sec || 0);
+                    const mins = Math.floor((total || 0) / 60);
+                    const secs = ((total || 0) % 60).toFixed(2);
+                    return `${mins}m ${secs}s`;
+                  })()}
+                </span>
+              </div>
+            </div>
+          ) : null}
+          
           <div style={{ marginTop: 8 }}>
             <strong>Video:</strong>
             {analysis.video_url ? (

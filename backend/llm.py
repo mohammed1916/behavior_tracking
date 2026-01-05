@@ -40,6 +40,99 @@ RULES_PROMPT_TEMPLATE = """Rules:
 Answer:
 """
 
+# Text-only LLM prompts (for analyzing TEXT descriptions, not images)
+# Used when classifier_source='llm' - LLM receives aggregated text captions with temporal context
+LLM_SEGMENT_TIMELINE_BINARY = """
+You are analyzing a sequence of timestamped visual-language model (VLM) captions.
+Each timestamp represents a single observation frame, not a true time interval.
+
+Task:
+Group consecutive observations into continuous activity segments using binary activity labels.
+
+Labels:
+- work: Person actively engaged in hands-on tasks (e.g., electronics work, assembly, using tools)
+- idle: Person not engaged in any task; standing or sitting without interaction
+
+Segmentation rules:
+- Treat each <t=...> entry as one observation.
+- Assign exactly one label (work or idle) to each observation.
+- If consecutive observations receive the same label, merge them into a single segment.
+- The segment start time is the timestamp of the first observation in the merged group.
+- The segment end time is the timestamp of the last observation in the merged group.
+- Do NOT infer or invent durations beyond the given timestamps.
+
+Output format:
+[start_time]-[end_time]: label
+
+Example Input:
+<t=0.50> ...VLM captions...
+<t=2.30> ...VLM captions...
+<t=3.10> ...VLM captions...
+<t=5.20> ...VLM captions...
+
+Dummy timestamp based Example Output:
+0.50-2.30: work
+3.10-3.10: idle
+5.20-5.20: work
+
+Instructions:
+1. Process observations in chronological order.
+2. Detect activity changes based on semantic meaning, not wording differences.
+3. Merge consecutive observations with identical labels.
+4. Use only the timestamps provided in the input timeline.
+
+Timeline to analyze based on above example format with real timestamps:
+{caption}
+
+Answer:
+"""
+
+LLM_SEGMENT_TIMELINE_MULTI = """
+You are analyzing a sequence of timestamped visual-language model (VLM) captions.
+Each timestamp represents a single observation frame, not a true time interval.
+
+Task:
+Group consecutive observations into continuous activity segments based on activity consistency.
+
+Labels:
+- idle: Standing or sitting without performing a task
+- using_phone: Holding or interacting with a phone or camera-like device
+- assembling_drone: Working with tools or assembling drone components
+- unknown: Activity cannot be confidently identified
+
+Segmentation rules:
+- Treat each <t=...> entry as a single observation.
+- Assign one label to each observation.
+- If consecutive observations receive the same label, merge them into one segment.
+- The segment start time is the timestamp of the first observation in the merged group.
+- The segment end time is the timestamp of the last observation in the merged group.
+- Do NOT invent new timestamps or durations.
+
+Output format:
+[start_time]-[end_time]: label
+
+Example Input:
+<t=8.57> ...VLM captions...
+<t=10.70> ...VLM captions...
+<t=12.83> ...VLM captions...
+<t=15.00> ...VLM captions...
+
+Dummy timestamp based Example Output:
+8.57-15.00: idle
+
+Instructions:
+1. Process the observations in chronological order.
+2. Detect activity changes based on semantics, not wording differences.
+3. Merge consecutive observations with the same label.
+4. Use only the timestamps provided in the input.
+
+Timeline to analyze based on above example format with real timestamps:
+{caption}
+
+Answer:
+"""
+
+
 
 
 # # Prompt for duration estimation: ask the LLM to return a single integer (seconds)
@@ -76,7 +169,7 @@ def get_local_text_llm():
                     out_bytes = p.stdout or b''
                     try:
                         out = out_bytes.decode('utf-8', errors='replace').strip()
-                        print('Ollama decoded output: %s', out)
+                        # print('Ollama decoded output: %s', out)
                     except Exception:
                         print('Ollama output decoding failed, using raw bytes string')
                         out = str(out_bytes)
