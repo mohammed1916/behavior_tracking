@@ -71,7 +71,7 @@ os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 
 # Shared helpers to keep stream endpoints consistent
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('none'), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('none'), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame'), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False)):
     """Stream video processing with evaluation modes: 'none', 'timing_only', 'llm_only', or 'combined'.
     
     Args:
@@ -116,6 +116,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             processed_dir=PROCESSED_DIR,
             min_segment_sec=MIN_SEGMENT_SEC,
             merge_gap_sec=MERGE_GAP_SEC,
+            enable_mediapipe=enable_mediapipe,
+            enable_yolo=enable_yolo,
+            detector_fusion_mode='cascade',  # TODO: make configurable via API
         )
         
     return StreamingResponse(gen(), media_type='text/event-stream')
@@ -237,6 +240,9 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 merge_gap_sec=MERGE_GAP_SEC,
                 video_url=f"/backend/vlm_video/{filename}",
                 analysis_filename=filename,
+                enable_mediapipe=enable_mediapipe,
+                enable_yolo=enable_yolo,
+                detector_fusion_mode='cascade',  # TODO: make configurable via API
             )
         except Exception as e:
             yield _sse_event({"stage": "alert", "message": str(e)})

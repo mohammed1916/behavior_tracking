@@ -153,6 +153,9 @@ def create_stream_generator(
     duration_override: Optional[float] = None,
     video_url: Optional[str] = None,  # For file mode: e.g. /backend/vlm_video/filename
     analysis_filename: Optional[str] = None,  # For file mode: uploaded filename
+    enable_mediapipe: bool = False,  # Use MediaPipe for motion detection
+    enable_yolo: bool = False,  # Use YOLO for object detection
+    detector_fusion_mode: str = 'cascade',  # How to combine YOLO + MediaPipe
 ) -> Generator[bytes, None, None]:
     """
     Shared streaming generator for webcam and file-based processing.
@@ -280,6 +283,42 @@ def create_stream_generator(
             
             frame_source = _file_frame_generator(video_source, frame_indices)
         
+        # Initialize detectors if enabled
+        detector = None
+        if enable_mediapipe or enable_yolo:
+            try:
+                if enable_mediapipe and enable_yolo:
+                    # Use fusion detector combining both
+                    from backend.detectors.fusion_detector import FusionDetector
+                    detector = FusionDetector(
+                        yolo_model='yolov8n',
+                        mediapipe_confidence=0.5,
+                        yolo_confidence=0.5,
+                        strategy=detector_fusion_mode,
+                        device='cuda:0',  # TODO: make configurable
+                    )
+                    logger.info(f"Initialized fusion detector with strategy={detector_fusion_mode}")
+                elif enable_yolo:
+                    # Use YOLO only
+                    from backend.detectors.yolo_detector import YOLODetector
+                    detector = YOLODetector(
+                        model='yolov8n',
+                        confidence_threshold=0.5,
+                        device='cuda:0',  # TODO: make configurable
+                    )
+                    logger.info("Initialized YOLO detector")
+                elif enable_mediapipe:
+                    # Use MediaPipe only
+                    from backend.detectors.mediapipe_detector import MediaPipeDetector
+                    detector = MediaPipeDetector(
+                        confidence_threshold=0.5,
+                        enable_visualization=False,
+                    )
+                    logger.info("Initialized MediaPipe detector")
+            except Exception as e:
+                logger.warning(f"Failed to initialize detector: {e}. Continuing without detector.")
+                detector = None
+        
         # Process frames
         for frame_data in frame_source:
             if is_webcam:
@@ -301,6 +340,21 @@ def create_stream_generator(
                 # DEBUG: Store VLM caption
                 debug_vlm_captions.append((elapsed_time, caption))
                 logger.debug(f"[DEBUG_VLM] t={elapsed_time:.2f}s: {caption[:80]}")
+                
+                # Detector analysis (optional, for activity classification context)
+                detector_info = None
+                if detector:
+                    try:
+                        detector_output = detector.process_frame(frame)
+                        detector_info = {
+                            'detector_label': detector_output.label,
+                            'detector_confidence': detector_output.confidence,
+                            'detector_metadata': detector_output.metadata,
+                        }
+                        logger.debug(f"[DETECTOR] t={elapsed_time:.2f}s: {detector_output.label} (conf={detector_output.confidence:.2f})")
+                    except Exception as e:
+                        logger.warning(f"Detector error at frame {frame_counter}: {e}")
+                        detector_info = {'detector_error': str(e)}
                 
                 # Text-based classification: caption → label
                 label, cls_text = per_sample_label_for_source(
@@ -339,6 +393,8 @@ def create_stream_generator(
                 }
                 if subtask_overrun is not None:
                     payload['subtask_overrun'] = subtask_overrun
+                if detector_info:
+                    payload['detector'] = detector_info
                 
                 # Encode image if requested
                 if is_webcam and jpeg_quality:
@@ -554,6 +610,14 @@ def create_stream_generator(
         yield sse_event_fn({"stage": "alert", "message": str(e)})
     
     finally:
+        # Cleanup detector
+        if detector:
+            try:
+                detector.close()
+                logger.info("Detector cleaned up")
+            except Exception as e:
+                logger.warning(f"Error closing detector: {e}")
+        
         yield sse_event_fn({"stage": "finished", "message": "processing complete"})
         video_source.release()
 
