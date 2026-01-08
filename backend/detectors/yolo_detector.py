@@ -21,7 +21,7 @@ class YOLODetector(DetectorBase):
     
     # Objects that indicate work activity
     WORK_INDICATORS = {
-        'laptop', 'keyboard', 'mouse', 'phone', 'book',
+        'laptop', 'keyboard', 'mouse', 'phone', 'book', 
         'pen', 'pencil', 'tool', 'wrench', 'hammer',
         'screwdriver', 'scissors', 'cup', 'bottle'
     }
@@ -78,12 +78,15 @@ class YOLODetector(DetectorBase):
     
     def process_frame(self, frame) -> DetectorOutput:
         """
-        Analyze frame for work activity using object detection.
+        Analyze frame for context (presence of tools/objects).
         
-        Heuristic:
-        - Presence of work tools/objects = work
-        - No tools detected + person present = idle
-        - No detections = unknown
+        NOTE: YOLO provides CONTEXT ONLY, not primary activity label.
+        The fusion engine uses this as supporting signal:
+        - Motion (MediaPipe) = primary signal
+        - Tool presence (YOLO) = context/confirmation signal
+        
+        Always returns 'context' label - fusion engine makes final decision.
+        Metadata contains detected work objects for cascade decision tree.
         """
         self.frame_count += 1
         
@@ -93,9 +96,13 @@ class YOLODetector(DetectorBase):
             
             if not results:
                 return DetectorOutput(
-                    label='unknown',
+                    label='context',
                     confidence=0.0,
-                    metadata={'error': 'No results from YOLO'}
+                    metadata={
+                        'error': 'No results from YOLO',
+                        'work_objects_detected': False,
+                        'detected_objects': {}
+                    }
                 )
             
             result = results[0]
@@ -118,39 +125,33 @@ class YOLODetector(DetectorBase):
             # Cache for temporal consistency
             self.last_detections = detected_objects
             
-            # Decision logic: check for work indicators
+            # Check for work indicators (tools/equipment in frame)
             work_objects = set(detected_objects.keys()) & self.WORK_INDICATORS
-            idle_only = set(detected_objects.keys()) & self.IDLE_INDICATORS
+            has_work_tools = len(work_objects) > 0
             
-            is_working = len(work_objects) > 0
-            decision_confidence = 0.0
-            
-            if is_working:
-                # Count work objects and average confidence
+            # Calculate confidence of tool presence
+            tool_confidence = 0.0
+            if has_work_tools:
                 work_confs = []
                 for obj in work_objects:
                     work_confs.extend([d['confidence'] for d in detected_objects[obj]])
-                decision_confidence = sum(work_confs) / len(work_confs) if work_confs else 0.5
-            elif idle_only and not is_working:
-                # Person present but no tools = idle
-                decision_confidence = 0.6
-            else:
-                # No detections
-                decision_confidence = 0.0
-            
-            label = 'work' if is_working else ('idle' if idle_only else 'unknown')
+                tool_confidence = sum(work_confs) / len(work_confs) if work_confs else 0.5
             
             metadata = {
-                'detected_objects': {k: len(v) for k, v in detected_objects.items()},
+                'work_objects_detected': has_work_tools,
                 'work_objects': list(work_objects),
+                'work_object_count': len(work_objects),
+                'detected_objects': {k: len(v) for k, v in detected_objects.items()},
+                'tool_confidence': tool_confidence,
                 'total_detections': len(result.boxes),
                 'device': str(self.device),
                 'model': self.model.model_name if hasattr(self.model, 'model_name') else 'yolo',
             }
             
+            # Return context signal only - fusion engine decides work/idle
             return DetectorOutput(
-                label=label,
-                confidence=decision_confidence,
+                label='context',
+                confidence=tool_confidence,
                 metadata=metadata,
                 raw_output={'boxes': result.boxes, 'names': result.names}
             )
@@ -158,9 +159,13 @@ class YOLODetector(DetectorBase):
         except Exception as e:
             logger.warning(f"YOLO detection error: {e}")
             return DetectorOutput(
-                label='unknown',
+                label='context',
                 confidence=0.0,
-                metadata={'error': str(e)}
+                metadata={
+                    'error': str(e),
+                    'work_objects_detected': False,
+                    'detected_objects': {}
+                }
             )
     
     def close(self):
