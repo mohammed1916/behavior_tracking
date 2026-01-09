@@ -56,6 +56,10 @@ function App() {
   const [viewAnalysisId, setViewAnalysisId] = useState(null);
   const [enableMediapipe, setEnableMediapipe] = useState(false);
   const [enableYolo, setEnableYolo] = useState(false);
+  const [latestStoredAnalysisId, setLatestStoredAnalysisId] = useState(null);
+  const [showOverlayYolo, setShowOverlayYolo] = useState(false);
+  const [showOverlayMediapipe, setShowOverlayMediapipe] = useState(false);
+  const [showOverlayInfo, setShowOverlayInfo] = useState(true);
   const vlmVideoRef = useRef(null);
   const pauseTimerRef = useRef(null);
 
@@ -117,6 +121,9 @@ function App() {
     setVlmLoading(true);
     setVlmResult(null);
     setVlmSegments([]);
+    setLatestStoredAnalysisId(null);
+    setShowOverlayYolo(false);
+    setShowOverlayMediapipe(false);
 
     try {
       // upload first
@@ -208,6 +215,7 @@ function App() {
             setVlmStream(null);
             // If server saved analysis and returned stored id, surface link
             if (data.stored_analysis_id) {
+              setLatestStoredAnalysisId(data.stored_analysis_id);
               setViewAnalysisId(data.stored_analysis_id);
               setActiveView('stored');
             }
@@ -711,8 +719,44 @@ function App() {
                     {vlmResult.analysis && vlmResult.analysis.video_url && (
                       <div style={{ marginTop: 8 }}>
                         <strong>Preview</strong>
-                        <video ref={vlmVideoRef} controls width="100%" style={{ marginTop: 8 }}>
-                          <source src={`http://localhost:8001${vlmResult.analysis.video_url}`} type="video/mp4" />
+                        {latestStoredAnalysisId ? (
+                          <div style={{ marginTop: 6, padding: 8, border: '1px solid var(--panel-border)', borderRadius: 6, background: 'var(--card-bg)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <input type="checkbox" checked={showOverlayYolo} onChange={(e) => setShowOverlayYolo(e.target.checked)} />
+                                <span>YOLO overlay</span>
+                              </label>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <input type="checkbox" checked={showOverlayMediapipe} onChange={(e) => setShowOverlayMediapipe(e.target.checked)} />
+                                <span>MediaPipe overlay</span>
+                              </label>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <input type="checkbox" checked={showOverlayInfo} onChange={(e) => setShowOverlayInfo(e.target.checked)} />
+                                <span>Info text</span>
+                              </label>
+                              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Turn on to view detector overlays from this run.</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 6, padding: 6, background: 'var(--card-bg)', borderRadius: 6, border: '1px dashed var(--panel-border)', color: 'var(--muted)', fontSize: 12 }}>
+                            Overlays available after a stored analysis is created (enable YOLO/MediaPipe and let the run finish).
+                          </div>
+                        )}
+                        <video
+                          ref={vlmVideoRef}
+                          controls
+                          width="100%"
+                          style={{ marginTop: 8 }}
+                          key={`${vlmResult.analysis.video_url}-${showOverlayYolo}-${showOverlayMediapipe}-${showOverlayInfo}`}
+                        >
+                          <source
+                            src={
+                              latestStoredAnalysisId && (showOverlayYolo || showOverlayMediapipe || showOverlayInfo)
+                                ? `http://localhost:8001/backend/analysis/${latestStoredAnalysisId}/video_overlay?show_yolo=${showOverlayYolo}&show_mediapipe=${showOverlayMediapipe}&show_info=${showOverlayInfo}`
+                                : `http://localhost:8001${vlmResult.analysis.video_url}`
+                            }
+                            type="video/mp4"
+                          />
                         </video>
 
                         {/* Statistical Summary (expand windows to midpoints for continuity) */}

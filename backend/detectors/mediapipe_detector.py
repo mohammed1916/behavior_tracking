@@ -65,12 +65,41 @@ class MediaPipeDetector(DetectorBase):
             
             label = 'work' if is_working and decision_confidence > self.confidence_threshold else 'idle'
             
+            # Extract landmark coordinates for visualization
+            hand_landmarks_list = []
+            if hand_results.multi_hand_landmarks:
+                for hand_landmarks in hand_results.multi_hand_landmarks:
+                    landmarks = []
+                    for lm in hand_landmarks.landmark:
+                        landmarks.append({
+                            'x': float(lm.x),
+                            'y': float(lm.y),
+                            'z': float(lm.z)
+                        })
+                    hand_landmarks_list.append(landmarks)
+            
+            pose_landmarks_list = []
+            if pose_results.pose_landmarks:
+                landmarks = []
+                for lm in pose_results.pose_landmarks.landmark:
+                    landmarks.append({
+                        'x': float(lm.x),
+                        'y': float(lm.y),
+                        'z': float(lm.z),
+                        'visibility': float(lm.visibility) if hasattr(lm, 'visibility') else 1.0
+                    })
+                pose_landmarks_list = landmarks
+            
             metadata = {
                 'hand_velocity': float(hand_velocity),
                 'hand_regions': int(hand_motion_regions),
                 'pose_activity': str(pose_activity),
                 'hands_detected': hand_results.multi_hand_landmarks is not None,
                 'pose_detected': pose_results.pose_landmarks is not None,
+                'confidence_threshold': self.confidence_threshold,
+                # Store keypoints for visualization
+                'hand_landmarks': hand_landmarks_list,
+                'pose_landmarks': pose_landmarks_list,
             }
             
             return DetectorOutput(

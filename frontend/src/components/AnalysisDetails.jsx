@@ -6,6 +6,12 @@ export default function AnalysisDetails({ analysisId, onClose }) {
   const [error, setError] = useState(null);
   const videoRef = useRef(null);
   const pauseTimerRef = useRef(null);
+  
+  // Visualization toggles
+  const [showYolo, setShowYolo] = useState(false);
+  const [showMediapipe, setShowMediapipe] = useState(false);
+  const [showInfo, setShowInfo] = useState(true);
+  const [hasDetectorData, setHasDetectorData] = useState(false);
 
   function playRange(startSec, endSec) {
     const v = videoRef.current;
@@ -26,7 +32,12 @@ export default function AnalysisDetails({ analysisId, onClose }) {
         if (!r.ok) throw new Error(await r.text());
         return r.json();
       })
-      .then((data) => setAnalysis(data))
+      .then((data) => {
+        setAnalysis(data);
+        // Check if any samples have detector metadata
+        const hasData = (data.samples || []).some(s => s.detector_metadata);
+        setHasDetectorData(hasData);
+      })
       .catch((e) => setError(e.message || String(e)))
       .finally(() => setLoading(false));
   }, [analysisId]);
@@ -111,9 +122,55 @@ export default function AnalysisDetails({ analysisId, onClose }) {
             {analysis.video_url ? (
               <div style={{ marginTop: 6 }}>
                 <a href={`http://localhost:8001${analysis.video_url}`} target="_blank" rel="noreferrer">Open video</a>
+                
+                {/* Detector Visualization Controls */}
+                {hasDetectorData && (
+                  <div style={{ marginTop: 8, padding: 8, backgroundColor: 'var(--card-bg)', borderRadius: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: 14 }}>Detector Overlays:</strong>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={showYolo}
+                          onChange={(e) => setShowYolo(e.target.checked)}
+                        />
+                        <span style={{ fontSize: 13 }}>YOLO (Objects)</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={showMediapipe}
+                          onChange={(e) => setShowMediapipe(e.target.checked)}
+                        />
+                        <span style={{ fontSize: 13 }}>MediaPipe (Pose/Hands)</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={showInfo}
+                          onChange={(e) => setShowInfo(e.target.checked)}
+                        />
+                        <span style={{ fontSize: 13 }}>Info Text</span>
+                      </label>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                      Toggle overlays to see YOLO detections, MediaPipe keypoints, thresholds, and decision info
+                    </div>
+                  </div>
+                )}
+                
                 <div style={{ marginTop: 8 }}>
-                  <video ref={videoRef} controls width="100%">
-                    <source src={`http://localhost:8001${analysis.video_url}`} />
+                  <video 
+                    ref={videoRef} 
+                    controls 
+                    width="100%" 
+                    key={`${showYolo}-${showMediapipe}-${showInfo}`}
+                  >
+                    <source src={
+                      (showYolo || showMediapipe) && hasDetectorData
+                        ? `http://localhost:8001/backend/analysis/${analysisId}/video_overlay?show_yolo=${showYolo}&show_mediapipe=${showMediapipe}&show_info=${showInfo}`
+                        : `http://localhost:8001${analysis.video_url}`
+                    } />
                   </video>
 
                   <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>

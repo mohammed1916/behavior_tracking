@@ -407,7 +407,7 @@ def create_stream_generator(
                 
                 yield sse_event_fn(payload)
                 
-                # Collect sample
+                # Collect sample (include detector metadata for visualization later)
                 sample = {
                     'frame_index': frame_counter,
                     'time_sec': elapsed_time,
@@ -415,6 +415,22 @@ def create_stream_generator(
                     'label': label,
                     'llm_output': cls_text,
                 }
+                
+                # Serialize detector data for later visualization
+                if detector_info:
+                    # Store raw detector output for visualization overlays
+                    metadata_for_storage = {}
+                    if 'detector_metadata' in detector_info:
+                        metadata_for_storage = detector_info['detector_metadata'].copy()
+                    metadata_for_storage['detector_label'] = detector_info.get('detector_label')
+                    metadata_for_storage['detector_confidence'] = detector_info.get('detector_confidence')
+                    
+                    # Extract visualization-ready data from raw output
+                    if detector and hasattr(detector, 'name'):
+                        metadata_for_storage['detector_type'] = detector.name
+                    
+                    sample['detector_metadata'] = metadata_for_storage
+                
                 collected_samples.append(sample)
                 if label == 'work':
                     collected_work.append(frame_counter)

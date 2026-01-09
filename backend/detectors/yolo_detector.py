@@ -146,6 +146,9 @@ class YOLODetector(DetectorBase):
                 'total_detections': len(result.boxes),
                 'device': str(self.device),
                 'model': self.model.model_name if hasattr(self.model, 'model_name') else 'yolo',
+                # Store full detections for visualization
+                'detections': detected_objects,  # Full bbox info with coordinates
+                'confidence_threshold': self.confidence_threshold,
             }
             
             # Return context signal only - fusion engine decides work/idle

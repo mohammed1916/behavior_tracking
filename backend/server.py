@@ -258,6 +258,92 @@ async def get_vlm_video(filename: str):
     return make_alert_json('File not found', status_code=404)
 
 
+@app.get("/backend/analysis/{analysis_id}/video_overlay")
+async def get_analysis_video_overlay(
+    analysis_id: str,
+    show_yolo: bool = Query(True),
+    show_mediapipe: bool = Query(True),
+    show_info: bool = Query(True)
+):
+    """Generate and stream video with detector overlays.
+    
+    Args:
+        analysis_id: Analysis ID
+        show_yolo: Whether to show YOLO bounding boxes
+        show_mediapipe: Whether to show MediaPipe keypoints
+        show_info: Whether to show info text overlay
+    
+    Returns:
+        Annotated video file
+    """
+    import tempfile
+    import backend.visualization as viz_mod
+    
+    # Get analysis data
+    analysis = db_mod.get_analysis_from_db(analysis_id)
+    if not analysis:
+        return make_alert_json('Analysis not found', status_code=404)
+    
+    video_url = analysis.get('video_url')
+    if not video_url:
+        return make_alert_json('No video available for this analysis', status_code=404)
+    
+    # Get source video path
+    if video_url.startswith('/backend/vlm_video/'):
+        filename = video_url.split('/')[-1]
+        source_video_path = os.path.join(VLM_UPLOAD_DIR, filename)
+    else:
+        return make_alert_json('Unsupported video source', status_code=400)
+    
+    if not os.path.exists(source_video_path):
+        return make_alert_json('Source video not found', status_code=404)
+    
+    # Check if any samples have detector metadata
+    samples = analysis.get('samples', [])
+    has_detector_data = any(
+        s.get('detector_metadata') for s in samples
+    )
+    
+    if not has_detector_data:
+        return make_alert_json(
+            'No detector data available. Enable YOLO/MediaPipe during analysis.',
+            status_code=404
+        )
+    
+    # Create temporary annotated video
+    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
+        output_path = tmp_file.name
+    
+    try:
+        success = viz_mod.create_annotated_video(
+            source_video_path,
+            output_path,
+            samples,
+            show_yolo=show_yolo,
+            show_mediapipe=show_mediapipe,
+            show_info=show_info
+        )
+        
+        if not success:
+            return make_alert_json('Failed to create annotated video', status_code=500)
+        
+        # Stream the annotated video
+        return FileResponse(
+            output_path,
+            media_type="video/mp4",
+            filename=f"annotated_{analysis_id}.mp4",
+            background=None  # Keep file until response is sent
+        )
+    except Exception as e:
+        module_logger.error(f"Error creating overlay video: {e}")
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except:
+                pass
+        return make_alert_json(f'Error: {str(e)}', status_code=500)
+
+
 @app.get("/backend/vlm_local_models")
 async def vlm_local_models():
     """Return the list of candidate local VLM/image-captioning models without
