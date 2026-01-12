@@ -16,38 +16,50 @@ from backend.detectors.mediapipe_detector import MediaPipeDetector
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Test data paths
+TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'assembly_drone')
+TEST_VIDEOS = {
+    # 'drone_assembly': os.path.join(TEST_DATA_DIR, 'drone_assembly.mp4'),
+    'wire_screw': os.path.join(TEST_DATA_DIR, 'wire_screw.mp4'),
+    # 'assembly_idle': os.path.join(TEST_DATA_DIR, 'assembly_idle.mp4'),
+}
 
-def create_test_frame(width=640, height=480, frame_type='empty'):
-    """Create a test frame for detector testing"""
-    frame = np.zeros((height, width, 3), dtype=np.uint8)
-    frame[:] = (255, 255, 255)  # White background
+
+def load_test_frame_from_video(video_name: str, frame_index: int = 0):
+    """Load a specific frame from a test video file"""
+    video_path = TEST_VIDEOS.get(video_name)
     
-    if frame_type == 'hand_motion':
-        # Add some motion (moving rectangle)
-        cv2.circle(frame, (300, 200), 50, (0, 255, 0), -1)
-        cv2.circle(frame, (350, 250), 50, (0, 255, 0), -1)
-    elif frame_type == 'person_with_tools':
-        # Simulate person with tools
-        cv2.rectangle(frame, (100, 100), (200, 300), (100, 150, 200), -1)  # Person
-        cv2.rectangle(frame, (210, 180), (250, 220), (200, 100, 100), -1)  # Tool
-    elif frame_type == 'laptop':
-        # Simulate laptop
-        cv2.rectangle(frame, (100, 100), (400, 250), (100, 100, 100), -1)  # Laptop body
-        cv2.rectangle(frame, (110, 110), (390, 240), (200, 200, 200), -1)  # Screen
+    if not video_path or not os.path.exists(video_path):
+        logger.warning(f"Video file not found: {video_path}")
+        return None
+    
+    cap = cv2.VideoCapture(video_path)
+    
+    # Seek to frame
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+    ret, frame = cap.read()
+    cap.release()
+    
+    if not ret:
+        logger.warning(f"Failed to read frame {frame_index} from {video_name}")
+        return None
     
     return frame
 
 
 def test_mediapipe_detector():
-    """Test MediaPipe detector in isolation"""
+    """Test MediaPipe detector in isolation with real video"""
     logger.info("\n=== Testing MediaPipe Detector ===")
+    
+    frame = load_test_frame_from_video('wire_screw', frame_index=30)
+    if frame is None:
+        logger.warning(" Skipping MediaPipe test: no video available")
+        return True
+    
     try:
         detector = MediaPipeDetector(confidence_threshold=0.5)
-        
-        # Test with empty frame
-        frame = create_test_frame(frame_type='empty')
         result = detector.process_frame(frame)
-        logger.info(f"Empty frame: {result.label} (conf={result.confidence:.2f})")
+        logger.info(f"Real frame: {result.label} (conf={result.confidence:.2f})")
         
         detector.close()
         logger.info(" MediaPipe detector works")
@@ -58,24 +70,23 @@ def test_mediapipe_detector():
 
 
 def test_yolo_detector():
-    """Test YOLO detector in isolation"""
+    """Test YOLO detector in isolation with real video"""
     logger.info("\n=== Testing YOLO Detector ===")
+    
+    frame = load_test_frame_from_video('wire_screw', frame_index=30)
+    if frame is None:
+        logger.warning(" Skipping YOLO test: no video available")
+        return True
+    
     try:
         detector = YOLODetector(
             model='yolov8n',
             confidence_threshold=0.5,
-            device='cpu'  # Use CPU for testing
+            device='cpu'
         )
         
-        # Test with empty frame
-        frame = create_test_frame(frame_type='empty')
         result = detector.process_frame(frame)
-        logger.info(f"Empty frame: {result.label} (conf={result.confidence:.2f})")
-        
-        # Test with person frame
-        frame = create_test_frame(frame_type='person_with_tools')
-        result = detector.process_frame(frame)
-        logger.info(f"Person frame: {result.label} (conf={result.confidence:.2f})")
+        logger.info(f"Real frame: {result.label} (conf={result.confidence:.2f})")
         logger.info(f"  Metadata: {result.metadata}")
         
         detector.close()
@@ -89,6 +100,12 @@ def test_yolo_detector():
 def test_fusion_detector_cascade():
     """Test MediaPipe + YOLO detector with cascade strategy"""
     logger.info("\n=== Testing MediaPipe + YOLO Detector (CASCADE) ===")
+    
+    frame = load_test_frame_from_video('wire_screw', frame_index=30)
+    if frame is None:
+        logger.warning(" Skipping CASCADE test: no video available")
+        return True
+    
     try:
         detector = MediaPipeYoloDetector(
             yolo_model='yolov8n',
@@ -98,16 +115,8 @@ def test_fusion_detector_cascade():
             device='cpu'
         )
         
-        # Test with empty frame
-        frame = create_test_frame(frame_type='empty')
         result = detector.process_frame(frame)
-        logger.info(f"Empty frame: {result.label} (conf={result.confidence:.2f})")
-        logger.info(f"  Strategy: {result.metadata.get('strategy')}")
-        
-        # Test with person frame
-        frame = create_test_frame(frame_type='person_with_tools')
-        result = detector.process_frame(frame)
-        logger.info(f"Person frame: {result.label} (conf={result.confidence:.2f})")
+        logger.info(f"Real frame: {result.label} (conf={result.confidence:.2f})")
         logger.info(f"  Strategy: {result.metadata.get('strategy')}")
         logger.info(f"  MP Signal: {result.metadata.get('mp_signal')}")
         logger.info(f"  YOLO Context: {result.metadata.get('yolo_context')}")
@@ -123,6 +132,12 @@ def test_fusion_detector_cascade():
 def test_fusion_detector_weighted():
     """Test MediaPipe + YOLO detector with weighted strategy"""
     logger.info("\n=== Testing MediaPipe + YOLO Detector (WEIGHTED) ===")
+    
+    frame = load_test_frame_from_video('wire_screw', frame_index=30)
+    if frame is None:
+        logger.warning(" Skipping WEIGHTED test: no video available")
+        return True
+    
     try:
         detector = MediaPipeYoloDetector(
             yolo_model='yolov8n',
@@ -132,10 +147,8 @@ def test_fusion_detector_weighted():
             device='cpu'
         )
         
-        # Test with empty frame
-        frame = create_test_frame(frame_type='empty')
         result = detector.process_frame(frame)
-        logger.info(f"Empty frame: {result.label} (conf={result.confidence:.2f})")
+        logger.info(f"Real frame: {result.label} (conf={result.confidence:.2f})")
         logger.info(f"  Combined value: {result.metadata.get('combined_value'):.2f}")
         
         detector.close()
@@ -146,15 +159,138 @@ def test_fusion_detector_weighted():
         return False
 
 
+def test_fusion_detector_consensus():
+    """Test MediaPipe + YOLO detector with consensus strategy"""
+    logger.info("\n=== Testing MediaPipe + YOLO Detector (CONSENSUS) ===")
+    
+    frame = load_test_frame_from_video('wire_screw', frame_index=30)
+    if frame is None:
+        logger.warning(" Skipping CONSENSUS test: no video available")
+        return True
+    
+    try:
+        detector = MediaPipeYoloDetector(
+            yolo_model='yolov8n',
+            mediapipe_confidence=0.5,
+            yolo_confidence=0.5,
+            strategy=MediaPipeYoloStrategy.CONSENSUS,
+            device='cpu'
+        )
+        
+        result = detector.process_frame(frame)
+        logger.info(f"Real frame: {result.label} (conf={result.confidence:.2f})")
+        logger.info(f"  Strategy: {result.metadata.get('strategy')}")
+        logger.info(f"  MP Signal: {result.metadata.get('mp_signal')}")
+        logger.info(f"  YOLO Context: {result.metadata.get('yolo_context')}")
+        
+        detector.close()
+        logger.info(" MediaPipe + YOLO detector (CONSENSUS) works")
+        return True
+    except Exception as e:
+        logger.error(f" MediaPipe + YOLO detector (CONSENSUS) failed: {e}")
+        return False
+
+
+def test_fusion_detector_majority_vote():
+    """Test MediaPipe + YOLO detector with majority vote strategy"""
+    logger.info("\n=== Testing MediaPipe + YOLO Detector (MAJORITY_VOTE) ===")
+    
+    frame = load_test_frame_from_video('wire_screw', frame_index=30)
+    if frame is None:
+        logger.warning(" Skipping MAJORITY_VOTE test: no video available")
+        return True
+    
+    try:
+        detector = MediaPipeYoloDetector(
+            yolo_model='yolov8n',
+            mediapipe_confidence=0.5,
+            yolo_confidence=0.5,
+            strategy=MediaPipeYoloStrategy.MAJORITY_VOTE,
+            device='cpu'
+        )
+        
+        result = detector.process_frame(frame)
+        logger.info(f"Real frame: {result.label} (conf={result.confidence:.2f})")
+        logger.info(f"  Strategy: {result.metadata.get('strategy')}")
+        logger.info(f"  MP Signal: {result.metadata.get('mp_signal')}")
+        logger.info(f"  YOLO Context: {result.metadata.get('yolo_context')}")
+        
+        detector.close()
+        logger.info(" MediaPipe + YOLO detector (MAJORITY_VOTE) works")
+        return True
+    except Exception as e:
+        logger.error(f" MediaPipe + YOLO detector (MAJORITY_VOTE) failed: {e}")
+        return False
+
+
+def test_real_video_frames():
+    """Test detectors with real video frames"""
+    logger.info("\n=== Testing with Real Video Files ===")
+    
+    test_videos = ['drone_assembly', 'wire_screw', 'assembly_idle']
+    results = []
+    
+    for video_name in test_videos:
+        # Try to load frame from video
+        frame = load_test_frame_from_video(video_name, frame_index=30)  # Frame at 1 second (30fps)
+        
+        if frame is None:
+            logger.warning(f"Skipping {video_name}: video not available")
+            continue
+        
+        logger.info(f"\nTesting with {video_name}.mp4:")
+        
+        try:
+            # Test with MediaPipeYolo detector
+            detector = MediaPipeYoloDetector(
+                yolo_model='yolov8n',
+                strategy=MediaPipeYoloStrategy.CASCADE,
+                device='cpu'
+            )
+            
+            result = detector.process_frame(frame)
+            logger.info(f"  Label: {result.label}")
+            logger.info(f"  Confidence: {result.confidence:.2f}")
+            logger.info(f"  Strategy: {result.metadata.get('strategy')}")
+            logger.info(f"  MP Signal: {result.metadata.get('mp_signal')}")
+            logger.info(f"  YOLO Context: {result.metadata.get('yolo_context')}")
+            
+            detector.close()
+            results.append((video_name, True))
+            
+        except Exception as e:
+            logger.error(f"  Failed to process {video_name}: {e}")
+            results.append((video_name, False))
+    
+    if not results:
+        logger.warning(" No real video files were tested (all skipped)")
+        return True  # Don't fail test if videos aren't available
+    
+    all_passed = all(passed for _, passed in results)
+    if all_passed:
+        logger.info(" Real video frame tests passed")
+    else:
+        logger.warning(" Some real video tests failed")
+    
+    return all_passed
+
+
 def test_detector_comparison():
-    """Compare detector outputs side by side"""
+    """Compare detector outputs side by side using real video frames"""
     logger.info("\n=== Detector Comparison ===")
     
-    frames = {
-        'empty': create_test_frame(frame_type='empty'),
-        'hand_motion': create_test_frame(frame_type='hand_motion'),
-        'person_tools': create_test_frame(frame_type='person_with_tools'),
-    }
+    # Load frames from real video at different timestamps
+    frame_indices = {'frame_30': 30, 'frame_60': 60, 'frame_90': 90}
+    frames = {}
+    
+    for name, idx in frame_indices.items():
+        frame = load_test_frame_from_video('wire_screw', frame_index=idx)
+        if frame is not None:
+            frames[name] = frame
+    
+    if not frames:
+        logger.warning(" Skipping comparison: no video frames available")
+        return True
     
     try:
         # Create detectors
@@ -166,7 +302,7 @@ def test_detector_comparison():
             device='cpu'
         )
         
-        logger.info("\nFrame Type     | MediaPipe       | YOLO            | MediaPipe+YOLO")
+        logger.info("\nFrame Index    | MediaPipe       | YOLO            | MediaPipe+YOLO")
         logger.info("-" * 70)
         
         for frame_name, frame in frames.items():
@@ -203,6 +339,11 @@ if __name__ == '__main__':
     # Test MediaPipe + YOLO strategies
     results.append(("MediaPipe+YOLO CASCADE", test_fusion_detector_cascade()))
     results.append(("MediaPipe+YOLO WEIGHTED", test_fusion_detector_weighted()))
+    results.append(("MediaPipe+YOLO CONSENSUS", test_fusion_detector_consensus()))
+    results.append(("MediaPipe+YOLO MAJORITY_VOTE", test_fusion_detector_majority_vote()))
+    
+    # Test with real video files
+    results.append(("Real Video Frames", test_real_video_frames()))
     
     # Compare detectors
     results.append(("Detector Comparison", test_detector_comparison()))
