@@ -1,4 +1,4 @@
-"""Test fusion of YOLO + MediaPipe detectors"""
+"""Test MediaPipe + YOLO detector integration"""
 
 import sys
 import os
@@ -9,7 +9,7 @@ import logging
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.detectors.fusion_detector import FusionDetector, FusionStrategy
+from backend.detectors.mediapipe_yolo_detector import MediaPipeYoloDetector, MediaPipeYoloStrategy
 from backend.detectors.yolo_detector import YOLODetector
 from backend.detectors.mediapipe_detector import MediaPipeDetector
 
@@ -87,14 +87,14 @@ def test_yolo_detector():
 
 
 def test_fusion_detector_cascade():
-    """Test fusion detector with cascade strategy"""
-    logger.info("\n=== Testing Fusion Detector (CASCADE) ===")
+    """Test MediaPipe + YOLO detector with cascade strategy"""
+    logger.info("\n=== Testing MediaPipe + YOLO Detector (CASCADE) ===")
     try:
-        detector = FusionDetector(
+        detector = MediaPipeYoloDetector(
             yolo_model='yolov8n',
             mediapipe_confidence=0.5,
             yolo_confidence=0.5,
-            strategy=FusionStrategy.CASCADE,
+            strategy=MediaPipeYoloStrategy.CASCADE,
             device='cpu'
         )
         
@@ -113,22 +113,22 @@ def test_fusion_detector_cascade():
         logger.info(f"  YOLO Context: {result.metadata.get('yolo_context')}")
         
         detector.close()
-        logger.info(" Fusion detector (CASCADE) works")
+        logger.info(" MediaPipe + YOLO detector (CASCADE) works")
         return True
     except Exception as e:
-        logger.error(f" Fusion detector (CASCADE) failed: {e}")
+        logger.error(f" MediaPipe + YOLO detector (CASCADE) failed: {e}")
         return False
 
 
 def test_fusion_detector_weighted():
-    """Test fusion detector with weighted strategy"""
-    logger.info("\n=== Testing Fusion Detector (WEIGHTED) ===")
+    """Test MediaPipe + YOLO detector with weighted strategy"""
+    logger.info("\n=== Testing MediaPipe + YOLO Detector (WEIGHTED) ===")
     try:
-        detector = FusionDetector(
+        detector = MediaPipeYoloDetector(
             yolo_model='yolov8n',
             mediapipe_confidence=0.5,
             yolo_confidence=0.5,
-            strategy=FusionStrategy.WEIGHTED,
+            strategy=MediaPipeYoloStrategy.WEIGHTED,
             device='cpu'
         )
         
@@ -139,10 +139,10 @@ def test_fusion_detector_weighted():
         logger.info(f"  Combined value: {result.metadata.get('combined_value'):.2f}")
         
         detector.close()
-        logger.info(" Fusion detector (WEIGHTED) works")
+        logger.info(" MediaPipe + YOLO detector (WEIGHTED) works")
         return True
     except Exception as e:
-        logger.error(f" Fusion detector (WEIGHTED) failed: {e}")
+        logger.error(f" MediaPipe + YOLO detector (WEIGHTED) failed: {e}")
         return False
 
 
@@ -160,29 +160,29 @@ def test_detector_comparison():
         # Create detectors
         mp_detector = MediaPipeDetector(confidence_threshold=0.5)
         yolo_detector = YOLODetector(model='yolov8n', confidence_threshold=0.5, device='cpu')
-        fusion_detector = FusionDetector(
+        mediapipe_yolo_detector = MediaPipeYoloDetector(
             yolo_model='yolov8n',
-            strategy=FusionStrategy.CASCADE,
+            strategy=MediaPipeYoloStrategy.CASCADE,
             device='cpu'
         )
         
-        logger.info("\nFrame Type     | MediaPipe       | YOLO            | Fusion")
+        logger.info("\nFrame Type     | MediaPipe       | YOLO            | MediaPipe+YOLO")
         logger.info("-" * 70)
         
         for frame_name, frame in frames.items():
             mp_result = mp_detector.process_frame(frame)
             yolo_result = yolo_detector.process_frame(frame)
-            fusion_result = fusion_detector.process_frame(frame)
+            combined_result = mediapipe_yolo_detector.process_frame(frame)
             
             mp_str = f"{mp_result.label}({mp_result.confidence:.1f})"
             yolo_str = f"{yolo_result.label}({yolo_result.confidence:.1f})"
-            fusion_str = f"{fusion_result.label}({fusion_result.confidence:.1f})"
+            combined_str = f"{combined_result.label}({combined_result.confidence:.1f})"
             
-            logger.info(f"{frame_name:14} | {mp_str:15} | {yolo_str:15} | {fusion_str}")
+            logger.info(f"{frame_name:14} | {mp_str:15} | {yolo_str:15} | {combined_str}")
         
         mp_detector.close()
         yolo_detector.close()
-        fusion_detector.close()
+        mediapipe_yolo_detector.close()
         
         logger.info(" Detector comparison complete")
         return True
@@ -200,9 +200,9 @@ if __name__ == '__main__':
     results.append(("MediaPipe", test_mediapipe_detector()))
     results.append(("YOLO", test_yolo_detector()))
     
-    # Test fusion strategies
-    results.append(("Fusion CASCADE", test_fusion_detector_cascade()))
-    results.append(("Fusion WEIGHTED", test_fusion_detector_weighted()))
+    # Test MediaPipe + YOLO strategies
+    results.append(("MediaPipe+YOLO CASCADE", test_fusion_detector_cascade()))
+    results.append(("MediaPipe+YOLO WEIGHTED", test_fusion_detector_weighted()))
     
     # Compare detectors
     results.append(("Detector Comparison", test_detector_comparison()))

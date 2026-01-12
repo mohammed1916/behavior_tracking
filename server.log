@@ -7827,3 +7827,185 @@ t=62.5s: arafed worker in a factory wit...
 2026-01-05 10:58:16,776 backend.db - INFO [DB_SAVE] analysis 746a8b39-d3e7-4f37-82b1-06c4e6de5f3f samples saved to database
 2026-01-05 10:58:16,778 backend.db - INFO [DB_SAVE] analysis 746a8b39-d3e7-4f37-82b1-06c4e6de5f3f saving 13 segments to database
 2026-01-05 10:58:16,780 backend.db - INFO [DB_SAVE_COMPLETE] analysis 746a8b39-d3e7-4f37-82b1-06c4e6de5f3f saved to database
+2026-01-07 10:35:03,613 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=0.86s with 4 samples
+2026-01-07 10:35:36,579 backend.stream_utils - INFO [PARSE_LLM] Parsed 1 unique segment(s) from LLM output
+2026-01-07 10:35:53,602 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=2.03s with 4 samples
+2026-01-07 10:36:08,793 backend.stream_utils - INFO [PARSE_LLM] Skipped 1 duplicate line(s) during parsing (1 unique lines kept)
+2026-01-07 10:36:26,547 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=3.19s with 4 samples
+2026-01-07 10:36:42,922 backend.stream_utils - INFO [PARSE_LLM] Skipped 3 duplicate line(s) during parsing (1 unique lines kept)
+2026-01-07 10:36:42,923 backend.stream_utils - INFO [PARSE_LLM] Parsed 1 unique segment(s) from LLM output
+2026-01-07 10:37:01,036 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=4.35s with 4 samples
+2026-01-07 10:37:24,647 backend.stream_utils - INFO [PARSE_LLM] Skipped 4 duplicate line(s) during parsing (2 unique lines kept)
+2026-01-07 10:37:24,648 backend.stream_utils - INFO [PARSE_LLM] Parsed 1 unique segment(s) from LLM output
+2026-01-07 10:37:42,299 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=5.52s with 4 samples
+2026-01-07 10:38:09,576 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=6.68s with 4 samples
+2026-01-07 10:38:17,748 backend.stream_utils - INFO [PARSE_LLM] Parsed 1 unique segment(s) from LLM output
+2026-01-07 10:38:35,218 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=7.84s with 4 samples
+2026-01-07 10:39:01,612 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Final window flush with 2 samples
+2026-01-07 10:39:07,315 backend.stream_processor - INFO [DEBUG_SUMMARY] Total VLM captions: 30
+2026-01-07 10:39:07,316 backend.stream_processor - INFO [DEBUG_SUMMARY] Total LLM inputs: 8
+2026-01-07 10:39:07,316 backend.stream_processor - INFO [DEBUG_SUMMARY] VLM captions: [(0.0, 'The main person is assembling a mechanic'), (0.2658555133079848, 'The main person is assembling a mechanic'), (0.5649429657794677, 'The main person in the image is engaged '), (0.8640304182509505, 'The main person is holding a wooden mech'), (1.1631178707224334, 'The main person is assembling a wooden m'), (1.4289733840304182, 'The main person is holding a wooden toy '), (1.728060836501901, 'The main person is holding a mechanical '), (2.027148288973384, 'The main person is holding a small elect'), (2.326235741444867, 'The main person is holding a small elect'), (2.5920912547528516, 'The main person is holding a small piece')]...
+2026-01-07 10:39:07,317 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #1 at t=0.8640304182509505: 4 samples, timeline=t=0.0s: The main person is assembling a mechanical model. They are using their hands to connect wire...
+2026-01-07 10:39:07,317 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #2 at t=2.027148288973384: 4 samples, timeline=t=1.2s: The main person is assembling a wooden mechanical model. They are using their hands to conne...
+2026-01-07 10:39:07,317 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #3 at t=3.1902661596958173: 4 samples, timeline=t=2.3s: The main person is holding a small electronic circuit board with their fingers. They are usi...
+2026-01-07 10:39:07,318 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #4 at t=4.353384030418251: 4 samples, timeline=t=3.5s: The main person is engaged in assembling a mechanical device. They are using their hands to ...
+2026-01-07 10:39:07,318 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #5 at t=5.516501901140685: 4 samples, timeline=t=4.7s: The main person is holding a small device with their hands. They are using a pair of tweezer...
+2026-01-07 10:39:07,319 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #6 at t=6.679619771863118: 4 samples, timeline=t=5.8s: The main person is assembling a wooden toy. They are using a small piece of wood to attach a...
+2026-01-07 10:39:07,319 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #7 at t=7.8427376425855515: 4 samples, timeline=t=7.0s: The main person is assembling a wooden drone. They are using a screwdriver to attach the com...
+2026-01-07 10:39:07,319 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #8 at t=final_flush: 2 samples, timeline=t=8.1s: The main person is holding a small drone. They are holding the drone with both hands, and it...
+2026-01-07 10:39:07,342 backend.db - INFO [STATS] samples=11 duration=8.74 fps=30.09 work=0.00s idle=2.33s unclass=6.41s work%=0.0 idle%=26.6 unclass%=73.4
+2026-01-07 10:39:07,343 backend.db - INFO [STATS_SAVE] analysis=c69405fc-51c6-4c6d-b4c7-7ccb8a1e0d55 duration=8.74 fps=30.09 work=0.00s idle=2.33s unclass=6.41s work%=0.0 idle%=26.6 unclass%=73.4
+2026-01-07 10:39:07,346 backend.db - INFO [DB_SAVE] analysis c69405fc-51c6-4c6d-b4c7-7ccb8a1e0d55 saved to database
+2026-01-07 10:39:07,346 backend.db - INFO [DB_SAVE] analysis c69405fc-51c6-4c6d-b4c7-7ccb8a1e0d55 saving 30 samples to database
+2026-01-07 10:39:07,347 backend.db - INFO [DB_SAVE] analysis c69405fc-51c6-4c6d-b4c7-7ccb8a1e0d55 samples saved to database
+2026-01-07 10:39:07,348 backend.db - INFO [DB_SAVE] analysis c69405fc-51c6-4c6d-b4c7-7ccb8a1e0d55 saving 4 segments to database
+2026-01-07 10:39:07,349 backend.db - INFO [DB_SAVE_COMPLETE] analysis c69405fc-51c6-4c6d-b4c7-7ccb8a1e0d55 saved to database
+2026-01-07 12:10:30,121 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=6.00s with 4 samples
+2026-01-07 12:10:46,413 backend.stream_utils - INFO [PARSE_LLM] Parsed 3 unique segment(s) from LLM output
+2026-01-07 12:11:00,114 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=14.00s with 4 samples
+2026-01-07 12:11:49,459 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=22.00s with 4 samples
+2026-01-07 12:12:10,056 backend.stream_utils - INFO [PARSE_LLM] Skipped 6 duplicate line(s) during parsing (6 unique lines kept)
+2026-01-07 12:12:10,057 backend.stream_utils - INFO [PARSE_LLM] Parsed 3 unique segment(s) from LLM output
+2026-01-07 12:12:25,877 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=30.00s with 4 samples
+2026-01-07 12:12:45,012 backend.stream_utils - INFO [PARSE_LLM] Skipped 6 duplicate line(s) during parsing (5 unique lines kept)
+2026-01-07 12:12:45,012 backend.stream_utils - INFO [PARSE_LLM] Parsed 2 unique segment(s) from LLM output
+2026-01-07 12:12:58,734 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=38.00s with 4 samples
+2026-01-07 12:13:13,999 backend.stream_utils - INFO [PARSE_LLM] Skipped 3 duplicate line(s) during parsing (3 unique lines kept)
+2026-01-07 12:13:28,114 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=46.00s with 4 samples
+2026-01-07 12:13:54,706 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=54.00s with 4 samples
+2026-01-07 12:14:12,643 backend.stream_utils - INFO [PARSE_LLM] Skipped 3 duplicate line(s) during parsing (3 unique lines kept)
+2026-01-07 12:14:12,643 backend.stream_utils - INFO [PARSE_LLM] Parsed 3 unique segment(s) from LLM output
+2026-01-07 12:14:26,129 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=62.00s with 4 samples
+2026-01-07 12:14:35,105 backend.stream_utils - INFO [PARSE_LLM] Parsed 2 unique segment(s) from LLM output
+2026-01-07 12:14:38,606 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Final window flush with 1 samples
+2026-01-07 12:14:49,450 backend.stream_utils - INFO [PARSE_LLM] Skipped 2 duplicate line(s) during parsing (3 unique lines kept)
+2026-01-07 12:14:49,451 backend.stream_utils - INFO [PARSE_LLM] Parsed 1 unique segment(s) from LLM output
+2026-01-07 12:14:49,454 backend.stream_processor - INFO [DEBUG_SUMMARY] Total VLM captions: 33
+2026-01-07 12:14:49,455 backend.stream_processor - INFO [DEBUG_SUMMARY] Total LLM inputs: 9
+2026-01-07 12:14:49,455 backend.stream_processor - INFO [DEBUG_SUMMARY] VLM captions: [(0.0, 'arafed image of a man working in a facto'), (2.0, 'someone is working on a laptop with a lo'), (4.0, 'arafed worker working on a machine in a '), (6.0, 'arafed man standing in a factory with a '), (8.0, 'there is a man standing in front of a co'), (10.0, 'someone is holding a cat in a glove whil'), (12.0, 'arafed man standing in a factory with a '), (14.0, 'arafed worker working on a machine in a '), (16.0, 'there is a truck that is parked in a gar'), (18.0, 'there is a computer monitor sitting on a')]...
+2026-01-07 12:14:49,456 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #1 at t=6.0: 4 samples, timeline=t=0.0s: arafed image of a man working in a factory with a machine
+t=2.0s: someone is working on a la...
+2026-01-07 12:14:49,456 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #2 at t=14.0: 4 samples, timeline=t=8.0s: there is a man standing in front of a counter with a bunch of bottles
+t=10.0s: someone is ho...
+2026-01-07 12:14:49,456 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #3 at t=22.0: 4 samples, timeline=t=16.0s: there is a truck that is parked in a garage
+t=18.0s: there is a computer monitor sitting on...
+2026-01-07 12:14:49,457 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #4 at t=30.0: 4 samples, timeline=t=24.0s: araffes in a factory with a dog and a man
+t=26.0s: there are people standing in a bus with ...
+2026-01-07 12:14:49,457 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #5 at t=38.0: 4 samples, timeline=t=32.0s: arafed man in a factory with a laptop and a box
+t=34.0s: arafed man in a factory holding a ...
+2026-01-07 12:14:49,457 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #6 at t=46.0: 4 samples, timeline=t=40.0s: arafed man standing in a factory with a lot of machines
+t=42.0s: arafed man in a blue shirt...
+2026-01-07 12:14:49,457 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #7 at t=54.0: 4 samples, timeline=t=48.0s: arafed man in blue shirt standing in front of a machine
+t=50.0s: arafed man in a factory wi...
+2026-01-07 12:14:49,458 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #8 at t=62.0: 4 samples, timeline=t=56.0s: arafed worker in a factory with a mask on
+t=58.0s: there is a man that is standing in a sto...
+2026-01-07 12:14:49,458 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #9 at t=final_flush: 1 samples, timeline=t=64.0s: arafed man in a factory with a machine in the background...
+2026-01-07 12:14:49,484 backend.db - INFO [STATS] samples=21 duration=64.30 fps=30.00 work=20.00s idle=4.00s unclass=40.30s work%=31.1 idle%=6.2 unclass%=62.7
+2026-01-07 12:14:49,485 backend.db - INFO [STATS_SAVE] analysis=72985439-f9b1-4c17-a7bc-e582cddfef19 duration=64.30 fps=30.00 work=20.00s idle=4.00s unclass=40.30s work%=31.1 idle%=6.2 unclass%=62.7
+2026-01-07 12:14:49,493 backend.db - INFO [DB_SAVE] analysis 72985439-f9b1-4c17-a7bc-e582cddfef19 saved to database
+2026-01-07 12:14:49,494 backend.db - INFO [DB_SAVE] analysis 72985439-f9b1-4c17-a7bc-e582cddfef19 saving 33 samples to database
+2026-01-07 12:14:49,494 backend.db - INFO [DB_SAVE] analysis 72985439-f9b1-4c17-a7bc-e582cddfef19 samples saved to database
+2026-01-07 12:14:49,494 backend.db - INFO [DB_SAVE] analysis 72985439-f9b1-4c17-a7bc-e582cddfef19 saving 14 segments to database
+2026-01-07 12:14:49,497 backend.db - INFO [DB_SAVE_COMPLETE] analysis 72985439-f9b1-4c17-a7bc-e582cddfef19 saved to database
+2026-01-08 14:00:33,522 backend.stream_processor - WARNING Failed to initialize detector: No module named 'base'. Continuing without detector.
+2026-01-08 14:00:37,912 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=6.00s with 4 samples
+2026-01-08 14:00:46,605 backend.stream_utils - INFO [PARSE_LLM] Skipped 1 duplicate line(s) during parsing (4 unique lines kept)
+2026-01-08 14:00:46,605 backend.stream_utils - INFO [PARSE_LLM] Parsed 2 unique segment(s) from LLM output
+2026-01-08 14:00:48,429 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=14.00s with 4 samples
+2026-01-08 14:00:52,171 backend.stream_utils - WARNING [PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all 4 captions.
+2026-01-08 14:00:52,172 backend.stream_utils - WARNING [PARSE_LLM] LLM output was: 
+2026-01-08 14:00:53,788 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=22.00s with 4 samples
+2026-01-08 14:01:00,810 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=30.00s with 4 samples
+2026-01-08 14:01:03,063 backend.stream_utils - WARNING [PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all 4 captions.
+2026-01-08 14:01:03,063 backend.stream_utils - WARNING [PARSE_LLM] LLM output was: 
+2026-01-08 14:01:05,424 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=38.00s with 4 samples
+2026-01-08 14:01:08,381 backend.stream_utils - WARNING [PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all 4 captions.
+2026-01-08 14:01:08,383 backend.stream_utils - WARNING [PARSE_LLM] LLM output was: 
+2026-01-08 14:01:10,866 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=46.00s with 4 samples
+2026-01-08 14:01:14,338 backend.stream_utils - INFO [PARSE_LLM] Parsed 2 unique segment(s) from LLM output
+2026-01-08 14:01:17,138 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=54.00s with 4 samples
+2026-01-08 14:01:20,615 backend.stream_utils - INFO [PARSE_LLM] Skipped 3 duplicate line(s) during parsing (3 unique lines kept)
+2026-01-08 14:01:22,971 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=62.00s with 4 samples
+2026-01-08 14:01:25,578 backend.stream_utils - INFO [PARSE_LLM] Skipped 1 duplicate line(s) during parsing (2 unique lines kept)
+2026-01-08 14:01:25,578 backend.stream_utils - INFO [PARSE_LLM] Parsed 2 unique segment(s) from LLM output
+2026-01-08 14:01:26,026 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Final window flush with 1 samples
+2026-01-08 14:01:30,372 backend.stream_utils - INFO [PARSE_LLM] Parsed 1 unique segment(s) from LLM output
+2026-01-08 14:01:30,374 backend.stream_processor - INFO [DEBUG_SUMMARY] Total VLM captions: 33
+2026-01-08 14:01:30,374 backend.stream_processor - INFO [DEBUG_SUMMARY] Total LLM inputs: 9
+2026-01-08 14:01:30,375 backend.stream_processor - INFO [DEBUG_SUMMARY] VLM captions: [(0.0, 'arafed image of a man working in a facto'), (2.0, 'someone is working on a laptop with a lo'), (4.0, 'arafed worker working on a machine in a '), (6.0, 'arafed man standing in a factory with a '), (8.0, 'there is a man standing in front of a co'), (10.0, 'someone is holding a cat in a glove whil'), (12.0, 'arafed man standing in a factory with a '), (14.0, 'arafed worker working on a machine in a '), (16.0, 'there is a truck that is parked in a gar'), (18.0, 'there is a computer monitor sitting on a')]...
+2026-01-08 14:01:30,375 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #1 at t=6.0: 4 samples, timeline=t=0.0s: arafed image of a man working in a factory with a machine
+t=2.0s: someone is working on a la...
+2026-01-08 14:01:30,376 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #2 at t=14.0: 4 samples, timeline=t=8.0s: there is a man standing in front of a counter with a bunch of bottles
+t=10.0s: someone is ho...
+2026-01-08 14:01:30,376 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #3 at t=22.0: 4 samples, timeline=t=16.0s: there is a truck that is parked in a garage
+t=18.0s: there is a computer monitor sitting on...
+2026-01-08 14:01:30,376 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #4 at t=30.0: 4 samples, timeline=t=24.0s: araffes in a factory with a dog and a man
+t=26.0s: there are people standing in a bus with ...
+2026-01-08 14:01:30,377 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #5 at t=38.0: 4 samples, timeline=t=32.0s: arafed man in a factory with a laptop and a box
+t=34.0s: arafed man in a factory holding a ...
+2026-01-08 14:01:30,377 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #6 at t=46.0: 4 samples, timeline=t=40.0s: arafed man standing in a factory with a lot of machines
+t=42.0s: arafed man in a blue shirt...
+2026-01-08 14:01:30,377 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #7 at t=54.0: 4 samples, timeline=t=48.0s: arafed man in blue shirt standing in front of a machine
+t=50.0s: arafed man in a factory wi...
+2026-01-08 14:01:30,377 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #8 at t=62.0: 4 samples, timeline=t=56.0s: arafed worker in a factory with a mask on
+t=58.0s: there is a man that is standing in a sto...
+2026-01-08 14:01:30,378 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #9 at t=final_flush: 1 samples, timeline=t=64.0s: arafed man in a factory with a machine in the background...
+2026-01-08 14:01:30,411 backend.db - INFO [STATS] samples=24 duration=64.30 fps=30.00 work=14.00s idle=22.00s unclass=28.30s work%=21.8 idle%=34.2 unclass%=44.0
+2026-01-08 14:01:30,411 backend.db - INFO [STATS_SAVE] analysis=485ec836-0dff-403d-9216-77865ed78759 duration=64.30 fps=30.00 work=14.00s idle=22.00s unclass=28.30s work%=21.8 idle%=34.2 unclass%=44.0
+2026-01-08 14:01:30,415 backend.db - INFO [DB_SAVE] analysis 485ec836-0dff-403d-9216-77865ed78759 saved to database
+2026-01-08 14:01:30,416 backend.db - INFO [DB_SAVE] analysis 485ec836-0dff-403d-9216-77865ed78759 saving 33 samples to database
+2026-01-08 14:01:30,416 backend.db - INFO [DB_SAVE] analysis 485ec836-0dff-403d-9216-77865ed78759 samples saved to database
+2026-01-08 14:01:30,417 backend.db - INFO [DB_SAVE] analysis 485ec836-0dff-403d-9216-77865ed78759 saving 10 segments to database
+2026-01-08 14:01:30,417 backend.db - INFO [DB_SAVE_COMPLETE] analysis 485ec836-0dff-403d-9216-77865ed78759 saved to database
+2026-01-09 11:48:35,034 backend.stream_processor - WARNING Failed to initialize detector: No module named 'base'. Continuing without detector.
+2026-01-09 11:48:39,055 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=6.00s with 4 samples
+2026-01-09 11:48:48,719 backend.stream_utils - INFO [PARSE_LLM] Skipped 4 duplicate line(s) during parsing (4 unique lines kept)
+2026-01-09 11:48:48,720 backend.stream_utils - INFO [PARSE_LLM] Parsed 4 unique segment(s) from LLM output
+2026-01-09 11:48:51,167 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=14.00s with 4 samples
+2026-01-09 11:48:56,903 backend.stream_utils - INFO [PARSE_LLM] Skipped 12 duplicate line(s) during parsing (7 unique lines kept)
+2026-01-09 11:48:56,904 backend.stream_utils - INFO [PARSE_LLM] Parsed 4 unique segment(s) from LLM output
+2026-01-09 11:48:59,724 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=22.00s with 4 samples
+2026-01-09 11:49:08,448 backend.stream_utils - WARNING [PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all 4 captions.
+2026-01-09 11:49:08,449 backend.stream_utils - WARNING [PARSE_LLM] LLM output was: 
+2026-01-09 11:49:10,446 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=30.00s with 4 samples
+2026-01-09 11:49:26,169 backend.stream_utils - INFO [PARSE_LLM] Skipped 36 duplicate line(s) during parsing (6 unique lines kept)
+2026-01-09 11:49:26,170 backend.stream_utils - INFO [PARSE_LLM] Parsed 2 unique segment(s) from LLM output
+2026-01-09 11:49:28,280 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=38.00s with 4 samples
+2026-01-09 11:49:32,840 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=46.00s with 4 samples
+2026-01-09 11:49:38,083 backend.stream_utils - WARNING [PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all 4 captions.
+2026-01-09 11:49:38,083 backend.stream_utils - WARNING [PARSE_LLM] LLM output was: 
+2026-01-09 11:49:40,619 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=54.00s with 4 samples
+2026-01-09 11:49:44,975 backend.stream_utils - INFO [PARSE_LLM] Parsed 3 unique segment(s) from LLM output
+2026-01-09 11:49:47,056 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Window closed at t=62.00s with 4 samples
+2026-01-09 11:49:51,275 backend.stream_utils - INFO [PARSE_LLM] Skipped 4 duplicate line(s) during parsing (2 unique lines kept)
+2026-01-09 11:49:51,275 backend.stream_utils - INFO [PARSE_LLM] Parsed 2 unique segment(s) from LLM output
+2026-01-09 11:49:51,768 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Final window flush with 1 samples
+2026-01-09 11:49:53,878 backend.stream_utils - WARNING [PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all 1 captions.
+2026-01-09 11:49:53,881 backend.stream_utils - WARNING [PARSE_LLM] LLM output was: 
+2026-01-09 11:49:53,885 backend.stream_processor - INFO [DEBUG_SUMMARY] Total VLM captions: 33
+2026-01-09 11:49:53,885 backend.stream_processor - INFO [DEBUG_SUMMARY] Total LLM inputs: 9
+2026-01-09 11:49:53,886 backend.stream_processor - INFO [DEBUG_SUMMARY] VLM captions: [(0.0, 'arafed image of a man working in a facto'), (2.0, 'someone is working on a laptop with a lo'), (4.0, 'arafed worker working on a machine in a '), (6.0, 'arafed man standing in a factory with a '), (8.0, 'there is a man standing in front of a co'), (10.0, 'someone is holding a cat in a glove whil'), (12.0, 'arafed man standing in a factory with a '), (14.0, 'arafed worker working on a machine in a '), (16.0, 'there is a truck that is parked in a gar'), (18.0, 'there is a computer monitor sitting on a')]...
+2026-01-09 11:49:53,887 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #1 at t=6.0: 4 samples, timeline=t=0.0s: arafed image of a man working in a factory with a machine
+t=2.0s: someone is working on a la...
+2026-01-09 11:49:53,887 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #2 at t=14.0: 4 samples, timeline=t=8.0s: there is a man standing in front of a counter with a bunch of bottles
+t=10.0s: someone is ho...
+2026-01-09 11:49:53,887 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #3 at t=22.0: 4 samples, timeline=t=16.0s: there is a truck that is parked in a garage
+t=18.0s: there is a computer monitor sitting on...
+2026-01-09 11:49:53,888 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #4 at t=30.0: 4 samples, timeline=t=24.0s: araffes in a factory with a dog and a man
+t=26.0s: there are people standing in a bus with ...
+2026-01-09 11:49:53,888 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #5 at t=38.0: 4 samples, timeline=t=32.0s: arafed man in a factory with a laptop and a box
+t=34.0s: arafed man in a factory holding a ...
+2026-01-09 11:49:53,888 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #6 at t=46.0: 4 samples, timeline=t=40.0s: arafed man standing in a factory with a lot of machines
+t=42.0s: arafed man in a blue shirt...
+2026-01-09 11:49:53,890 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #7 at t=54.0: 4 samples, timeline=t=48.0s: arafed man in blue shirt standing in front of a machine
+t=50.0s: arafed man in a factory wi...
+2026-01-09 11:49:53,891 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #8 at t=62.0: 4 samples, timeline=t=56.0s: arafed worker in a factory with a mask on
+t=58.0s: there is a man that is standing in a sto...
+2026-01-09 11:49:53,891 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #9 at t=final_flush: 1 samples, timeline=t=64.0s: arafed man in a factory with a machine in the background...
+2026-01-09 11:49:53,956 backend.db - INFO [STATS] samples=29 duration=64.30 fps=30.00 work=26.00s idle=12.00s unclass=26.30s work%=40.4 idle%=18.7 unclass%=40.9
+2026-01-09 11:49:53,957 backend.db - INFO [STATS_SAVE] analysis=03fb0972-9435-43e5-977e-5e8103a93e24 duration=64.30 fps=30.00 work=26.00s idle=12.00s unclass=26.30s work%=40.4 idle%=18.7 unclass%=40.9
+2026-01-09 11:49:53,962 backend.db - INFO [DB_SAVE] analysis 03fb0972-9435-43e5-977e-5e8103a93e24 saved to database
+2026-01-09 11:49:54,047 backend.db - INFO [DB_SAVE] analysis 03fb0972-9435-43e5-977e-5e8103a93e24 saving 33 samples to database
+2026-01-09 11:49:54,048 backend.db - INFO [DB_SAVE] analysis 03fb0972-9435-43e5-977e-5e8103a93e24 samples saved to database
+2026-01-09 11:49:54,049 backend.db - INFO [DB_SAVE] analysis 03fb0972-9435-43e5-977e-5e8103a93e24 saving 18 segments to database
+2026-01-09 11:49:54,052 backend.db - INFO [DB_SAVE_COMPLETE] analysis 03fb0972-9435-43e5-977e-5e8103a93e24 saved to database

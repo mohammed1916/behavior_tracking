@@ -286,18 +286,19 @@ def create_stream_generator(
         # Initialize detectors if enabled
         detector = None
         if enable_mediapipe or enable_yolo:
+            logger.info(f"[DETECTOR_INIT] enable_mediapipe={enable_mediapipe}, enable_yolo={enable_yolo}")
             try:
                 if enable_mediapipe and enable_yolo:
-                    # Use fusion detector combining both
-                    from backend.detectors.fusion_detector import FusionDetector
-                    detector = FusionDetector(
+                    # Use MediaPipe + YOLO detector combining both
+                    from backend.detectors.mediapipe_yolo_detector import MediaPipeYoloDetector
+                    detector = MediaPipeYoloDetector(
                         yolo_model='yolov8n',
                         mediapipe_confidence=0.5,
                         yolo_confidence=0.5,
                         strategy=detector_fusion_mode,
                         device='cuda:0',  # TODO: make configurable
                     )
-                    logger.info(f"Initialized fusion detector with strategy={detector_fusion_mode}")
+                    logger.info(f"[DETECTOR_INIT] Initialized MediaPipe + YOLO detector with strategy={detector_fusion_mode}")
                 elif enable_yolo:
                     # Use YOLO only
                     from backend.detectors.yolo_detector import YOLODetector
@@ -306,7 +307,7 @@ def create_stream_generator(
                         confidence_threshold=0.5,
                         device='cuda:0',  # TODO: make configurable
                     )
-                    logger.info("Initialized YOLO detector")
+                    logger.info("[DETECTOR_INIT] Initialized YOLO detector")
                 elif enable_mediapipe:
                     # Use MediaPipe only
                     from backend.detectors.mediapipe_detector import MediaPipeDetector
@@ -314,10 +315,14 @@ def create_stream_generator(
                         confidence_threshold=0.5,
                         enable_visualization=False,
                     )
-                    logger.info("Initialized MediaPipe detector")
+                    logger.info("[DETECTOR_INIT] Initialized MediaPipe detector")
             except Exception as e:
-                logger.warning(f"Failed to initialize detector: {e}. Continuing without detector.")
+                logger.warning(f"[DETECTOR_INIT] Failed to initialize detector: {e}. Continuing without detector.")
+                import traceback
+                logger.warning(traceback.format_exc())
                 detector = None
+        else:
+            logger.info(f"[DETECTOR_INIT] Detectors disabled: enable_mediapipe={enable_mediapipe}, enable_yolo={enable_yolo}")
         
         # Process frames
         for frame_data in frame_source:
@@ -351,9 +356,12 @@ def create_stream_generator(
                             'detector_confidence': detector_output.confidence,
                             'detector_metadata': detector_output.metadata,
                         }
-                        logger.debug(f"[DETECTOR] t={elapsed_time:.2f}s: {detector_output.label} (conf={detector_output.confidence:.2f})")
+                        if frame_counter % 10 == 0:  # Log every 10 frames to avoid spam
+                            logger.info(f"[DETECTOR] t={elapsed_time:.2f}s: {detector_output.label} (conf={detector_output.confidence:.2f})")
                     except Exception as e:
-                        logger.warning(f"Detector error at frame {frame_counter}: {e}")
+                        logger.warning(f"[DETECTOR] Error at frame {frame_counter}: {e}")
+                        import traceback
+                        logger.warning(traceback.format_exc())
                         detector_info = {'detector_error': str(e)}
                 
                 # Text-based classification: caption → label
@@ -430,6 +438,8 @@ def create_stream_generator(
                         metadata_for_storage['detector_type'] = detector.name
                     
                     sample['detector_metadata'] = metadata_for_storage
+                    if frame_counter % 10 == 0:  # Log every 10 frames to avoid spam
+                        logger.info(f"[SAMPLE] Frame {frame_counter}: detector_metadata stored with keys {list(metadata_for_storage.keys())}")
                 
                 collected_samples.append(sample)
                 if label == 'work':

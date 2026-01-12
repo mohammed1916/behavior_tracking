@@ -5,12 +5,12 @@ graph TD
     
     C -->|check flags| D["Detector Selection"]
     
-    D -->|both enabled| E["FusionDetector"]
+    D -->|both enabled| E["MediaPipeYoloDetector"]
     D -->|mediapipe only| F["MediaPipeDetector"]
     D -->|yolo only| G["YOLODetector"]
     D -->|none enabled| H["VLM Only<br/>Fallback"]
     
-    E -->|process| E1["Fusion Engine<br/>Cascade Strategy"]
+    E -->|process| E1["Multi-Detector Engine<br/>Cascade Strategy"]
     F -->|process| F1["Motion Analysis<br/>Hand Velocity + Pose"]
     G -->|process| G1["Object Detection<br/>Tool Recognition"]
     

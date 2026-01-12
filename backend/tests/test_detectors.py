@@ -114,8 +114,8 @@ class TestYOLODetector:
         assert isinstance(output.metadata, dict)
 
 
-class TestFusionEngine:
-    """Test multi-detector fusion"""
+class TestMultiDetectorEngine:
+    """Test multi-detector engine fusion"""
     
     @pytest.fixture
     def dummy_detectors(self):
@@ -139,21 +139,21 @@ class TestFusionEngine:
             'detector2': MockDetector2('detector2'),
         }
     
-    def test_fusion_engine_initialization(self, dummy_detectors):
-        """Fusion engine should initialize with detectors"""
-        from backend.detectors import FusionEngine, FusionMode
+    def test_multi_detector_engine_initialization(self, dummy_detectors):
+        """Multi-detector engine should initialize with detectors"""
+        from backend.detectors import MultiDetectorEngine, MultiDetectorMode
         
-        engine = FusionEngine(dummy_detectors, mode=FusionMode.WEIGHTED)
+        engine = MultiDetectorEngine(dummy_detectors, mode=MultiDetectorMode.WEIGHTED)
         
         assert engine is not None
         assert len(engine.detectors) == 2
-        assert engine.mode == FusionMode.WEIGHTED
+        assert engine.mode == MultiDetectorMode.WEIGHTED
     
     def test_consensus_fusion_all_agree(self, dummy_detectors):
         """Consensus mode should return work when all detectors agree on work"""
-        from backend.detectors import FusionEngine, FusionMode, DetectorOutput
+        from backend.detectors import MultiDetectorEngine, MultiDetectorMode, DetectorOutput
         
-        engine = FusionEngine(dummy_detectors, mode=FusionMode.CONSENSUS)
+        engine = MultiDetectorEngine(dummy_detectors, mode=MultiDetectorMode.CONSENSUS)
         
         outputs = {
             'detector1': DetectorOutput('work', 0.8, {}),
@@ -167,9 +167,9 @@ class TestFusionEngine:
     
     def test_consensus_fusion_disagree(self, dummy_detectors):
         """Consensus mode should return unknown when detectors disagree"""
-        from backend.detectors import FusionEngine, FusionMode, DetectorOutput
+        from backend.detectors import MultiDetectorEngine, MultiDetectorMode, DetectorOutput
         
-        engine = FusionEngine(dummy_detectors, mode=FusionMode.CONSENSUS)
+        engine = MultiDetectorEngine(dummy_detectors, mode=MultiDetectorMode.CONSENSUS)
         
         outputs = {
             'detector1': DetectorOutput('work', 0.8, {}),
@@ -182,9 +182,9 @@ class TestFusionEngine:
     
     def test_weighted_fusion(self, dummy_detectors):
         """Weighted mode should return fused label"""
-        from backend.detectors import FusionEngine, FusionMode, DetectorOutput
+        from backend.detectors import MultiDetectorEngine, MultiDetectorMode, DetectorOutput
         
-        engine = FusionEngine(dummy_detectors, mode=FusionMode.WEIGHTED)
+        engine = MultiDetectorEngine(dummy_detectors, mode=MultiDetectorMode.WEIGHTED)
         
         outputs = {
             'detector1': DetectorOutput('work', 0.8, {}),
@@ -200,9 +200,9 @@ class TestFusionEngine:
     
     def test_cascade_fusion_uses_primary(self, dummy_detectors):
         """Cascade mode should return primary detector output"""
-        from backend.detectors import FusionEngine, FusionMode, DetectorOutput
+        from backend.detectors import MultiDetectorEngine, MultiDetectorMode, DetectorOutput
         
-        engine = FusionEngine(dummy_detectors, mode=FusionMode.CASCADE)
+        engine = MultiDetectorEngine(dummy_detectors, mode=MultiDetectorMode.CASCADE)
         
         outputs = {
             'mediapipe': DetectorOutput('work', 0.8, {}),
@@ -217,9 +217,9 @@ class TestFusionEngine:
     
     def test_majority_fusion(self, dummy_detectors):
         """Majority mode should return majority vote"""
-        from backend.detectors import FusionEngine, FusionMode, DetectorOutput
+        from backend.detectors import MultiDetectorEngine, MultiDetectorMode, DetectorOutput
         
-        engine = FusionEngine(dummy_detectors, mode=FusionMode.MAJORITY)
+        engine = MultiDetectorEngine(dummy_detectors, mode=MultiDetectorMode.MAJORITY)
         
         outputs = {
             'detector1': DetectorOutput('work', 0.8, {}),
@@ -295,8 +295,8 @@ class TestPerformance:
         detector.close()
     
     def test_fusion_throughput(self, benchmark):
-        """Benchmark fusion engine throughput"""
-        from backend.detectors import FusionEngine, FusionMode, DetectorOutput
+        """Benchmark multi-detector engine throughput"""
+        from backend.detectors import MultiDetectorEngine, MultiDetectorMode, DetectorOutput
         
         outputs = {
             'detector1': DetectorOutput('work', 0.8, {}),

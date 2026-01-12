@@ -81,11 +81,11 @@ class YOLODetector(DetectorBase):
         Analyze frame for context (presence of tools/objects).
         
         NOTE: YOLO provides CONTEXT ONLY, not primary activity label.
-        The fusion engine uses this as supporting signal:
+        The multi-detector engine uses this as supporting signal:
         - Motion (MediaPipe) = primary signal
         - Tool presence (YOLO) = context/confirmation signal
         
-        Always returns 'context' label - fusion engine makes final decision.
+        Always returns 'context' label - multi-detector engine makes final decision.
         Metadata contains detected work objects for cascade decision tree.
         """
         self.frame_count += 1
@@ -151,7 +151,7 @@ class YOLODetector(DetectorBase):
                 'confidence_threshold': self.confidence_threshold,
             }
             
-            # Return context signal only - fusion engine decides work/idle
+            # Return context signal only - multi-detector engine decides work/idle
             return DetectorOutput(
                 label='context',
                 confidence=tool_confidence,
