@@ -306,9 +306,55 @@ behavior_tracking/
   **Done:** The frontend UI supports the full ML pipeline workflow, including upload, feature extraction, labeling, training, and evaluation.
 - [x] Add temporal models (LSTM/TCN/Transformer) for improved accuracy
   **Done:** The training pipeline now supports LSTM-based temporal models. Use `--model lstm` in `train_task_classifier.py` to train on windowed sequences. (TCN/Transformer can be added similarly.)
-- [ ] Add active learning loop: surface low-confidence spans for relabeling
+- [x] Add active learning loop: surface low-confidence spans for relabeling
+  **Done:** The system now flags low-confidence frames (based on `low_confidence_threshold`), highlights them in the UI, and allows users to correct them. Relabels are persisted to the database.
 - [ ] Add ablation experiments: MP-only, YOLO-only, fused
-- [ ] Add online learning: retrain models incrementally with new data
+- [x] Add online learning: retrain models incrementally with new data
+  **Done:** Added a "Training" tab in the UI to manage feature files, build datasets, and train models (RandomForest/LSTM). Added "Sync to Training Data" in Analysis view.
+
+---
+
+## Active Learning & Online Training Workflow
+
+### 1. Relabeling (Active Learning)
+The active learning loop allows users to correct low-confidence predictions.
+1.  **Detection**: During streaming (Live or VLM), the system checks detector confidence.
+2.  **Surfacing**: Low-confidence frames are flagged and highlighted in the UI.
+3.  **Relabeling**: Users click "Relabel" on segments to provide correct labels. Relabels are saved to `analyses.db`.
+
+### 2. Synchronization
+To use relabeled data for training:
+1.  Open an analysis in "Stored Analyses".
+2.  Click **"Sync to Training Data"**.
+3.  This extracts features (if missing) and updates the `.parquet` feature file with the corrected labels from the database.
+
+### 3. Training (Online Learning)
+1.  Go to the **"Training"** tab.
+2.  **Features**: Select the synced feature files you want to include.
+3.  **Build Dataset**: Create a sliding-window dataset from the selected files.
+4.  **Train Model**: Select the new dataset and train a model (RandomForest, LightGBM, or LSTM).
+5.  **Deploy**: The new model is saved to `models/` and can be used for future inference.
+
+### Relabel Endpoint
+
+**Endpoint**: `POST /backend/relabel`
+
+Updates the label for a specific sequence of frames or time range in an analysis.
+
+**Parameters**:
+- `analysis_id`: ID of the analysis
+- `label`: New label string
+- `start_time` / `end_time`: Time range to update (inclusive)
+- `start_frame` / `end_frame`: Frame range to update (alternative to time)
+
+**Example**:
+```bash
+curl -X POST http://localhost:8001/backend/relabel \
+  -F "analysis_id=..." \
+  -F "label=work" \
+  -F "start_time=10.5" \
+  -F "end_time=15.0"
+```
 
 ---
 

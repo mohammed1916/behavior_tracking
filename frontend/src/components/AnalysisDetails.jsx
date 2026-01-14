@@ -6,12 +6,13 @@ export default function AnalysisDetails({ analysisId, onClose }) {
   const [error, setError] = useState(null);
   const videoRef = useRef(null);
   const pauseTimerRef = useRef(null);
-  
+
   // Visualization toggles
   const [showYolo, setShowYolo] = useState(false);
   const [showMediapipe, setShowMediapipe] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
   const [hasDetectorData, setHasDetectorData] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   function playRange(startSec, endSec) {
     const v = videoRef.current;
@@ -19,9 +20,36 @@ export default function AnalysisDetails({ analysisId, onClose }) {
     if (pauseTimerRef.current) { clearTimeout(pauseTimerRef.current); pauseTimerRef.current = null; }
     v.currentTime = startSec || 0;
     const dur = Math.max(0.2, (endSec || (startSec + 1)) - startSec);
-    v.play().catch(() => {});
-    pauseTimerRef.current = setTimeout(() => { try { v.pause(); } catch (e) {} pauseTimerRef.current = null; }, Math.ceil(dur * 1000) + 150);
+    v.play().catch(() => { });
+    pauseTimerRef.current = setTimeout(() => { try { v.pause(); } catch (e) { } pauseTimerRef.current = null; }, Math.ceil(dur * 1000) + 150);
   }
+
+  const handleSync = async () => {
+    if (!analysisId) return;
+    if (!confirm('Sync this analysis to training data? This will create/update a feature file with current labels set in the samples.')) return;
+
+    setSyncing(true);
+    try {
+      const fd = new FormData();
+      fd.append('analysis_id', analysisId);
+      fd.append('detector_type', 'fusion');
+
+      const res = await fetch('http://localhost:8001/backend/sync_analysis_to_features', {
+        method: 'POST',
+        body: fd
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Synced successfully!\n\nFile: ${data.feature_file}\nFrames: ${data.num_frames}\nLabeled: ${data.num_labeled}\nStatus: ${data.status}`);
+      } else {
+        alert('Sync failed: ' + (data.alert || JSON.stringify(data)));
+      }
+    } catch (e) {
+      alert('Sync error: ' + e.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (!analysisId) return;
@@ -49,6 +77,9 @@ export default function AnalysisDetails({ analysisId, onClose }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>Analysis Details</h3>
         <div>
+          <button onClick={handleSync} disabled={syncing} style={{ marginRight: 8, backgroundColor: 'var(--accent)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: 'pointer' }}>
+            {syncing ? 'Syncing...' : 'Sync to Training Data'}
+          </button>
           <button onClick={onClose}>Close</button>
         </div>
       </div>
@@ -60,7 +91,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
           <div><strong>Filename:</strong> {analysis.filename}</div>
           <div><strong>Model:</strong> {analysis.model}</div>
           <div><strong>Created:</strong> {analysis.created_at}</div>
-          
+
           {/* Work/Idle Statistics */}
           {(analysis.duration !== undefined && analysis.duration !== null) || analysis.work_duration_sec || analysis.idle_duration_sec ? (
             <div style={{ marginTop: 12, padding: 12, backgroundColor: 'var(--card-bg)', borderRadius: 4, border: '1px solid var(--panel-border)' }}>
@@ -98,7 +129,7 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                     })()}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{(analysis.unclassified_percentage || 0).toFixed(1)}% of total</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>(Transition from Idle to work/work to idle)</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>(Transition from Idle to work/work to idle)</div>
                 </div>
               </div>
               <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--panel-border)', fontSize: 12 }}>
@@ -116,13 +147,13 @@ export default function AnalysisDetails({ analysisId, onClose }) {
               </div>
             </div>
           ) : null}
-          
+
           <div style={{ marginTop: 8 }}>
             <strong>Video:</strong>
             {analysis.video_url ? (
               <div style={{ marginTop: 6 }}>
                 <a href={`http://localhost:8001${analysis.video_url}`} target="_blank" rel="noreferrer">Open video</a>
-                
+
                 {/* Detector Visualization Controls */}
                 {hasDetectorData && (
                   <div style={{ marginTop: 8, padding: 8, backgroundColor: 'var(--card-bg)', borderRadius: 4 }}>
@@ -158,12 +189,12 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                     </div>
                   </div>
                 )}
-                
+
                 <div style={{ marginTop: 8 }}>
-                  <video 
-                    ref={videoRef} 
-                    controls 
-                    width="100%" 
+                  <video
+                    ref={videoRef}
+                    controls
+                    width="100%"
                     key={`${showYolo}-${showMediapipe}-${showInfo}`}
                   >
                     <source src={
@@ -176,28 +207,28 @@ export default function AnalysisDetails({ analysisId, onClose }) {
                   <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <strong>Idle Frames</strong>
-                        {analysis.idle_ranges && analysis.idle_ranges.length > 0 ? (
-                          <div className="captions-list">
-                            {analysis.idle_ranges.slice(0,50).map((r, i) => (
-                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                <div style={{ flex: 1 }}>
-                                  <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r.captions && r.captions.length ? r.captions.join(' | ') : ''}</div>
-                                </div>
-                                <div>
-                                  <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
-                                </div>
+                      {analysis.idle_ranges && analysis.idle_ranges.length > 0 ? (
+                        <div className="captions-list">
+                          {analysis.idle_ranges.slice(0, 50).map((r, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ flex: 1 }}>
+                                <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
+                                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r.captions && r.captions.length ? r.captions.join(' | ') : ''}</div>
                               </div>
-                            ))}
-                          </div>
-                        ) : (<div style={{ color: 'var(--muted)' }}>No idle frames detected.</div>)}
+                              <div>
+                                <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (<div style={{ color: 'var(--muted)' }}>No idle frames detected.</div>)}
                     </div>
 
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <strong>Work Frames</strong>
                       {analysis.work_ranges && analysis.work_ranges.length > 0 ? (
                         <div className="captions-list">
-                          {analysis.work_ranges.slice(0,50).map((r, i) => (
+                          {analysis.work_ranges.slice(0, 50).map((r, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                               <div style={{ flex: 1 }}>
                                 <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>

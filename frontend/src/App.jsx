@@ -8,6 +8,7 @@ import LiveView from './components/LiveView';
 import Tasks from './components/Tasks';
 import Subtasks from './components/Subtasks';
 import SegmentDisplay from './components/SegmentDisplay';
+import Training from './components/Training';
 
 function App() {
 
@@ -34,7 +35,7 @@ function App() {
     try {
       const saved = localStorage.getItem('darkMode');
       if (saved !== null) return saved === '1';
-    } catch (e) {}
+    } catch (e) { }
     return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const [evaluationMode, setEvaluationMode] = useState('combined');
@@ -102,8 +103,8 @@ function App() {
     if (pauseTimerRef.current) { clearTimeout(pauseTimerRef.current); pauseTimerRef.current = null; }
     v.currentTime = startSec || 0;
     const dur = Math.max(0.2, (endSec || (startSec + 1)) - startSec);
-    v.play().catch(() => {});
-    pauseTimerRef.current = setTimeout(() => { try { v.pause(); } catch (e) {} pauseTimerRef.current = null; }, Math.ceil(dur * 1000) + 150);
+    v.play().catch(() => { });
+    pauseTimerRef.current = setTimeout(() => { try { v.pause(); } catch (e) { } pauseTimerRef.current = null; }, Math.ceil(dur * 1000) + 150);
   }
 
   const [activeView, setActiveView] = useState('vlm');
@@ -111,7 +112,7 @@ function App() {
   // selection of subtasks removed from Subtasks tab
   const [subtasksRefreshTrigger, setSubtasksRefreshTrigger] = useState(0);
 
-  
+
 
   const handleVlmSubmit = async () => {
     if (!vlmPrompt && !vlmVideo) {
@@ -158,7 +159,7 @@ function App() {
       if (lowConfidenceThreshold !== undefined && lowConfidenceThreshold !== null) {
         url += `&low_confidence_threshold=${encodeURIComponent(lowConfidenceThreshold)}`;
       }
-      if (vlmStream) { try { vlmStream.close(); } catch {} }
+      if (vlmStream) { try { vlmStream.close(); } catch { } }
       const es = new EventSource(url);
       setVlmStream(es);
 
@@ -177,7 +178,13 @@ function App() {
             // Append temporal segment to state
             setVlmSegments(prev => [...prev, data]);
           } else if (data.stage === 'sample') {
-            const sample = { frame_index: data.frame_index, time_sec: data.time_sec, caption: data.caption, label: data.label };
+            const sample = {
+              frame_index: data.frame_index,
+              time_sec: data.time_sec,
+              caption: data.caption,
+              label: data.label,
+              low_confidence: data.low_confidence
+            };
             analysis.samples.push(sample);
             if (data.llm_output) {
               analysis.samples[analysis.samples.length - 1].llm_output = data.llm_output;
@@ -215,7 +222,7 @@ function App() {
             analysis.video_url = data.video_url;
             setVlmResult({ message: 'done', analysis: { ...analysis } });
             setVlmLoading(false);
-            try { es.close(); } catch {}
+            try { es.close(); } catch { }
             setVlmStream(null);
             // If server saved analysis and returned stored id, surface link
             if (data.stored_analysis_id) {
@@ -229,7 +236,7 @@ function App() {
             analysis.error = data.message;
             setVlmResult({ message: 'error', analysis: { ...analysis } });
             setVlmLoading(false);
-            try { es.close(); } catch {}
+            try { es.close(); } catch { }
             setVlmStream(null);
           }
         } catch (e) {
@@ -240,7 +247,7 @@ function App() {
       es.onerror = (err) => {
         console.warn('SSE error', err);
         setVlmLoading(false);
-        try { es.close(); } catch {}
+        try { es.close(); } catch { }
         setVlmStream(null);
       };
     } catch (err) {
@@ -249,6 +256,61 @@ function App() {
       const errorMsg = isServerDown ? 'Server not running or crashed, Please Refresh after some time' : (err.message || String(err));
       setVlmResult({ error: errorMsg });
       setVlmLoading(false);
+    }
+  };
+
+  const handleRelabel = async (segment, newLabel) => {
+    // segment has start_time, end_time.
+    if (!latestStoredAnalysisId) {
+      alert("Please wait for analysis to be saved first.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('analysis_id', latestStoredAnalysisId);
+    formData.append('label', newLabel);
+    formData.append('start_time', segment.start_time);
+    formData.append('end_time', segment.end_time);
+
+    try {
+      const res = await fetch('http://localhost:8001/backend/relabel', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Update local state to reflect change immediately
+        setVlmSegments(prev => prev.map(s => {
+          if (s.start_time === segment.start_time && s.end_time === segment.end_time) {
+            return { ...s, label: newLabel };
+          }
+          return s;
+        }));
+
+        // Also update vlmResult.analysis.samples labels for that range
+        if (vlmResult && vlmResult.analysis && vlmResult.analysis.samples) {
+          const updatedSamples = vlmResult.analysis.samples.map(s => {
+            if (s.time_sec >= segment.start_time && s.time_sec <= segment.end_time) {
+              return { ...s, label: newLabel };
+            }
+            return s;
+          });
+          setVlmResult(prev => ({
+            ...prev,
+            analysis: {
+              ...prev.analysis,
+              samples: updatedSamples
+            }
+          }));
+        }
+
+        alert(`Updated ${data.updated_samples} samples. Refreshing view...`);
+      } else {
+        alert("Error: " + (data.alert || "Unknown error"));
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Relabel failed: " + e.message);
     }
   };
 
@@ -450,7 +512,7 @@ function App() {
       if (darkMode) document.documentElement.classList.add('dark');
       else document.documentElement.classList.remove('dark');
       localStorage.setItem('darkMode', darkMode ? '1' : '0');
-    } catch (e) {}
+    } catch (e) { }
   }, [darkMode]);
 
   useEffect(() => {
@@ -471,6 +533,7 @@ function App() {
         <button className={activeView === 'stored' ? 'active' : ''} onClick={() => setActiveView('stored')}>Stored Analyses</button>
         <button className={activeView === 'tasks' ? 'active' : ''} onClick={() => setActiveView('tasks')}>Tasks</button>
         <button className={activeView === 'subtasks' ? 'active' : ''} onClick={() => setActiveView('subtasks')}>Subtasks</button>
+        <button className={activeView === 'training' ? 'active' : ''} onClick={() => setActiveView('training')}>Training</button>
       </nav>
 
       <div className="content">
@@ -490,165 +553,165 @@ function App() {
                 <option value="cpu">CPU</option>
                 <option value="cuda:0">GPU (cuda:0)</option>
               </select>
-              <div style={{  margin: 30 }}/>
-              <div  style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ margin: 30 }} />
+              <div style={{ display: 'flex', alignItems: 'center' }}>
                 <button type="button" onClick={loadModel} disabled={!vlmModel || modelLoading} style={{ marginLeft: 8 }}>{modelLoading ? 'Loading...' : 'Load model'}</button>
-                <button type="button" onClick={() => { fetchLocalModels(); fetchPreloadedModels(); } } style={{ marginLeft: 'auto' }}>Refresh models</button>
+                <button type="button" onClick={() => { fetchLocalModels(); fetchPreloadedModels(); }} style={{ marginLeft: 'auto' }}>Refresh models</button>
               </div>
             </label>
 
-              <div style={{ margin: 8 }}>
-                <button onClick={() => setShowAdvanced(s => !s)}>{showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}</button>
-                {showAdvanced && (
-                  <div style={{ marginTop: 8, padding: 8, border: '1px dashed var(--panel-border)', borderRadius: 6 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <div>
-                        <label>Task(s) (optional, multi-select):</label>
-                        <div style={{ marginTop: 6 }}>
-                          <Select
-                            isMulti
-                            options={taskOptions}
-                            value={selectedTaskOptions}
-                            onChange={(vals) => setSelectedTaskIds(vals ? vals.map(v => v.value) : [])}
-                            placeholder="Select task(s)..."
-                            styles={{ container: (base) => ({ ...base, width: '100%' }), ...selectStyles }}
-                            theme={(theme) => ({
-                              ...theme,
-                              colors: {
-                                ...theme.colors,
-                                primary: cssVars.accentStrong,
-                                primary25: cssVars.accentGhost,
-                                neutral0: cssVars.surface,
-                                neutral80: cssVars.text
-                              }
-                            })}
-                          />
-                          <button type="button" onClick={fetchTasks} style={{ marginLeft: 8, marginTop: 6 }}>Refresh tasks</button>
-                        </div>
-                      </div>
-                      <div>
-                        <label>Evaluation Mode:</label>
-                        <div>
-                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="none" checked={evaluationMode==='none'} onChange={(e) => setEvaluationMode(e.target.value)} /> None</label>
-                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="timing_only" checked={evaluationMode==='timing_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> Timing only</label>
-                          <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="llm_only" checked={evaluationMode==='llm_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> LLM only</label>
-                          <label><input type="radio" name="evalmode" value="combined" checked={evaluationMode==='combined'} onChange={(e) => setEvaluationMode(e.target.value)} /> Combined (LLM + timing)</label>
-                        </div>
-                        <small style={{ color: 'var(--muted)', marginTop: 4, display: 'block' }}>
-                          How to evaluate subtask completion: timing compares work duration, LLM uses reasoning, combined uses both.
-                        </small>
-                      </div>
-                      <div>
-                        <label>Processing Mode:</label>
-                        <select value={processingMode} onChange={(e) => setProcessingMode(e.target.value)} style={{ width: '100%' }}>
-                          <option value="fast">Fast sampling (~30 frames)</option>
-                          <option value="every_2s">Sample every {sampleIntervalSec.toFixed(2)}s</option>
-                          <option value="all_frames">All frames (no sampling)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label>Sample Interval (seconds): {sampleIntervalSec.toFixed(2)}</label>
-                        <input type="range" min={0.5} max={10} step={0.1} value={sampleIntervalSec} onChange={(e) => setSampleIntervalSec(parseFloat(e.target.value) || 2.0)} style={{ width: '100%' }} />
-                        <input type="number" min={0.1} max={60} step={0.5} value={sampleIntervalSec} onChange={(e) => setSampleIntervalSec(parseFloat(e.target.value) || 2.0)} style={{ width: '100%', marginTop: 4 }} placeholder="e.g. 2.0" />
-                      </div>
-                      <div>
-                        <label>JPEG Quality: {advJpegQuality}</label>
-                        <input type="range" min={10} max={95} value={advJpegQuality} onChange={(e) => setAdvJpegQuality(parseInt(e.target.value || '80'))} />
-                      </div>
-                      <div>
-                        <label>Max Width (px):</label>
-                        <input style={{ width: '100%' }} value={advMaxWidth} onChange={(e) => setAdvMaxWidth(e.target.value)} placeholder="e.g. 640" />
-                      </div>
-                      <div>
-                        <label>Save Recording:</label>
-                        <input type="checkbox" checked={advSaveRecording} onChange={(e) => setAdvSaveRecording(e.target.checked)} />
-                      </div>
-                      <div>
-                        <label>Low-Confidence Threshold: {lowConfidenceThreshold}</label>
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          value={lowConfidenceThreshold}
-                          onChange={e => setLowConfidenceThreshold(parseFloat(e.target.value))}
-                          style={{ width: '100%' }}
+            <div style={{ margin: 8 }}>
+              <button onClick={() => setShowAdvanced(s => !s)}>{showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}</button>
+              {showAdvanced && (
+                <div style={{ marginTop: 8, padding: 8, border: '1px dashed var(--panel-border)', borderRadius: 6 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <label>Task(s) (optional, multi-select):</label>
+                      <div style={{ marginTop: 6 }}>
+                        <Select
+                          isMulti
+                          options={taskOptions}
+                          value={selectedTaskOptions}
+                          onChange={(vals) => setSelectedTaskIds(vals ? vals.map(v => v.value) : [])}
+                          placeholder="Select task(s)..."
+                          styles={{ container: (base) => ({ ...base, width: '100%' }), ...selectStyles }}
+                          theme={(theme) => ({
+                            ...theme,
+                            colors: {
+                              ...theme.colors,
+                              primary: cssVars.accentStrong,
+                              primary25: cssVars.accentGhost,
+                              neutral0: cssVars.surface,
+                              neutral80: cssVars.text
+                            }
+                          })}
                         />
-                        <input
-                          type="number"
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          value={lowConfidenceThreshold}
-                          onChange={e => setLowConfidenceThreshold(parseFloat(e.target.value))}
-                          style={{ width: '100%', marginTop: 4 }}
-                        />
-                        <small style={{ color: 'var(--muted)' }}>
-                          Frames or segments with confidence below this value will be surfaced for relabeling.
-                        </small>
-                      </div>
-                      <div>
-                        <label>Enable MediaPipe:</label>
-                        <input type="checkbox" checked={enableMediapipe} onChange={(e) => setEnableMediapipe(e.target.checked)} />
-                      </div>
-                      <div>
-                        <label>Enable YOLO:</label>
-                        <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} />
+                        <button type="button" onClick={fetchTasks} style={{ marginLeft: 8, marginTop: 6 }}>Refresh tasks</button>
                       </div>
                     </div>
+                    <div>
+                      <label>Evaluation Mode:</label>
+                      <div>
+                        <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="none" checked={evaluationMode === 'none'} onChange={(e) => setEvaluationMode(e.target.value)} /> None</label>
+                        <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="timing_only" checked={evaluationMode === 'timing_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> Timing only</label>
+                        <label style={{ marginRight: 8 }}><input type="radio" name="evalmode" value="llm_only" checked={evaluationMode === 'llm_only'} onChange={(e) => setEvaluationMode(e.target.value)} /> LLM only</label>
+                        <label><input type="radio" name="evalmode" value="combined" checked={evaluationMode === 'combined'} onChange={(e) => setEvaluationMode(e.target.value)} /> Combined (LLM + timing)</label>
+                      </div>
+                      <small style={{ color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+                        How to evaluate subtask completion: timing compares work duration, LLM uses reasoning, combined uses both.
+                      </small>
+                    </div>
+                    <div>
+                      <label>Processing Mode:</label>
+                      <select value={processingMode} onChange={(e) => setProcessingMode(e.target.value)} style={{ width: '100%' }}>
+                        <option value="fast">Fast sampling (~30 frames)</option>
+                        <option value="every_2s">Sample every {sampleIntervalSec.toFixed(2)}s</option>
+                        <option value="all_frames">All frames (no sampling)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>Sample Interval (seconds): {sampleIntervalSec.toFixed(2)}</label>
+                      <input type="range" min={0.5} max={10} step={0.1} value={sampleIntervalSec} onChange={(e) => setSampleIntervalSec(parseFloat(e.target.value) || 2.0)} style={{ width: '100%' }} />
+                      <input type="number" min={0.1} max={60} step={0.5} value={sampleIntervalSec} onChange={(e) => setSampleIntervalSec(parseFloat(e.target.value) || 2.0)} style={{ width: '100%', marginTop: 4 }} placeholder="e.g. 2.0" />
+                    </div>
+                    <div>
+                      <label>JPEG Quality: {advJpegQuality}</label>
+                      <input type="range" min={10} max={95} value={advJpegQuality} onChange={(e) => setAdvJpegQuality(parseInt(e.target.value || '80'))} />
+                    </div>
+                    <div>
+                      <label>Max Width (px):</label>
+                      <input style={{ width: '100%' }} value={advMaxWidth} onChange={(e) => setAdvMaxWidth(e.target.value)} placeholder="e.g. 640" />
+                    </div>
+                    <div>
+                      <label>Save Recording:</label>
+                      <input type="checkbox" checked={advSaveRecording} onChange={(e) => setAdvSaveRecording(e.target.checked)} />
+                    </div>
+                    <div>
+                      <label>Low-Confidence Threshold: {lowConfidenceThreshold}</label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={lowConfidenceThreshold}
+                        onChange={e => setLowConfidenceThreshold(parseFloat(e.target.value))}
+                        style={{ width: '100%' }}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={lowConfidenceThreshold}
+                        onChange={e => setLowConfidenceThreshold(parseFloat(e.target.value))}
+                        style={{ width: '100%', marginTop: 4 }}
+                      />
+                      <small style={{ color: 'var(--muted)' }}>
+                        Frames or segments with confidence below this value will be surfaced for relabeling.
+                      </small>
+                    </div>
+                    <div>
+                      <label>Enable MediaPipe:</label>
+                      <input type="checkbox" checked={enableMediapipe} onChange={(e) => setEnableMediapipe(e.target.checked)} />
+                    </div>
+                    <div>
+                      <label>Enable YOLO:</label>
+                      <input type="checkbox" checked={enableYolo} onChange={(e) => setEnableYolo(e.target.checked)} />
+                    </div>
+                  </div>
 
-                    {selectedTaskIds.length === 1 ? (
-                      <div style={{ marginTop: 8 }}>
-                        <strong>Subtasks for selected task</strong>
-                        <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid ' + cssVars.panelBorder, padding: 8, marginTop: 6 }}>
-                          {(() => {
-                            // try { console.debug('subtasksList', subtasksList, 'selectedTaskIds', selectedTaskIds, 'tasksList', tasksList); } catch {}
-                            const selId = selectedTaskIds && selectedTaskIds.length === 1 ? selectedTaskIds[0] : null;
-                            const selTask = selId ? (tasksList || []).find(t => t.id === selId) : null;
-                            return (subtasksList || []).filter(s => {
-                              // if (!selId) return false;
-                              // Primary match: subtask references task by `task_id`
-                              if (s.task_id === selId) return true;
-                              // Fallback: match by task name if backend didn't include task_id
-                              // if (selTask && s.task_name && s.task_name === selTask.name) return true;
-                              return false;
-                            }).map(s => (
+                  {selectedTaskIds.length === 1 ? (
+                    <div style={{ marginTop: 8 }}>
+                      <strong>Subtasks for selected task</strong>
+                      <div style={{ maxHeight: 160, overflow: 'auto', border: '1px solid ' + cssVars.panelBorder, padding: 8, marginTop: 6 }}>
+                        {(() => {
+                          // try { console.debug('subtasksList', subtasksList, 'selectedTaskIds', selectedTaskIds, 'tasksList', tasksList); } catch {}
+                          const selId = selectedTaskIds && selectedTaskIds.length === 1 ? selectedTaskIds[0] : null;
+                          const selTask = selId ? (tasksList || []).find(t => t.id === selId) : null;
+                          return (subtasksList || []).filter(s => {
+                            // if (!selId) return false;
+                            // Primary match: subtask references task by `task_id`
+                            if (s.task_id === selId) return true;
+                            // Fallback: match by task name if backend didn't include task_id
+                            // if (selTask && s.task_name && s.task_name === selTask.name) return true;
+                            return false;
+                          }).map(s => (
                             <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                               <div style={{ flex: 1 }}>{s.subtask_info} <small style={{ color: cssVars.muted }}>({s.duration_sec}s)</small></div>
                             </div>
-                            ))
-                          })()}
-                        </div>
+                          ))
+                        })()}
                       </div>
-                      ) : selectedTaskIds.length > 1 ? (
-                      <div style={{ marginTop: 8 }}>
-                        <strong>Multiple tasks selected — subtasks list hidden</strong>
-                        <div style={{ color: cssVars.muted, marginTop: 6 }}>Subtasks preview is available when exactly one task is selected.</div>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  ) : selectedTaskIds.length > 1 ? (
+                    <div style={{ marginTop: 8 }}>
+                      <strong>Multiple tasks selected — subtasks list hidden</strong>
+                      <div style={{ color: cssVars.muted, marginTop: 6 }}>Subtasks preview is available when exactly one task is selected.</div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
 
             <label>Prompt:
               <textarea value={vlmPrompt} onChange={(e) => setVlmPrompt(e.target.value)} placeholder="Ask about the video or request an analysis" rows={3} />
             </label>
-              <div style={{ marginTop: 8 }}>
-                <label style={{ display: 'block', marginTop: 6 }}>Mode:
-                  <select value={vlmClassifierMode} onChange={(e) => setVlmClassifierMode(e.target.value)}>
-                    {Object.keys(classifiers).length > 0 ? Object.keys(classifiers).map(k => <option key={k} value={k}>{k}</option>) : (
-                      <>
-                        <option value="binary">binary (work/idle)</option>
-                        <option value="multi">multi (preserve adapter labels)</option>
-                      </>
-                    )}
-                  </select>
-                </label>
+            <div style={{ marginTop: 8 }}>
+              <label style={{ display: 'block', marginTop: 6 }}>Mode:
+                <select value={vlmClassifierMode} onChange={(e) => setVlmClassifierMode(e.target.value)}>
+                  {Object.keys(classifiers).length > 0 ? Object.keys(classifiers).map(k => <option key={k} value={k}>{k}</option>) : (
+                    <>
+                      <option value="binary">binary (work/idle)</option>
+                      <option value="multi">multi (preserve adapter labels)</option>
+                    </>
+                  )}
+                </select>
+              </label>
 
-                <label style={{ display: 'block', marginTop: 6 }}>Classifier Prompt (optional override):
-                  <textarea value={vlmClassifierPrompt} onChange={(e) => setVlmClassifierPrompt(e.target.value)} placeholder="Optional: override prompt template" rows={3} />
-                </label>
-              </div>
+              <label style={{ display: 'block', marginTop: 6 }}>Classifier Prompt (optional override):
+                <textarea value={vlmClassifierPrompt} onChange={(e) => setVlmClassifierPrompt(e.target.value)} placeholder="Optional: override prompt template" rows={3} />
+              </label>
+            </div>
 
             <label style={{ display: 'block', marginTop: 8 }}>
               <div style={{ marginBottom: 6 }}>Classifier source:</div>
@@ -659,15 +722,15 @@ function App() {
               </select>
               <small style={{ color: '#666', marginLeft: 8, display: 'block', marginTop: 6 }}>Choose whether labels come from the VLM, a local LLM, or bag-of-words heuristics.</small>
             </label>
-            <br/>
+            <br />
 
             <div style={{ marginTop: 8, border: '1px dotted var(--accent)', padding: '8px', paddingTop: 16 }}>
-              <div className="tabs" style={{ display: 'flex', gap: 8, justifyContent: 'center'}}>
+              <div className="tabs" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                 <button className={`tab ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>Upload</button>
                 <button className={`tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>Live</button>
               </div>
 
-              <div className="dotted-hr"/>
+              <div className="dotted-hr" />
 
               <div style={{ marginTop: 10, justifyContent: 'center', display: 'flex' }}>
                 {activeTab === 'upload' ? (
@@ -692,7 +755,7 @@ function App() {
               </div>
             </div>
 
-            
+
 
 
             <div style={{ marginTop: 6 }}>
@@ -705,16 +768,16 @@ function App() {
                     const statusMsg = meta && meta.device_status_message;
                     return (
                       <>
-                              {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
-                                        <span style={{ marginLeft: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? cssVars.successBg : cssVars.dangerBg), color: (vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? cssVars.successText : cssVars.dangerText) , fontSize: 12 }}>
-                                          {vlmStatusModels.find(m=>m.id===vlmModel && m.available) ? 'VLM ready' : 'VLM not loaded'}
-                                        </span>
-                                        <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, backgroundColor: (llmAvailable ? cssVars.successBg : cssVars.dangerBg), color: (llmAvailable ? cssVars.successText : cssVars.dangerText), fontSize: 12 }}>
-                                          {llmAvailable ? 'LLM available' : 'LLM missing'}
-                                        </span>
-                                        <button onClick={fetchBackendStatus} style={{ marginLeft: 8 }}>Refresh status</button>
-                                        <small style={{ marginLeft: 8, color: cssVars.muted }}>{statusLastFetched ? `Last fetched: ${new Date(statusLastFetched).toLocaleString()}` : 'Last fetched: never'}</small>
-                                        {statusMsg ? <div style={{ color: cssVars.dangerText, marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
+                        {`Using local model: ${selectedVlmModelName} (device: ${devLabel})`}
+                        <span style={{ marginLeft: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: (vlmStatusModels.find(m => m.id === vlmModel && m.available) ? cssVars.successBg : cssVars.dangerBg), color: (vlmStatusModels.find(m => m.id === vlmModel && m.available) ? cssVars.successText : cssVars.dangerText), fontSize: 12 }}>
+                          {vlmStatusModels.find(m => m.id === vlmModel && m.available) ? 'VLM ready' : 'VLM not loaded'}
+                        </span>
+                        <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, backgroundColor: (llmAvailable ? cssVars.successBg : cssVars.dangerBg), color: (llmAvailable ? cssVars.successText : cssVars.dangerText), fontSize: 12 }}>
+                          {llmAvailable ? 'LLM available' : 'LLM missing'}
+                        </span>
+                        <button onClick={fetchBackendStatus} style={{ marginLeft: 8 }}>Refresh status</button>
+                        <small style={{ marginLeft: 8, color: cssVars.muted }}>{statusLastFetched ? `Last fetched: ${new Date(statusLastFetched).toLocaleString()}` : 'Last fetched: never'}</small>
+                        {statusMsg ? <div style={{ color: cssVars.dangerText, marginTop: 6, whiteSpace: 'pre-wrap' }}>{statusMsg}</div> : null}
                       </>
                     );
                   })()
@@ -737,11 +800,15 @@ function App() {
                     {vlmResult.analysis && (vlmResult.analysis.captions || vlmResult.analysis.caption) && (
                       <div><strong>Captions</strong><ul className="captions-list">{vlmResult.analysis.captions ? vlmResult.analysis.captions.map((c, i) => <li key={i}>{c}</li>) : <li>{vlmResult.analysis.caption}</li>}</ul></div>
                     )}
-                    
+
                     {/* Temporal Segments - shown during streaming */}
                     <div style={{ marginTop: 16 }}>
                       <h5>Temporal Segments (LLM)</h5>
-                      <SegmentDisplay segments={vlmSegments} />
+                      <SegmentDisplay
+                        segments={vlmSegments}
+                        lowConfidenceFrames={(vlmResult?.analysis?.samples || []).filter(s => s && s.low_confidence).map(s => s.frame_index)}
+                        onRelabel={handleRelabel}
+                      />
                     </div>
 
                     {vlmResult.analysis && vlmResult.analysis.video_url && (
@@ -869,28 +936,28 @@ function App() {
                         <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
                           <div style={{ flex: 1, textAlign: 'left' }}>
                             <strong>Idle Frames</strong>
-                              {vlmResult.analysis.idle_frames && vlmResult.analysis.idle_frames.length > 0 ? (
-                                <div className="captions-list">
-                                  {(() => {
-                                    const fps = vlmResult.analysis.fps || 30;
-                                    const ranges = computeRanges(vlmResult.analysis.idle_frames, vlmResult.analysis.samples || [], fps);
-                                    return ranges.slice(0,50).map((r, i) => {
-                                      const captions = (vlmResult.analysis.samples || []).filter(s => s.time_sec >= r.startTime - 0.0001 && s.time_sec <= r.endTime + 0.0001).map(s => s.caption).filter(Boolean);
-                                      return (
-                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                          <div style={{ flex: 1 }}>
-                                            <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
-                                            <div style={{ fontSize: 12, color: cssVars.muted }}>{captions.length ? captions.join(' | ') : ''}</div>
-                                          </div>
-                                          <div>
-                                            <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
-                                          </div>
+                            {vlmResult.analysis.idle_frames && vlmResult.analysis.idle_frames.length > 0 ? (
+                              <div className="captions-list">
+                                {(() => {
+                                  const fps = vlmResult.analysis.fps || 30;
+                                  const ranges = computeRanges(vlmResult.analysis.idle_frames, vlmResult.analysis.samples || [], fps);
+                                  return ranges.slice(0, 50).map((r, i) => {
+                                    const captions = (vlmResult.analysis.samples || []).filter(s => s.time_sec >= r.startTime - 0.0001 && s.time_sec <= r.endTime + 0.0001).map(s => s.caption).filter(Boolean);
+                                    return (
+                                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                        <div style={{ flex: 1 }}>
+                                          <small>{r.startTime.toFixed(2)}s - {r.endTime.toFixed(2)}s</small>
+                                          <div style={{ fontSize: 12, color: cssVars.muted }}>{captions.length ? captions.join(' | ') : ''}</div>
                                         </div>
-                                      )
-                                    })
-                                  })()}
-                                </div>
-                              ) : (<div style={{ color: cssVars.muted }}>No idle frames detected.</div>)}
+                                        <div>
+                                          <button onClick={() => playRange(r.startTime, r.endTime)}>Play</button>
+                                        </div>
+                                      </div>
+                                    )
+                                  })
+                                })()}
+                              </div>
+                            ) : (<div style={{ color: cssVars.muted }}>No idle frames detected.</div>)}
                           </div>
 
                           <div style={{ flex: 1, textAlign: 'left' }}>
@@ -900,7 +967,7 @@ function App() {
                                 {(() => {
                                   const fps = vlmResult.analysis.fps || 30;
                                   const ranges = computeRanges(vlmResult.analysis.work_frames, vlmResult.analysis.samples || [], fps);
-                                  return ranges.slice(0,50).map((r, i) => {
+                                  return ranges.slice(0, 50).map((r, i) => {
                                     const captions = (vlmResult.analysis.samples || []).filter(s => s.time_sec >= r.startTime - 0.0001 && s.time_sec <= r.endTime + 0.0001).map(s => s.caption).filter(Boolean);
                                     return (
                                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -919,7 +986,7 @@ function App() {
                             ) : (<div style={{ color: cssVars.muted }}>No work frames detected.</div>)}
                           </div>
                         </div>
-                        
+
                       </div>
                     )}
                   </>
@@ -947,8 +1014,12 @@ function App() {
         {activeView === 'subtasks' && (
           <Subtasks refreshTrigger={subtasksRefreshTrigger} />
         )}
+
+        {activeView === 'training' && (
+          <Training />
+        )}
       </div>
-    </div>
+    </div >
   );
 }
 

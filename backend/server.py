@@ -581,6 +581,22 @@ async def delete_analysis(analysis_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post('/backend/relabel')
+async def relabel_analysis(
+    analysis_id: str = Form(...),
+    label: str = Form(...),
+    start_frame: int = Form(None),
+    end_frame: int = Form(None),
+    start_time: float = Form(None),
+    end_time: float = Form(None)
+):
+    try:
+        count = db_mod.update_samples_label(analysis_id, label, start_frame, end_frame, start_time, end_time)
+        return {"success": True, "updated_samples": count}
+    except Exception as e:
+        return make_alert_json(str(e), status_code=500)
+
+
 # ============================================================================
 # ML TRAINING PIPELINE ENDPOINTS
 # ============================================================================
@@ -694,6 +710,126 @@ async def upload_and_extract_features(
     except Exception as e:
         module_logger.exception('Failed to extract features')
         return make_alert_json(f'Feature extraction failed: {e}', status_code=500)
+
+
+@app.post("/backend/sync_analysis_to_features")
+async def sync_analysis_to_features(
+    analysis_id: str = Form(...),
+    detector_type: str = Form('fusion'),
+):
+    """Sync labels from an analysis to a feature file (extracting features if needed)."""
+    import pandas as pd
+    import subprocess
+    import tempfile
+    
+    try:
+        # 1. Get analysis and labels
+        analysis = db_mod.get_analysis_from_db(analysis_id)
+        if not analysis:
+            return make_alert_json("Analysis not found", status_code=404)
+            
+        video_filename = analysis.get('filename')
+        # Fix: VLM uploads might have path separators or be just filenames.
+        # usually it is just "filename" stored in DB.
+        if not video_filename:
+            return make_alert_json("Analysis has no associated video file", status_code=400)
+            
+        video_path = os.path.join(VLM_UPLOAD_DIR, os.path.basename(video_filename))
+        if not os.path.exists(video_path):
+             return make_alert_json(f"Video file not found: {video_path}", status_code=404)
+
+        # 2. Prepare labels CSV from DB samples
+        samples = analysis.get('samples', [])
+        # Filter samples that have a meaningful label
+        labeled_samples = [s for s in samples if s.get('label')]
+        
+        # Create temp labels CSV
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, newline='') as tmp_labels:
+            import csv
+            writer = csv.writer(tmp_labels)
+            writer.writerow(['frame_index', 'label'])
+            for s in labeled_samples:
+                writer.writerow([s.get('frame_index'), s.get('label')])
+            labels_csv_path = tmp_labels.name
+        
+        # 3. Determine feature file path
+        # Convention: {video_filename}_features.parquet
+        feature_filename = f"{video_filename}_features.parquet"
+        feature_path = os.path.join(FEATURES_DIR, feature_filename)
+        
+        # 4. Check if features exist
+        if os.path.exists(feature_path):
+            # Update existing features with new labels
+            module_logger.info(f"Updating labels in existing feature file: {feature_path}")
+            try:
+                df = pd.read_parquet(feature_path)
+                
+                # Load labels into a map
+                label_map = {s.get('frame_index'): s.get('label') for s in labeled_samples}
+                
+                # Update 'label' column
+                # Use map to update only where we have new labels, or overwrite?
+                # Active learning usually implies we trust the DB labels more.
+                # However, if the feature file has MORE frames than the DB (e.g. VLM was sparse),
+                # we only update the frames we know about.
+                
+                # If 'label' column doesn't exist, create it
+                if 'label' not in df.columns:
+                    df['label'] = None
+                
+                # We can iterate or use map. Map is faster but tricky if we want to preserve old labels 
+                # for frames NOT in the DB.
+                # df['label'] = df['frame_index'].map(label_map).fillna(df['label'])
+                # ^ This works: map returns new label or NaN (if missing in map). 
+                # fillna fills NaN with original label.
+                
+                df['label'] = df['frame_index'].map(label_map).combine_first(df['label'])
+                
+                df.to_parquet(feature_path, index=False)
+                status = "updated"
+            except Exception as e:
+                module_logger.error(f"Failed to update parquet: {e}")
+                return make_alert_json(f"Failed to update existing feature file: {e}", status_code=500)
+            
+        else:
+            # Extract features from scratch
+            module_logger.info(f"Extracting new features to: {feature_path}")
+            
+            cmd = [
+                'python', 'scripts/extract_features.py',
+                '--video', video_path,
+                '--output', feature_path,
+                '--video-id', analysis_id, # Use analysis ID or filename as ID
+                '--labels', labels_csv_path,
+                '--detector', detector_type,
+                '--sample-rate', '1', # Deep learning usually needs dense frames
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            if result.returncode != 0:
+                module_logger.error(f"Feature extraction failed: {result.stderr}")
+                os.unlink(labels_csv_path)
+                return make_alert_json(f"Feature extraction failed: {result.stderr}", status_code=500)
+            
+            status = "created"
+
+        # Cleanup temp file
+        if os.path.exists(labels_csv_path):
+            os.unlink(labels_csv_path)
+
+        # Return stats
+        df = pd.read_parquet(feature_path)
+        return {
+            "success": True,
+            "status": status,
+            "feature_file": feature_path,
+            "num_frames": len(df),
+            "num_labeled": int(df['label'].notna().sum()) if 'label' in df.columns else 0
+        }
+
+    except Exception as e:
+        module_logger.exception("Sync failed")
+        return make_alert_json(str(e), status_code=500)
 
 
 @app.get("/backend/features")

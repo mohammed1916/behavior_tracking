@@ -520,6 +520,38 @@ def delete_task_from_db(task_id):
             vector_store.delete('subtasks', it.get('id'))
     return vector_store.delete('tasks', task_id)
 
+def update_samples_label(analysis_id, label, start_frame=None, end_frame=None, start_time=None, end_time=None):
+    """Update labels for a range of samples in an analysis."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    
+    # helper to find frames by time if needed
+    if start_time is not None and start_frame is None:
+        # get FPS from analysis
+        cur.execute('SELECT fps FROM analyses WHERE id=?', (analysis_id,))
+        r = cur.fetchone()
+        fps = r[0] if r else 30.0
+        start_frame = int(start_time * fps)
+        if end_time is not None:
+            end_frame = int(end_time * fps)
+            
+    query = 'UPDATE samples SET label=? WHERE analysis_id=?'
+    params = [label, analysis_id]
+    
+    if start_frame is not None:
+        query += ' AND frame_index >= ?'
+        params.append(start_frame)
+    if end_frame is not None:
+        query += ' AND frame_index <= ?'
+        params.append(end_frame)
+        
+    cur.execute(query, tuple(params))
+    rows = cur.rowcount
+    conn.commit()
+    conn.close()
+    return rows
+
 def compute_ranges(frames, samples, fps):
     if not frames or (hasattr(frames, '__len__') and len(frames) == 0):
         return []
