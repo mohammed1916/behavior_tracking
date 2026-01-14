@@ -356,8 +356,18 @@ def create_annotated_video(
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         # Create video writer
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # type: ignore
-        out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+        # browsers typically prefer avc1 (H.264) over mp4v for .mp4, or vp8/vp9 for .webm
+        try:
+            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+            out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+            if not out.isOpened():
+                # Fallback to mp4v if avc1 fails (though browser might not like it, at least file is created)
+                logger.warning("avc1 codec failed, falling back to mp4v")
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+        except Exception:
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
         
         # Index samples by frame index
         samples_by_frame = {}
