@@ -11,7 +11,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../scripts/mediapipe_vlm'))
 
 from motion_detector import MediaPipeMotionDetector
-from base import DetectorBase, DetectorOutput
+from .base import DetectorBase, DetectorOutput
 
 logger = logging.getLogger(__name__)
 

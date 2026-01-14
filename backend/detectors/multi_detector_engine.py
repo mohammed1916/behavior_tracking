@@ -4,7 +4,7 @@ import logging
 from typing import Dict, List, Optional
 from enum import Enum
 
-from base import DetectorOutput, DetectorBase
+from .base import DetectorOutput, DetectorBase
 
 logger = logging.getLogger(__name__)
 

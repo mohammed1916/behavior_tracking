@@ -4,9 +4,9 @@ import logging
 from typing import Dict, Optional, List
 from enum import Enum
 
-from base import DetectorBase, DetectorOutput
-from mediapipe_detector import MediaPipeDetector
-from yolo_detector import YOLODetector
+from .base import DetectorBase, DetectorOutput
+from .mediapipe_detector import MediaPipeDetector
+from .yolo_detector import YOLODetector
 
 logger = logging.getLogger(__name__)
 

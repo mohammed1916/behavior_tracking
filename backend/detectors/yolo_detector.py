@@ -11,7 +11,7 @@ try:
 except ImportError:
     HAS_YOLO = False
 
-from base import DetectorBase, DetectorOutput
+from .base import DetectorBase, DetectorOutput
 
 logger = logging.getLogger(__name__)
 
