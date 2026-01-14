@@ -25,6 +25,10 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
 import lightgbm as lgb
+# Temporal models
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -103,6 +107,43 @@ def train_random_forest(X_train: np.ndarray, y_train: np.ndarray, **kwargs) -> R
 
 
 def train_lightgbm(X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray, **kwargs) -> lgb.LGBMClassifier:
+    class LSTMClassifier(nn.Module):
+        def __init__(self, input_dim, hidden_dim, num_layers, num_classes):
+            super().__init__()
+            self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
+            self.fc = nn.Linear(hidden_dim, num_classes)
+
+        def forward(self, x):
+            out, _ = self.lstm(x)
+            out = out[:, -1, :]
+            out = self.fc(out)
+            return out
+
+    def train_lstm(X_train, y_train, X_val, y_val, num_classes, input_dim, device='cpu', epochs=20, lr=1e-3, hidden_dim=64, num_layers=1):
+        model = LSTMClassifier(input_dim, hidden_dim, num_layers, num_classes).to(device)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+        X_train_t = torch.tensor(X_train, dtype=torch.float32).to(device)
+        y_train_t = torch.tensor(y_train, dtype=torch.long).to(device)
+        X_val_t = torch.tensor(X_val, dtype=torch.float32).to(device)
+        y_val_t = torch.tensor(y_val, dtype=torch.long).to(device)
+        best_val_acc = 0.0
+        for epoch in range(epochs):
+            model.train()
+            optimizer.zero_grad()
+            outputs = model(X_train_t)
+            loss = criterion(outputs, y_train_t)
+            loss.backward()
+            optimizer.step()
+            model.eval()
+            with torch.no_grad():
+                val_outputs = model(X_val_t)
+                val_pred = val_outputs.argmax(dim=1)
+                val_acc = (val_pred == y_val_t).float().mean().item()
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+            logger.info(f"Epoch {epoch+1}/{epochs} - Loss: {loss.item():.4f} - Val Acc: {val_acc:.4f}")
+        return model
     """Train LightGBM classifier."""
     model = lgb.LGBMClassifier(
         n_estimators=kwargs.get('n_estimators', 100),
@@ -203,49 +244,66 @@ def train_classifier(
     # Load dataset
     X_train, y_train, X_val, y_val, X_test, y_test, metadata = load_dataset(dataset_dir)
     
-    # Aggregate windows
-    X_train_agg = aggregate_windows(X_train, method=aggregation)
-    X_val_agg = aggregate_windows(X_val, method=aggregation)
-    X_test_agg = aggregate_windows(X_test, method=aggregation)
-    
-    # Train model
-    if model_type == 'rf':
-        model = train_random_forest(X_train_agg, y_train, **model_kwargs)
-    elif model_type == 'lgbm':
-        model = train_lightgbm(X_train_agg, y_train, X_val_agg, y_val, **model_kwargs)
+    # Aggregate windows for non-temporal models
+    if model_type in ['rf', 'lgbm']:
+        X_train_agg = aggregate_windows(X_train, method=aggregation)
+        X_val_agg = aggregate_windows(X_val, method=aggregation)
+        X_test_agg = aggregate_windows(X_test, method=aggregation)
+        if model_type == 'rf':
+            model = train_random_forest(X_train_agg, y_train, **model_kwargs)
+        elif model_type == 'lgbm':
+            model = train_lightgbm(X_train_agg, y_train, X_val_agg, y_val, **model_kwargs)
+        metrics = evaluate_model(model, X_test_agg, y_test, metadata)
+        save_model(model, output_path, metadata, metrics, aggregation)
+        return metrics
+    # Temporal models: LSTM
+    elif model_type == 'lstm':
+        input_dim = X_train.shape[2]
+        num_classes = len(set(y_train))
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        model = train_lstm(X_train, y_train, X_val, y_val, num_classes, input_dim, device=device, epochs=model_kwargs.get('epochs', 20), lr=model_kwargs.get('lr', 1e-3), hidden_dim=model_kwargs.get('hidden_dim', 64), num_layers=model_kwargs.get('num_layers', 1))
+        # Evaluate
+        X_test_t = torch.tensor(X_test, dtype=torch.float32).to(device)
+        y_test_t = torch.tensor(y_test, dtype=torch.long).to(device)
+        model.eval()
+        with torch.no_grad():
+            outputs = model(X_test_t)
+            y_pred = outputs.argmax(dim=1).cpu().numpy()
+        accuracy = (y_pred == y_test).mean()
+        metrics = {'accuracy': float(accuracy)}
+        save_model(model, output_path, metadata, metrics, aggregation)
+        return metrics
     else:
         raise ValueError(f"Unknown model type: {model_type}")
-    
-    # Evaluate
-    metrics = evaluate_model(model, X_test_agg, y_test, metadata)
-    
-    # Save
-    save_model(model, output_path, metadata, metrics, aggregation)
-    
-    return metrics
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Train baseline task classifier')
+    parser = argparse.ArgumentParser(description='Train baseline or temporal task classifier')
     parser.add_argument('--dataset', required=True, help='Path to dataset directory')
-    parser.add_argument('--model', choices=['rf', 'lgbm'], default='rf', help='Model type (default: rf)')
+    parser.add_argument('--model', choices=['rf', 'lgbm', 'lstm'], default='rf', help='Model type (default: rf)')
     parser.add_argument('--output', required=True, help='Path to save trained model (.pkl)')
-    parser.add_argument('--agg', choices=['stats', 'flatten'], default='stats',
-                        help='Aggregation method (default: stats)')
+    parser.add_argument('--agg', choices=['stats', 'flatten'], default='stats', help='Aggregation method (default: stats)')
     parser.add_argument('--n-estimators', type=int, default=100, help='Number of trees (default: 100)')
     parser.add_argument('--max-depth', type=int, default=None, help='Max tree depth (default: None)')
     parser.add_argument('--learning-rate', type=float, default=0.1, help='Learning rate for LightGBM (default: 0.1)')
-    
+    # Temporal model args
+    parser.add_argument('--epochs', type=int, default=20, help='Epochs for LSTM (default: 20)')
+    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate for LSTM (default: 1e-3)')
+    parser.add_argument('--hidden-dim', type=int, default=64, help='Hidden dimension for LSTM (default: 64)')
+    parser.add_argument('--num-layers', type=int, default=1, help='Number of LSTM layers (default: 1)')
+
     args = parser.parse_args()
-    
+
     model_kwargs = {
         'n_estimators': args.n_estimators,
         'max_depth': args.max_depth,
+        'learning_rate': args.learning_rate,
+        'epochs': args.epochs,
+        'lr': args.lr,
+        'hidden_dim': args.hidden_dim,
+        'num_layers': args.num_layers,
     }
-    
-    if args.model == 'lgbm':
-        model_kwargs['learning_rate'] = args.learning_rate
-    
+
     train_classifier(
         dataset_dir=args.dataset,
         model_type=args.model,
@@ -253,7 +311,6 @@ def main():
         aggregation=args.agg,
         **model_kwargs
     )
-
 
 if __name__ == '__main__':
     main()

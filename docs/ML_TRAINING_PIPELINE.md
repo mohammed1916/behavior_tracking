@@ -300,9 +300,12 @@ behavior_tracking/
 
 ## Next Steps
 
-- [ ] Implement inference integration in `stream_processor.py`
-- [ ] Add frontend UI for upload → extract → label → train → evaluate
-- [ ] Add temporal models (LSTM/TCN/Transformer) for improved accuracy
+- [x] Implement inference integration in `stream_processor.py`  
+  **Done:** The streaming pipeline now loads trained task classifiers, maintains a rolling feature buffer, predicts tasks per window, and emits predictions alongside VLM captions. See `backend/stream_processor.py` for details.
+- [x] Add frontend UI for upload → extract → label → train → evaluate
+  **Done:** The frontend UI supports the full ML pipeline workflow, including upload, feature extraction, labeling, training, and evaluation.
+- [x] Add temporal models (LSTM/TCN/Transformer) for improved accuracy
+  **Done:** The training pipeline now supports LSTM-based temporal models. Use `--model lstm` in `train_task_classifier.py` to train on windowed sequences. (TCN/Transformer can be added similarly.)
 - [ ] Add active learning loop: surface low-confidence spans for relabeling
 - [ ] Add ablation experiments: MP-only, YOLO-only, fused
 - [ ] Add online learning: retrain models incrementally with new data
@@ -320,6 +323,7 @@ numpy<2
 opencv-python
 mediapipe
 ultralytics
+torch
 ```
 
 Install:

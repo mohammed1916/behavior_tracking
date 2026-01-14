@@ -41,6 +41,7 @@ function App() {
   const [advJpegQuality, setAdvJpegQuality] = useState(80);
   const [advMaxWidth, setAdvMaxWidth] = useState('');
   const [advSaveRecording, setAdvSaveRecording] = useState(false);
+  const [lowConfidenceThreshold, setLowConfidenceThreshold] = useState(0.5);
   const [processingMode, setProcessingMode] = useState('every_2s');
   const [sampleIntervalSec, setSampleIntervalSec] = useState(2.0);
   const [vlmPrompt, setVlmPrompt] = useState('');
@@ -153,6 +154,9 @@ function App() {
       }
       if (sampleIntervalSec && sampleIntervalSec > 0) {
         url += `&sample_interval_sec=${encodeURIComponent(sampleIntervalSec)}`;
+      }
+      if (lowConfidenceThreshold !== undefined && lowConfidenceThreshold !== null) {
+        url += `&low_confidence_threshold=${encodeURIComponent(lowConfidenceThreshold)}`;
       }
       if (vlmStream) { try { vlmStream.close(); } catch {} }
       const es = new EventSource(url);
@@ -558,6 +562,30 @@ function App() {
                       <div>
                         <label>Save Recording:</label>
                         <input type="checkbox" checked={advSaveRecording} onChange={(e) => setAdvSaveRecording(e.target.checked)} />
+                      </div>
+                      <div>
+                        <label>Low-Confidence Threshold: {lowConfidenceThreshold}</label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={lowConfidenceThreshold}
+                          onChange={e => setLowConfidenceThreshold(parseFloat(e.target.value))}
+                          style={{ width: '100%' }}
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={lowConfidenceThreshold}
+                          onChange={e => setLowConfidenceThreshold(parseFloat(e.target.value))}
+                          style={{ width: '100%', marginTop: 4 }}
+                        />
+                        <small style={{ color: 'var(--muted)' }}>
+                          Frames or segments with confidence below this value will be surfaced for relabeling.
+                        </small>
                       </div>
                       <div>
                         <label>Enable MediaPipe:</label>

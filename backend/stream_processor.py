@@ -156,6 +156,7 @@ def create_stream_generator(
     enable_mediapipe: bool = False,  # Use MediaPipe for motion detection
     enable_yolo: bool = False,  # Use YOLO for object detection
     detector_fusion_mode: str = 'cascade',  # How to combine YOLO + MediaPipe
+    low_confidence_threshold: float = 0.5,  # Threshold for low-confidence surfacing
 ) -> Generator[bytes, None, None]:
     """
     Shared streaming generator for webcam and file-based processing.
@@ -338,16 +339,18 @@ def create_stream_generator(
             if is_webcam and (time.time() - last_inference_time) < sample_interval:
                 continue
             
+
             try:
                 # VLM inference: single call per frame
                 caption = get_frame_caption(frame, captioner, vlm_prompt)
-                
+
                 # DEBUG: Store VLM caption
                 debug_vlm_captions.append((elapsed_time, caption))
                 logger.debug(f"[DEBUG_VLM] t={elapsed_time:.2f}s: {caption[:80]}")
-                
+
                 # Detector analysis (optional, for activity classification context)
                 detector_info = None
+                detector_confidence = None
                 if detector:
                     try:
                         detector_output = detector.process_frame(frame)
@@ -356,14 +359,15 @@ def create_stream_generator(
                             'detector_confidence': detector_output.confidence,
                             'detector_metadata': detector_output.metadata,
                         }
-                        if frame_counter % 10 == 0:  # Log every 10 frames to avoid spam
+                        detector_confidence = detector_output.confidence
+                        if frame_counter % 10 == 0:
                             logger.info(f"[DETECTOR] t={elapsed_time:.2f}s: {detector_output.label} (conf={detector_output.confidence:.2f})")
                     except Exception as e:
                         logger.warning(f"[DETECTOR] Error at frame {frame_counter}: {e}")
                         import traceback
                         logger.warning(traceback.format_exc())
                         detector_info = {'detector_error': str(e)}
-                
+
                 # Text-based classification: caption → label
                 label, cls_text = per_sample_label_for_source(
                     classifier_source_norm,
@@ -374,7 +378,7 @@ def create_stream_generator(
                     classify_prompt_template,
                     effective_use_llm,
                 )
-                
+
                 # Check subtask overrun
                 subtask_overrun = None
                 if subtask_id and label == 'work':
@@ -389,7 +393,12 @@ def create_stream_generator(
                             subtask_overrun = actual_work_time > expected
                     except Exception:
                         subtask_overrun = None
-                
+
+                # Determine if this sample is low-confidence
+                is_low_conf = False
+                if detector_confidence is not None and detector_confidence < low_confidence_threshold:
+                    is_low_conf = True
+
                 # Emit sample
                 payload = {
                     "stage": "sample",
@@ -398,12 +407,14 @@ def create_stream_generator(
                     "caption": caption,
                     "label": label,
                     "llm_output": cls_text,
+                    "low_confidence": is_low_conf,
+                    "confidence": detector_confidence,
                 }
                 if subtask_overrun is not None:
                     payload['subtask_overrun'] = subtask_overrun
                 if detector_info:
                     payload['detector'] = detector_info
-                
+
                 # Encode image if requested
                 if is_webcam and jpeg_quality:
                     try:
@@ -412,9 +423,9 @@ def create_stream_generator(
                             payload['image'] = b64
                     except Exception:
                         pass
-                
+
                 yield sse_event_fn(payload)
-                
+
                 # Collect sample (include detector metadata for visualization later)
                 sample = {
                     'frame_index': frame_counter,
@@ -422,43 +433,52 @@ def create_stream_generator(
                     'caption': caption,
                     'label': label,
                     'llm_output': cls_text,
+                    'low_confidence': is_low_conf,
+                    'confidence': detector_confidence,
                 }
-                
+
                 # Serialize detector data for later visualization
                 if detector_info:
-                    # Store raw detector output for visualization overlays
                     metadata_for_storage = {}
                     if 'detector_metadata' in detector_info:
                         metadata_for_storage = detector_info['detector_metadata'].copy()
                     metadata_for_storage['detector_label'] = detector_info.get('detector_label')
                     metadata_for_storage['detector_confidence'] = detector_info.get('detector_confidence')
-                    
-                    # Extract visualization-ready data from raw output
                     if detector and hasattr(detector, 'name'):
                         metadata_for_storage['detector_type'] = detector.name
-                    
                     sample['detector_metadata'] = metadata_for_storage
-                    if frame_counter % 10 == 0:  # Log every 10 frames to avoid spam
+                    if frame_counter % 10 == 0:
                         logger.info(f"[SAMPLE] Frame {frame_counter}: detector_metadata stored with keys {list(metadata_for_storage.keys())}")
-                
+
                 collected_samples.append(sample)
                 if label == 'work':
                     collected_work.append(frame_counter)
                 else:
                     collected_idle.append(frame_counter)
-                
+
+                # Emit low-confidence span event if needed
+                if is_low_conf:
+                    yield sse_event_fn({
+                        "stage": "low_confidence_span",
+                        "frame_index": frame_counter,
+                        "time_sec": elapsed_time,
+                        "confidence": detector_confidence,
+                        "label": label,
+                        "caption": caption
+                    })
+
                 # Window aggregation (LLM mode only)
                 if classifier_source_norm == 'llm':
                     logger.debug(f"Adding sample to window at t={elapsed_time:.2f}s: {caption[:50]}...")
                     if current_window is None:
                         current_window = CaptionTimeline()
-                    
+
                     current_window.add_sample(elapsed_time, caption)
-                    
+
                     # Check window closure
                     if len(current_window) >= max_samples_per_window:
                         timeline_text = current_window.to_timeline_text()
-                        
+
                         # DEBUG: Store LLM input
                         llm_input_prompt = classify_prompt_template.format(caption=timeline_text, prompt=prompt)
                         debug_llm_inputs.append({
@@ -469,7 +489,7 @@ def create_stream_generator(
                         })
                         logger.info(f"[DEBUG_LLM_INPUT] Window closed at t={elapsed_time:.2f}s with {len(current_window.samples)} samples")
                         logger.debug(f"[DEBUG_LLM_INPUT] Timeline: {timeline_text[:200]}")
-                        
+
                         segments = segment_activities(
                             timeline_text,
                             classify_prompt_template,
@@ -478,22 +498,21 @@ def create_stream_generator(
                             current_window.samples,
                             min_samples,
                         )
-                        
+
                         for seg_event in segments:
                             collected_segments.append(seg_event)
                             yield sse_event_fn(seg_event)
-                            
+
                             # Update samples in segment range and emit sample_update events
                             segment_label = seg_event.get('label')
                             segment_start = seg_event.get('start_time', 0)
                             segment_end = seg_event.get('end_time', 0)
-                            
+
                             for sample in collected_samples:
                                 sample_time = sample.get('time_sec', 0)
                                 if segment_start <= sample_time <= segment_end:
                                     if segment_label and sample.get('label') is None:
                                         sample['label'] = segment_label
-                                        # Emit sample_update event so frontend can add to idle/work frames
                                         yield sse_event_fn({
                                             "stage": "sample_update",
                                             "frame_index": sample['frame_index'],
@@ -503,11 +522,11 @@ def create_stream_generator(
                                             collected_idle.append(sample['frame_index'])
                                         else:
                                             collected_work.append(sample['frame_index'])
-                        
+
                         current_window = None
-                
+
                 last_inference_time = time.time()
-                
+
             except Exception as e:
                 yield sse_event_fn({"stage": "sample_error", "frame_index": frame_counter, "error": str(e)})
         

@@ -167,7 +167,25 @@ def make_alert_json(message: str, status_code: int = 400):
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('none'), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+async def vlm_local_stream(
+    filename: str = Query(...),
+    model: str = Query(...),
+    prompt: str = Query(''),
+    use_llm: bool = Query(False),
+    subtask_id: str = Query(None),
+    task_id: str = Query(None),
+    evaluation_mode: str = Query('none'),
+    enable_mediapipe: bool = Query(False),
+    enable_yolo: bool = Query(False),
+    rule_set: str = Query('default'),
+    classifier: str = Query('blip_binary'),
+    classifier_prompt: str = Query(None),
+    classifier_mode: str = Query('binary'),
+    classifier_source: str = Query('llm'),
+    sample_interval_sec: Optional[float] = Query(None),
+    processing_mode: str = Query('current_frame'),
+    low_confidence_threshold: float = Query(0.5)
+):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -243,6 +261,7 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 enable_mediapipe=enable_mediapipe,
                 enable_yolo=enable_yolo,
                 detector_fusion_mode='cascade',  # TODO: make configurable via API
+                low_confidence_threshold=low_confidence_threshold
             )
         except Exception as e:
             yield _sse_event({"stage": "alert", "message": str(e)})
