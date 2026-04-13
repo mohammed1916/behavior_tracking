@@ -10,6 +10,7 @@ import json
 import logging
 import threading
 import backend.rules as rules_mod
+from datetime import datetime
 
 #if env has set debug then debug mode
 if os.getenv('DEBUG', '0') == '1':
@@ -542,7 +543,7 @@ async def update_task_endpoint(task_id: str, name: str = Form(...)):
 
 @app.delete('/backend/tasks/{task_id}')
 async def delete_task_endpoint(task_id: str):
-    t = get_task_from_db(task_id)
+    t = db_mod.get_task_from_db(task_id)
     if not t:
         raise HTTPException(status_code=404, detail='task not found')
     deleted = db_mod.delete_task_from_db(task_id)
@@ -845,7 +846,7 @@ async def list_features():
                     'filename': fname,
                     'path': fpath,
                     'size_mb': round(stat.st_size / (1024*1024), 2),
-                    'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    'created': datetime.fromtimestamp(stat.st_birthtime).isoformat(),
                 })
         files.sort(key=lambda x: x['created'], reverse=True)
         return {'features': files}

@@ -8009,3 +8009,35 @@ t=58.0s: there is a man that is standing in a sto...
 2026-01-09 11:49:54,048 backend.db - INFO [DB_SAVE] analysis 03fb0972-9435-43e5-977e-5e8103a93e24 samples saved to database
 2026-01-09 11:49:54,049 backend.db - INFO [DB_SAVE] analysis 03fb0972-9435-43e5-977e-5e8103a93e24 saving 18 segments to database
 2026-01-09 11:49:54,052 backend.db - INFO [DB_SAVE_COMPLETE] analysis 03fb0972-9435-43e5-977e-5e8103a93e24 saved to database
+2026-01-14 13:10:41,542 backend.stream_processor - INFO [DETECTOR_INIT] enable_mediapipe=True, enable_yolo=True
+2026-01-14 13:10:43,409 backend.detectors.mediapipe_yolo_detector - INFO MediaPipe detector initialized
+2026-01-14 13:10:43,547 backend.detectors.yolo_detector - INFO YOLO loaded: yolov8n.pt on device cuda:0
+2026-01-14 13:10:43,548 backend.detectors.mediapipe_yolo_detector - INFO YOLO detector initialized with yolov8n
+2026-01-14 13:10:43,548 backend.stream_processor - INFO [DETECTOR_INIT] Initialized MediaPipe + YOLO detector with strategy=cascade
+2026-01-14 13:10:45,087 backend.stream_processor - INFO [DETECTOR] t=0.00s: idle (conf=0.00)
+2026-01-14 13:10:45,088 backend.stream_processor - INFO [SAMPLE] Frame 0: detector_metadata stored with keys ['strategy', 'mp_signal', 'yolo_context', 'mp_confidence', 'yolo_confidence', 'detector_label', 'detector_confidence', 'detector_type']
+2026-01-14 13:10:45,433 backend.stream_processor - INFO [DETECTOR] t=2.00s: idle (conf=0.00)
+2026-01-14 13:10:45,434 backend.stream_processor - INFO [SAMPLE] Frame 60: detector_metadata stored with keys ['strategy', 'mp_signal', 'yolo_context', 'mp_confidence', 'yolo_confidence', 'detector_label', 'detector_confidence', 'detector_type']
+2026-01-14 13:10:45,434 backend.stream_processor - INFO [DEBUG_LLM_INPUT] Final window flush with 2 samples
+2026-01-14 13:11:28,209 backend.stream_utils - WARNING [PARSE_LLM] No valid segments found in LLM output. Creating fallback segment with all 2 captions.
+2026-01-14 13:11:28,210 backend.stream_utils - WARNING [PARSE_LLM] LLM output was: 
+2026-01-14 13:11:28,211 backend.stream_processor - INFO [DEBUG_SUMMARY] Total VLM captions: 2
+2026-01-14 13:11:28,212 backend.stream_processor - INFO [DEBUG_SUMMARY] Total LLM inputs: 1
+2026-01-14 13:11:28,212 backend.stream_processor - INFO [DEBUG_SUMMARY] VLM captions: [(0.0, 'someone is holding a black wire with a s'), (2.0, 'someone is making a small circuit with a')]...
+2026-01-14 13:11:28,212 backend.stream_processor - INFO [DEBUG_SUMMARY] LLM Input #1 at t=final_flush: 2 samples, timeline=t=0.0s: someone is holding a black wire with a small black object in it
+t=2.0s: someone is making a ...
+2026-01-14 13:11:28,214 backend.db - INFO [STATS] samples=2 duration=2.20 fps=30.00 work=0.00s idle=2.00s unclass=0.20s work%=0.0 idle%=90.9 unclass%=9.1
+2026-01-14 13:11:28,214 backend.db - INFO [STATS_SAVE] analysis=2df74e7c-8dcc-4465-94e0-ea77121f7a54 duration=2.20 fps=30.00 work=0.00s idle=2.00s unclass=0.20s work%=0.0 idle%=90.9 unclass%=9.1
+2026-01-14 13:11:28,219 backend.db - INFO [DB_SAVE] analysis 2df74e7c-8dcc-4465-94e0-ea77121f7a54 saved to database
+2026-01-14 13:11:28,220 backend.db - INFO [DB_SAVE] analysis 2df74e7c-8dcc-4465-94e0-ea77121f7a54 saving 2 samples to database
+2026-01-14 13:11:28,220 backend.db - INFO [DB_SAVE] analysis 2df74e7c-8dcc-4465-94e0-ea77121f7a54 samples saved to database
+2026-01-14 13:11:28,221 backend.db - INFO [DB_SAVE] analysis 2df74e7c-8dcc-4465-94e0-ea77121f7a54 saving 1 segments to database
+2026-01-14 13:11:28,222 backend.db - INFO [DB_SAVE_COMPLETE] analysis 2df74e7c-8dcc-4465-94e0-ea77121f7a54 saved to database
+2026-01-14 13:11:35,682 backend.stream_processor - INFO Detector cleaned up
+2026-01-14 13:13:32,175 backend.visualization - INFO Created annotated video: C:\Users\BBBS-A~1\AppData\Local\Temp\tmp27_mw121.mp4
+2026-01-14 13:13:34,228 backend.visualization - INFO Created annotated video: C:\Users\BBBS-A~1\AppData\Local\Temp\tmpvr032i2l.mp4
+2026-01-14 13:13:47,119 backend.visualization - INFO Created annotated video: C:\Users\BBBS-A~1\AppData\Local\Temp\tmpef50lcas.mp4
+2026-01-14 13:13:48,264 backend.visualization - INFO Created annotated video: C:\Users\BBBS-A~1\AppData\Local\Temp\tmp2tcza4dd.mp4
+2026-01-14 13:13:49,192 backend.visualization - INFO Created annotated video: C:\Users\BBBS-A~1\AppData\Local\Temp\tmpvm9v2ekz.mp4
+2026-01-14 13:14:00,924 backend.visualization - INFO Created annotated video: C:\Users\BBBS-A~1\AppData\Local\Temp\tmpo44b60rh.mp4
+2026-01-14 13:14:01,332 backend.visualization - INFO Created annotated video: C:\Users\BBBS-A~1\AppData\Local\Temp\tmp92mty9bp.mp4

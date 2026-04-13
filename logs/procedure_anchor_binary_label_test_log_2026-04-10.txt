@@ -1,0 +1,51 @@
+Procedure Anchor Binary Label Test Log
+Date: 2026-04-10
+Workspace: c:\Users\BBBS-AI-01\d\behavior_tracking
+
+Scope
+- Validate binary label generation rule:
+  inside labeled procedure segments => work
+  outside labeled procedure segments => idle
+
+Commands Run
+1. Bulk export
+   & 'C:\ProgramData\anaconda3\python.exe' scripts/parse_procedure_anchors.py 'dataset\sequential_human_assembly\Scenario-B-Assembly\Assembly\procedure_anchors.csv' --all --output 'dataset\sequential_human_assembly\Scenario-B-Assembly\Assembly\binary_labels' --mode binary
+
+2. Single-video retest
+   & 'C:\ProgramData\anaconda3\python.exe' scripts/parse_procedure_anchors.py 'dataset\sequential_human_assembly\Scenario-B-Assembly\Assembly\procedure_anchors.csv' --video-id s2_p1_1_a_1 --output 'dataset\sequential_human_assembly\Scenario-B-Assembly\Assembly\binary_labels\s2_p1_1_a_1_retest.csv' --mode binary
+
+Results
+- Bulk export completed successfully
+- Label files written: 225
+- Validation across generated *_labels.csv files:
+  - files: 225
+  - files containing idle frames: 225
+  - invalid labels found: none
+  - row count min: 920
+  - row count max: 1385
+  - row count median: 1083
+
+Sample generated files
+- s2_p10_1_a_1_labels.csv -> rows=1384, work=1292, idle=92
+- s2_p10_1_a_2_labels.csv -> rows=1384, work=1292, idle=92
+- s2_p10_1_a_3_labels.csv -> rows=1384, work=1292, idle=92
+- s2_p10_2_a_1_labels.csv -> rows=1277, work=1180, idle=97
+- s2_p10_2_a_2_labels.csv -> rows=1277, work=1180, idle=97
+
+Spot Check
+- Previously verified on s2_p1_1_a_1_labels.csv:
+  - total rows: 1047
+  - work: 983
+  - idle: 64
+  - known idle gap behaved correctly:
+    - frame 623 => work
+    - frame 624 => idle
+    - frame 641 => idle
+    - frame 642 => work
+
+Notes
+- One one-off retest verification command could not reopen the retest CSV by the expected relative path after creation.
+- This did not affect the bulk export validation, which succeeded and was verified from the generated *_labels.csv files.
+
+Outcome
+- PASS: binary work/idle label generation is working for the Assembly dataset using procedure anchors.

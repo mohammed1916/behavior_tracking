@@ -1,0 +1,650 @@
+{
+  "benchmark": "vlm_binary_work_idle",
+  "model": "Salesforce/blip-image-captioning-large",
+  "device": "0",
+  "videos_dir": "dataset\\sequential_human_assembly\\Scenario-B-Assembly\\Assembly\\raw video",
+  "labels_dir": "dataset\\sequential_human_assembly\\Scenario-B-Assembly\\Assembly\\binary_labels",
+  "sample_every_frames": 60,
+  "max_videos": 5,
+  "num_videos_evaluated": 5,
+  "num_samples_total": 116,
+  "runtime_sec": 87.02,
+  "metrics": {
+    "accuracy": 0.46551724137931033,
+    "balanced_accuracy": 0.44823066841415465,
+    "f1_macro": 0.3550932568149211,
+    "f1_weighted": 0.5897442240142483,
+    "precision_idle": 0.04918032786885246,
+    "recall_idle": 0.42857142857142855,
+    "f1_idle": 0.08823529411764706,
+    "support_idle": 7,
+    "precision_work": 0.9272727272727272,
+    "recall_work": 0.46788990825688076,
+    "f1_work": 0.6219512195121951,
+    "support_work": 109,
+    "confusion_matrix": [
+      [
+        3,
+        4
+      ],
+      [
+        58,
+        51
+      ]
+    ],
+    "classification_report": {
+      "idle": {
+        "precision": 0.04918032786885246,
+        "recall": 0.42857142857142855,
+        "f1-score": 0.08823529411764706,
+        "support": 7.0
+      },
+      "work": {
+        "precision": 0.9272727272727272,
+        "recall": 0.46788990825688076,
+        "f1-score": 0.6219512195121951,
+        "support": 109.0
+      },
+      "accuracy": 0.46551724137931033,
+      "macro avg": {
+        "precision": 0.4882265275707899,
+        "recall": 0.44823066841415465,
+        "f1-score": 0.3550932568149211,
+        "support": 116.0
+      },
+      "weighted avg": {
+        "precision": 0.8742843928259416,
+        "recall": 0.46551724137931033,
+        "f1-score": 0.5897442240142483,
+        "support": 116.0
+      }
+    }
+  },
+  "per_video": [
+    {
+      "video_id": "s2_p10_1_a_1",
+      "num_samples": 24,
+      "metrics": {
+        "accuracy": 0.7916666666666666,
+        "balanced_accuracy": 0.41304347826086957,
+        "f1_macro": 0.4418604651162791,
+        "f1_weighted": 0.8468992248062016,
+        "precision_idle": 0.0,
+        "recall_idle": 0.0,
+        "f1_idle": 0.0,
+        "support_idle": 1,
+        "precision_work": 0.95,
+        "recall_work": 0.8260869565217391,
+        "f1_work": 0.8837209302325582,
+        "support_work": 23,
+        "confusion_matrix": [
+          [
+            0,
+            1
+          ],
+          [
+            4,
+            19
+          ]
+        ],
+        "classification_report": {
+          "idle": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 1.0
+          },
+          "work": {
+            "precision": 0.95,
+            "recall": 0.8260869565217391,
+            "f1-score": 0.8837209302325582,
+            "support": 23.0
+          },
+          "accuracy": 0.7916666666666666,
+          "macro avg": {
+            "precision": 0.475,
+            "recall": 0.41304347826086957,
+            "f1-score": 0.4418604651162791,
+            "support": 24.0
+          },
+          "weighted avg": {
+            "precision": 0.9104166666666665,
+            "recall": 0.7916666666666666,
+            "f1-score": 0.8468992248062016,
+            "support": 24.0
+          }
+        }
+      },
+      "samples": [
+        {
+          "frame_index": 0,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a robot that is standing in a room"
+        },
+        {
+          "frame_index": 60,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a machine that is sitting on a table in a factory"
+        },
+        {
+          "frame_index": 120,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a factory with a machine"
+        },
+        {
+          "frame_index": 180,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 240,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 300,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 360,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 420,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 480,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "arafed machine in a factory with a man working on a machine"
+        },
+        {
+          "frame_index": 540,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        }
+      ]
+    },
+    {
+      "video_id": "s2_p10_1_a_2",
+      "num_samples": 24,
+      "metrics": {
+        "accuracy": 0.4166666666666667,
+        "balanced_accuracy": 0.6956521739130435,
+        "f1_macro": 0.34375,
+        "f1_weighted": 0.5442708333333334,
+        "precision_idle": 0.06666666666666667,
+        "recall_idle": 1.0,
+        "f1_idle": 0.125,
+        "support_idle": 1,
+        "precision_work": 1.0,
+        "recall_work": 0.391304347826087,
+        "f1_work": 0.5625,
+        "support_work": 23,
+        "confusion_matrix": [
+          [
+            1,
+            0
+          ],
+          [
+            14,
+            9
+          ]
+        ],
+        "classification_report": {
+          "idle": {
+            "precision": 0.06666666666666667,
+            "recall": 1.0,
+            "f1-score": 0.125,
+            "support": 1.0
+          },
+          "work": {
+            "precision": 1.0,
+            "recall": 0.391304347826087,
+            "f1-score": 0.5625,
+            "support": 23.0
+          },
+          "accuracy": 0.4166666666666667,
+          "macro avg": {
+            "precision": 0.5333333333333333,
+            "recall": 0.6956521739130435,
+            "f1-score": 0.34375,
+            "support": 24.0
+          },
+          "weighted avg": {
+            "precision": 0.9611111111111111,
+            "recall": 0.4166666666666667,
+            "f1-score": 0.5442708333333334,
+            "support": 24.0
+          }
+        }
+      },
+      "samples": [
+        {
+          "frame_index": 0,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a machine"
+        },
+        {
+          "frame_index": 60,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a robot that is sitting on a table in a room"
+        },
+        {
+          "frame_index": 120,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man that is standing in front of a robot"
+        },
+        {
+          "frame_index": 180,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man that is working on a machine in a room"
+        },
+        {
+          "frame_index": 240,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man that is standing in front of a machine"
+        },
+        {
+          "frame_index": 300,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot in it"
+        },
+        {
+          "frame_index": 360,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man that is standing in front of a robot"
+        },
+        {
+          "frame_index": 420,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a machine"
+        },
+        {
+          "frame_index": 480,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man that is working on a machine in a room"
+        },
+        {
+          "frame_index": 540,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot in it"
+        }
+      ]
+    },
+    {
+      "video_id": "s2_p10_1_a_3",
+      "num_samples": 24,
+      "metrics": {
+        "accuracy": 0.08333333333333333,
+        "balanced_accuracy": 0.5217391304347826,
+        "f1_macro": 0.08333333333333333,
+        "f1_weighted": 0.08333333333333333,
+        "precision_idle": 0.043478260869565216,
+        "recall_idle": 1.0,
+        "f1_idle": 0.08333333333333333,
+        "support_idle": 1,
+        "precision_work": 1.0,
+        "recall_work": 0.043478260869565216,
+        "f1_work": 0.08333333333333333,
+        "support_work": 23,
+        "confusion_matrix": [
+          [
+            1,
+            0
+          ],
+          [
+            22,
+            1
+          ]
+        ],
+        "classification_report": {
+          "idle": {
+            "precision": 0.043478260869565216,
+            "recall": 1.0,
+            "f1-score": 0.08333333333333333,
+            "support": 1.0
+          },
+          "work": {
+            "precision": 1.0,
+            "recall": 0.043478260869565216,
+            "f1-score": 0.08333333333333333,
+            "support": 23.0
+          },
+          "accuracy": 0.08333333333333333,
+          "macro avg": {
+            "precision": 0.5217391304347826,
+            "recall": 0.5217391304347826,
+            "f1-score": 0.08333333333333333,
+            "support": 24.0
+          },
+          "weighted avg": {
+            "precision": 0.9601449275362319,
+            "recall": 0.08333333333333333,
+            "f1-score": 0.08333333333333333,
+            "support": 24.0
+          }
+        }
+      },
+      "samples": [
+        {
+          "frame_index": 0,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot"
+        },
+        {
+          "frame_index": 60,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a robot that is sitting on a table in a room"
+        },
+        {
+          "frame_index": 120,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot in it"
+        },
+        {
+          "frame_index": 180,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot"
+        },
+        {
+          "frame_index": 240,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot"
+        },
+        {
+          "frame_index": 300,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot in front of him"
+        },
+        {
+          "frame_index": 360,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot"
+        },
+        {
+          "frame_index": 420,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot"
+        },
+        {
+          "frame_index": 480,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot"
+        },
+        {
+          "frame_index": 540,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a lab with a robot"
+        }
+      ]
+    },
+    {
+      "video_id": "s2_p10_2_a_1",
+      "num_samples": 22,
+      "metrics": {
+        "accuracy": 0.7272727272727273,
+        "balanced_accuracy": 0.4,
+        "f1_macro": 0.42105263157894735,
+        "f1_weighted": 0.7655502392344498,
+        "precision_idle": 0.0,
+        "recall_idle": 0.0,
+        "f1_idle": 0.0,
+        "support_idle": 2,
+        "precision_work": 0.8888888888888888,
+        "recall_work": 0.8,
+        "f1_work": 0.8421052631578947,
+        "support_work": 20,
+        "confusion_matrix": [
+          [
+            0,
+            2
+          ],
+          [
+            4,
+            16
+          ]
+        ],
+        "classification_report": {
+          "idle": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 2.0
+          },
+          "work": {
+            "precision": 0.8888888888888888,
+            "recall": 0.8,
+            "f1-score": 0.8421052631578947,
+            "support": 20.0
+          },
+          "accuracy": 0.7272727272727273,
+          "macro avg": {
+            "precision": 0.4444444444444444,
+            "recall": 0.4,
+            "f1-score": 0.42105263157894735,
+            "support": 22.0
+          },
+          "weighted avg": {
+            "precision": 0.8080808080808081,
+            "recall": 0.7272727272727273,
+            "f1-score": 0.7655502392344498,
+            "support": 22.0
+          }
+        }
+      },
+      "samples": [
+        {
+          "frame_index": 0,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a robot that is standing in a room"
+        },
+        {
+          "frame_index": 60,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a robot that is sitting on a table in a factory"
+        },
+        {
+          "frame_index": 120,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a robot that is working on a laptop in a factory"
+        },
+        {
+          "frame_index": 180,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working in a factory with a robot"
+        },
+        {
+          "frame_index": 240,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working in a factory with a machine"
+        },
+        {
+          "frame_index": 300,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 360,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man that is working on a machine in a factory"
+        },
+        {
+          "frame_index": 420,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 480,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 540,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        }
+      ]
+    },
+    {
+      "video_id": "s2_p10_2_a_2",
+      "num_samples": 22,
+      "metrics": {
+        "accuracy": 0.3181818181818182,
+        "balanced_accuracy": 0.4,
+        "f1_macro": 0.28104575163398693,
+        "f1_weighted": 0.4147355912061794,
+        "precision_idle": 0.06666666666666667,
+        "recall_idle": 0.5,
+        "f1_idle": 0.11764705882352941,
+        "support_idle": 2,
+        "precision_work": 0.8571428571428571,
+        "recall_work": 0.3,
+        "f1_work": 0.4444444444444444,
+        "support_work": 20,
+        "confusion_matrix": [
+          [
+            1,
+            1
+          ],
+          [
+            14,
+            6
+          ]
+        ],
+        "classification_report": {
+          "idle": {
+            "precision": 0.06666666666666667,
+            "recall": 0.5,
+            "f1-score": 0.11764705882352941,
+            "support": 2.0
+          },
+          "work": {
+            "precision": 0.8571428571428571,
+            "recall": 0.3,
+            "f1-score": 0.4444444444444444,
+            "support": 20.0
+          },
+          "accuracy": 0.3181818181818182,
+          "macro avg": {
+            "precision": 0.4619047619047619,
+            "recall": 0.4,
+            "f1-score": 0.28104575163398693,
+            "support": 22.0
+          },
+          "weighted avg": {
+            "precision": 0.7852813852813852,
+            "recall": 0.3181818181818182,
+            "f1-score": 0.4147355912061794,
+            "support": 22.0
+          }
+        }
+      },
+      "samples": [
+        {
+          "frame_index": 0,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a robot that is standing in a room with a lot of items"
+        },
+        {
+          "frame_index": 60,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a lab"
+        },
+        {
+          "frame_index": 120,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man that is standing in front of a machine"
+        },
+        {
+          "frame_index": 180,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a woman that is working on a machine in a room"
+        },
+        {
+          "frame_index": 240,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man that is standing in front of a robot"
+        },
+        {
+          "frame_index": 300,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man that is working on a machine in a room"
+        },
+        {
+          "frame_index": 360,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a room with a robot on a table"
+        },
+        {
+          "frame_index": 420,
+          "ground_truth": "work",
+          "prediction": "work",
+          "caption": "there is a man working on a machine in a factory"
+        },
+        {
+          "frame_index": 480,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man standing in a lab with a robot"
+        },
+        {
+          "frame_index": 540,
+          "ground_truth": "work",
+          "prediction": "idle",
+          "caption": "there is a man that is standing in front of a robot"
+        }
+      ]
+    }
+  ]
+}
