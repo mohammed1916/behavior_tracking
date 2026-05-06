@@ -12,11 +12,19 @@ import threading
 import backend.rules as rules_mod
 from datetime import datetime
 
-#if env has set debug then debug mode
+# If env has set DEBUG then enable debugpy. Only block waiting for a
+# debugger if WAIT_FOR_DEBUGGER is explicitly set to '1'. This avoids
+# hanging import-time when running under uvicorn in environments where
+# DEBUG is set but no debugger will attach.
 if os.getenv('DEBUG', '0') == '1':
-    import debugpy
-    debugpy.listen(("0.0.0.0", 5678))
-    debugpy.wait_for_client()
+    try:
+        import debugpy
+        debugpy.listen(("0.0.0.0", 5678))
+        if os.getenv('WAIT_FOR_DEBUGGER', '0') == '1':
+            debugpy.wait_for_client()
+    except Exception:
+        # Don't fail import if debugpy isn't available or fails to bind
+        logging.exception('debugpy setup failed')
 
 app = FastAPI()
 
