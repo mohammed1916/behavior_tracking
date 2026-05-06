@@ -1,0 +1,32 @@
+VLM Model Availability And Benchmark Status
+Date: 2026-04-11
+
+Configured models
+1. Salesforce/blip-image-captioning-large
+2. Qwen/Qwen2-VL-2B-Instruct
+
+Results
+
+Salesforce/blip-image-captioning-large
+- Status: benchmarked successfully
+- Benchmark artifact: logs\vlm_binary_benchmark_2026-04-10.json
+- Summary artifact: logs\vlm_binary_benchmark_2026-04-10_summary.txt
+- Notes:
+  - local captioning worked on Assembly raw videos
+  - benchmark ran on 5 videos sampled every 60 frames
+  - overall macro F1 was low
+
+Qwen/Qwen2-VL-2B-Instruct
+- Status: unavailable for offline benchmark in current environment
+- Probe result:
+  - model weights appear to be partially cached
+  - pipeline initialization still attempted Hugging Face metadata access
+  - failed under offline mode before frame benchmarking could start
+- Error class:
+  - huggingface_hub.errors.OfflineModeIsEnabled
+- Key message:
+  - Cannot reach https://huggingface.co/api/models/Qwen/Qwen2-VL-2B-Instruct: offline mode is enabled.
+
+Conclusion
+- Benchmarks completed for the BLIP VLM.
+- Qwen is configured but not fully runnable offline here, so no comparable Qwen benchmark metrics were produced yet.

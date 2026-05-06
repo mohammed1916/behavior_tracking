@@ -172,9 +172,19 @@ def init_db():
         caption TEXT,
         label TEXT,
         llm_output TEXT,
+        detector_metadata TEXT,
         FOREIGN KEY(analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
     )
     ''')
+    # Add detector_metadata column if missing (backward compatibility)
+    try:
+        cur.execute('PRAGMA table_info(samples)')
+        cols = {row[1] for row in cur.fetchall()}
+        if 'detector_metadata' not in cols:
+            cur.execute("ALTER TABLE samples ADD COLUMN detector_metadata TEXT")
+    except Exception:
+        # If migration fails, leave DB as-is to avoid breaking existing data
+        pass
     cur.execute('''
     CREATE TABLE IF NOT EXISTS segments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -236,13 +246,17 @@ def save_analysis_to_db(analysis_id, filename, model, prompt, video_url, video_i
     if samples:
         logger.info("[DB_SAVE] analysis %s saving %d samples to database", analysis_id, len(samples))
         for s in samples:
-            cur.execute('''INSERT or REPLACE INTO samples (analysis_id, frame_index, time_sec, caption, label, llm_output) VALUES (?, ?, ?, ?, ?, ?)''', (
+            detector_metadata_json = None
+            if 'detector_metadata' in s and s['detector_metadata']:
+                detector_metadata_json = json.dumps(s['detector_metadata'])
+            cur.execute('''INSERT or REPLACE INTO samples (analysis_id, frame_index, time_sec, caption, label, llm_output, detector_metadata) VALUES (?, ?, ?, ?, ?, ?, ?)''', (
                 analysis_id,
                 s.get('frame_index'),
                 s.get('time_sec'),
                 s.get('caption'),
                 s.get('label'),
-                s.get('llm_output')
+                s.get('llm_output'),
+                detector_metadata_json
             ))
     logger.info("[DB_SAVE] analysis %s samples saved to database", analysis_id)
     if segments:
@@ -298,13 +312,26 @@ def get_analysis_from_db(aid):
         'work_percentage': r[14], 'idle_percentage': r[15],
         'unclassified_duration_sec': r[16], 'unclassified_percentage': r[17]
     }
-    cur.execute('SELECT frame_index, time_sec, caption, label, llm_output FROM samples WHERE analysis_id=? ORDER BY frame_index ASC', (aid,))
+    cur.execute('SELECT frame_index, time_sec, caption, label, llm_output, detector_metadata FROM samples WHERE analysis_id=? ORDER BY frame_index ASC', (aid,))
     rows = cur.fetchall()
     samples = []
     idle_frames = []
     work_frames = []
     for s in rows:
-        sample = {'frame_index': s[0], 'time_sec': s[1], 'caption': s[2], 'label': s[3], 'llm_output': s[4]}
+        detector_metadata = None
+        if s[5]:  # detector_metadata column
+            try:
+                detector_metadata = json.loads(s[5])
+            except:
+                detector_metadata = None
+        sample = {
+            'frame_index': s[0], 
+            'time_sec': s[1], 
+            'caption': s[2], 
+            'label': s[3], 
+            'llm_output': s[4],
+            'detector_metadata': detector_metadata
+        }
         samples.append(sample)
         if s[3] == 'idle':
             idle_frames.append(s[0])
@@ -492,6 +519,38 @@ def delete_task_from_db(task_id):
         if it.get('metadata', {}).get('task_id') == task_id:
             vector_store.delete('subtasks', it.get('id'))
     return vector_store.delete('tasks', task_id)
+
+def update_samples_label(analysis_id, label, start_frame=None, end_frame=None, start_time=None, end_time=None):
+    """Update labels for a range of samples in an analysis."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    
+    # helper to find frames by time if needed
+    if start_time is not None and start_frame is None:
+        # get FPS from analysis
+        cur.execute('SELECT fps FROM analyses WHERE id=?', (analysis_id,))
+        r = cur.fetchone()
+        fps = r[0] if r else 30.0
+        start_frame = int(start_time * fps)
+        if end_time is not None:
+            end_frame = int(end_time * fps)
+            
+    query = 'UPDATE samples SET label=? WHERE analysis_id=?'
+    params = [label, analysis_id]
+    
+    if start_frame is not None:
+        query += ' AND frame_index >= ?'
+        params.append(start_frame)
+    if end_frame is not None:
+        query += ' AND frame_index <= ?'
+        params.append(end_frame)
+        
+    cur.execute(query, tuple(params))
+    rows = cur.rowcount
+    conn.commit()
+    conn.close()
+    return rows
 
 def compute_ranges(frames, samples, fps):
     if not frames or (hasattr(frames, '__len__') and len(frames) == 0):

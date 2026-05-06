@@ -12,3 +12,5 @@ node_modules/
 backend/scripts/qwen_vlm_2b_activity_model/*
 .github/
 *.avi
+
+dataset/*

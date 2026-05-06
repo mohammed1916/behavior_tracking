@@ -10,12 +10,21 @@ import json
 import logging
 import threading
 import backend.rules as rules_mod
+from datetime import datetime
 
-#if env has set debug then debug mode
+# If env has set DEBUG then enable debugpy. Only block waiting for a
+# debugger if WAIT_FOR_DEBUGGER is explicitly set to '1'. This avoids
+# hanging import-time when running under uvicorn in environments where
+# DEBUG is set but no debugger will attach.
 if os.getenv('DEBUG', '0') == '1':
-    import debugpy
-    debugpy.listen(("0.0.0.0", 5678))
-    debugpy.wait_for_client()
+    try:
+        import debugpy
+        debugpy.listen(("0.0.0.0", 5678))
+        if os.getenv('WAIT_FOR_DEBUGGER', '0') == '1':
+            debugpy.wait_for_client()
+    except Exception:
+        # Don't fail import if debugpy isn't available or fails to bind
+        logging.exception('debugpy setup failed')
 
 app = FastAPI()
 
@@ -71,7 +80,7 @@ os.makedirs(VLM_UPLOAD_DIR, exist_ok=True)
 
 # Shared helpers to keep stream endpoints consistent
 @app.get("/backend/stream_pose")
-async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('none'), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('none'), jpeg_quality: int = Query(80), max_width: Optional[int] = Query(None), save_video: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame'), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False)):
     """Stream video processing with evaluation modes: 'none', 'timing_only', 'llm_only', or 'combined'.
     
     Args:
@@ -116,6 +125,9 @@ async def stream_pose(model: str = Query(''), prompt: str = Query(''), use_llm: 
             processed_dir=PROCESSED_DIR,
             min_segment_sec=MIN_SEGMENT_SEC,
             merge_gap_sec=MERGE_GAP_SEC,
+            enable_mediapipe=enable_mediapipe,
+            enable_yolo=enable_yolo,
+            detector_fusion_mode='cascade',  # TODO: make configurable via API
         )
         
     return StreamingResponse(gen(), media_type='text/event-stream')
@@ -164,7 +176,25 @@ def make_alert_json(message: str, status_code: int = 400):
 
 
 @app.get("/backend/vlm_local_stream")
-async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), prompt: str = Query(''), use_llm: bool = Query(False), subtask_id: str = Query(None), task_id: str = Query(None), evaluation_mode: str = Query('none'), enable_mediapipe: bool = Query(False), enable_yolo: bool = Query(False), rule_set: str = Query('default'), classifier: str = Query('blip_binary'), classifier_prompt: str = Query(None), classifier_mode: str = Query('binary'), classifier_source: str = Query('llm'), sample_interval_sec: Optional[float] = Query(None), processing_mode: str = Query('current_frame')):
+async def vlm_local_stream(
+    filename: str = Query(...),
+    model: str = Query(...),
+    prompt: str = Query(''),
+    use_llm: bool = Query(False),
+    subtask_id: str = Query(None),
+    task_id: str = Query(None),
+    evaluation_mode: str = Query('none'),
+    enable_mediapipe: bool = Query(False),
+    enable_yolo: bool = Query(False),
+    rule_set: str = Query('default'),
+    classifier: str = Query('blip_binary'),
+    classifier_prompt: str = Query(None),
+    classifier_mode: str = Query('binary'),
+    classifier_source: str = Query('llm'),
+    sample_interval_sec: Optional[float] = Query(None),
+    processing_mode: str = Query('current_frame'),
+    low_confidence_threshold: float = Query(0.5)
+):
     """Stream processing events (SSE) for a previously-uploaded VLM video.
     The frontend should first POST the file to `/backend/upload_vlm` and then open
     an EventSource to this endpoint with the returned `filename`.
@@ -237,6 +267,10 @@ async def vlm_local_stream(filename: str = Query(...), model: str = Query(...), 
                 merge_gap_sec=MERGE_GAP_SEC,
                 video_url=f"/backend/vlm_video/{filename}",
                 analysis_filename=filename,
+                enable_mediapipe=enable_mediapipe,
+                enable_yolo=enable_yolo,
+                detector_fusion_mode='cascade',  # TODO: make configurable via API
+                low_confidence_threshold=low_confidence_threshold
             )
         except Exception as e:
             yield _sse_event({"stage": "alert", "message": str(e)})
@@ -250,6 +284,92 @@ async def get_vlm_video(filename: str):
     if os.path.exists(file_path):
         return FileResponse(file_path, media_type="video/mp4", filename=filename)
     return make_alert_json('File not found', status_code=404)
+
+
+@app.get("/backend/analysis/{analysis_id}/video_overlay")
+async def get_analysis_video_overlay(
+    analysis_id: str,
+    show_yolo: bool = Query(True),
+    show_mediapipe: bool = Query(True),
+    show_info: bool = Query(True)
+):
+    """Generate and stream video with detector overlays.
+    
+    Args:
+        analysis_id: Analysis ID
+        show_yolo: Whether to show YOLO bounding boxes
+        show_mediapipe: Whether to show MediaPipe keypoints
+        show_info: Whether to show info text overlay
+    
+    Returns:
+        Annotated video file
+    """
+    import tempfile
+    import backend.visualization as viz_mod
+    
+    # Get analysis data
+    analysis = db_mod.get_analysis_from_db(analysis_id)
+    if not analysis:
+        return make_alert_json('Analysis not found', status_code=404)
+    
+    video_url = analysis.get('video_url')
+    if not video_url:
+        return make_alert_json('No video available for this analysis', status_code=404)
+    
+    # Get source video path
+    if video_url.startswith('/backend/vlm_video/'):
+        filename = video_url.split('/')[-1]
+        source_video_path = os.path.join(VLM_UPLOAD_DIR, filename)
+    else:
+        return make_alert_json('Unsupported video source', status_code=400)
+    
+    if not os.path.exists(source_video_path):
+        return make_alert_json('Source video not found', status_code=404)
+    
+    # Check if any samples have detector metadata
+    samples = analysis.get('samples', [])
+    has_detector_data = any(
+        s.get('detector_metadata') for s in samples
+    )
+    
+    if not has_detector_data:
+        return make_alert_json(
+            'No detector data available. Enable YOLO/MediaPipe during analysis.',
+            status_code=404
+        )
+    
+    # Create temporary annotated video
+    with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
+        output_path = tmp_file.name
+    
+    try:
+        success = viz_mod.create_annotated_video(
+            source_video_path,
+            output_path,
+            samples,
+            show_yolo=show_yolo,
+            show_mediapipe=show_mediapipe,
+            show_info=show_info
+        )
+        
+        if not success:
+            return make_alert_json('Failed to create annotated video', status_code=500)
+        
+        # Stream the annotated video
+        return FileResponse(
+            output_path,
+            media_type="video/mp4",
+            filename=f"annotated_{analysis_id}.mp4",
+            background=None  # Keep file until response is sent
+        )
+    except Exception as e:
+        module_logger.error(f"Error creating overlay video: {e}")
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except:
+                pass
+        return make_alert_json(f'Error: {str(e)}', status_code=500)
 
 
 @app.get("/backend/vlm_local_models")
@@ -431,7 +551,7 @@ async def update_task_endpoint(task_id: str, name: str = Form(...)):
 
 @app.delete('/backend/tasks/{task_id}')
 async def delete_task_endpoint(task_id: str):
-    t = get_task_from_db(task_id)
+    t = db_mod.get_task_from_db(task_id)
     if not t:
         raise HTTPException(status_code=404, detail='task not found')
     deleted = db_mod.delete_task_from_db(task_id)
@@ -469,3 +589,544 @@ async def delete_analysis(analysis_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post('/backend/relabel')
+async def relabel_analysis(
+    analysis_id: str = Form(...),
+    label: str = Form(...),
+    start_frame: int = Form(None),
+    end_frame: int = Form(None),
+    start_time: float = Form(None),
+    end_time: float = Form(None)
+):
+    try:
+        count = db_mod.update_samples_label(analysis_id, label, start_frame, end_frame, start_time, end_time)
+        return {"success": True, "updated_samples": count}
+    except Exception as e:
+        return make_alert_json(str(e), status_code=500)
+
+
+# ============================================================================
+# ML TRAINING PIPELINE ENDPOINTS
+# ============================================================================
+
+FEATURES_DIR = "processed/features"
+DATASETS_DIR = "processed/datasets"
+MODELS_DIR = "mlruns/models"
+
+os.makedirs(FEATURES_DIR, exist_ok=True)
+os.makedirs(DATASETS_DIR, exist_ok=True)
+os.makedirs(MODELS_DIR, exist_ok=True)
+
+
+@app.post("/backend/upload_and_extract_features")
+async def upload_and_extract_features(
+    video: UploadFile = File(...),
+    video_id: str = Form(None),
+    labels_csv: UploadFile = File(None),
+    detector_type: str = Form('fusion'),
+    sample_rate: int = Form(1),
+):
+    """Upload video, extract features using MediaPipe+YOLO, return feature file path.
+    
+    Args:
+        video: Video file to process
+        video_id: Optional unique identifier (default: filename)
+        labels_csv: Optional CSV with frame labels (columns: frame_index, label)
+        detector_type: 'fusion' (MP+YOLO), 'mediapipe', or 'yolo'
+        sample_rate: Process every Nth frame (default: 1)
+    
+    Returns:
+        {
+            "feature_file": "path/to/features.parquet",
+            "video_id": "unique_id",
+            "num_frames": 1234,
+            "status": "completed"
+        }
+    """
+    import subprocess
+    import tempfile
+    
+    try:
+        # Save uploaded video
+        file_id = video_id or str(uuid.uuid4())
+        video_filename = f"{file_id}_{video.filename}"
+        video_path = os.path.join(VLM_UPLOAD_DIR, video_filename)
+        
+        with open(video_path, "wb") as buffer:
+            while True:
+                chunk = await video.read(1024 * 1024)
+                if not chunk:
+                    break
+                buffer.write(chunk)
+        
+        module_logger.info(f"Saved video to {video_path}")
+        
+        # Save labels if provided
+        labels_path = None
+        if labels_csv:
+            labels_filename = f"{file_id}_labels.csv"
+            labels_path = os.path.join(FEATURES_DIR, labels_filename)
+            with open(labels_path, "wb") as buffer:
+                while True:
+                    chunk = await labels_csv.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    buffer.write(chunk)
+            module_logger.info(f"Saved labels to {labels_path}")
+        
+        # Extract features using subprocess
+        feature_filename = f"{file_id}_features.parquet"
+        feature_path = os.path.join(FEATURES_DIR, feature_filename)
+        
+        cmd = [
+            'python', 'scripts/extract_features.py',
+            '--video', video_path,
+            '--output', feature_path,
+            '--video-id', file_id,
+            '--detector', detector_type,
+            '--sample-rate', str(sample_rate),
+        ]
+        
+        if labels_path:
+            cmd.extend(['--labels', labels_path])
+        
+        module_logger.info(f"Running feature extraction: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        
+        if result.returncode != 0:
+            module_logger.error(f"Feature extraction failed: {result.stderr}")
+            return make_alert_json(f"Feature extraction failed: {result.stderr}", status_code=500)
+        
+        module_logger.info(f"Feature extraction completed: {feature_path}")
+        
+        # Load feature file to get metadata
+        import pandas as pd
+        df = pd.read_parquet(feature_path)
+        
+        return {
+            "feature_file": feature_path,
+            "video_id": file_id,
+            "num_frames": len(df),
+            "num_labeled": int(df['label'].notna().sum()) if 'label' in df.columns else 0,
+            "status": "completed",
+            "columns": list(df.columns),
+        }
+    
+    except subprocess.TimeoutExpired:
+        return make_alert_json("Feature extraction timed out (>10 min)", status_code=500)
+    except Exception as e:
+        module_logger.exception('Failed to extract features')
+        return make_alert_json(f'Feature extraction failed: {e}', status_code=500)
+
+
+@app.post("/backend/sync_analysis_to_features")
+async def sync_analysis_to_features(
+    analysis_id: str = Form(...),
+    detector_type: str = Form('fusion'),
+):
+    """Sync labels from an analysis to a feature file (extracting features if needed)."""
+    import pandas as pd
+    import subprocess
+    import tempfile
+    
+    try:
+        # 1. Get analysis and labels
+        analysis = db_mod.get_analysis_from_db(analysis_id)
+        if not analysis:
+            return make_alert_json("Analysis not found", status_code=404)
+            
+        video_filename = analysis.get('filename')
+        # Fix: VLM uploads might have path separators or be just filenames.
+        # usually it is just "filename" stored in DB.
+        if not video_filename:
+            return make_alert_json("Analysis has no associated video file", status_code=400)
+            
+        video_path = os.path.join(VLM_UPLOAD_DIR, os.path.basename(video_filename))
+        if not os.path.exists(video_path):
+             return make_alert_json(f"Video file not found: {video_path}", status_code=404)
+
+        # 2. Prepare labels CSV from DB samples
+        samples = analysis.get('samples', [])
+        # Filter samples that have a meaningful label
+        labeled_samples = [s for s in samples if s.get('label')]
+        
+        # Create temp labels CSV
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, newline='') as tmp_labels:
+            import csv
+            writer = csv.writer(tmp_labels)
+            writer.writerow(['frame_index', 'label'])
+            for s in labeled_samples:
+                writer.writerow([s.get('frame_index'), s.get('label')])
+            labels_csv_path = tmp_labels.name
+        
+        # 3. Determine feature file path
+        # Convention: {video_filename}_features.parquet
+        feature_filename = f"{video_filename}_features.parquet"
+        feature_path = os.path.join(FEATURES_DIR, feature_filename)
+        
+        # 4. Check if features exist
+        if os.path.exists(feature_path):
+            # Update existing features with new labels
+            module_logger.info(f"Updating labels in existing feature file: {feature_path}")
+            try:
+                df = pd.read_parquet(feature_path)
+                
+                # Load labels into a map
+                label_map = {s.get('frame_index'): s.get('label') for s in labeled_samples}
+                
+                # Update 'label' column
+                # Use map to update only where we have new labels, or overwrite?
+                # Active learning usually implies we trust the DB labels more.
+                # However, if the feature file has MORE frames than the DB (e.g. VLM was sparse),
+                # we only update the frames we know about.
+                
+                # If 'label' column doesn't exist, create it
+                if 'label' not in df.columns:
+                    df['label'] = None
+                
+                # We can iterate or use map. Map is faster but tricky if we want to preserve old labels 
+                # for frames NOT in the DB.
+                # df['label'] = df['frame_index'].map(label_map).fillna(df['label'])
+                # ^ This works: map returns new label or NaN (if missing in map). 
+                # fillna fills NaN with original label.
+                
+                df['label'] = df['frame_index'].map(label_map).combine_first(df['label'])
+                
+                df.to_parquet(feature_path, index=False)
+                status = "updated"
+            except Exception as e:
+                module_logger.error(f"Failed to update parquet: {e}")
+                return make_alert_json(f"Failed to update existing feature file: {e}", status_code=500)
+            
+        else:
+            # Extract features from scratch
+            module_logger.info(f"Extracting new features to: {feature_path}")
+            
+            cmd = [
+                'python', 'scripts/extract_features.py',
+                '--video', video_path,
+                '--output', feature_path,
+                '--video-id', analysis_id, # Use analysis ID or filename as ID
+                '--labels', labels_csv_path,
+                '--detector', detector_type,
+                '--sample-rate', '1', # Deep learning usually needs dense frames
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            if result.returncode != 0:
+                module_logger.error(f"Feature extraction failed: {result.stderr}")
+                os.unlink(labels_csv_path)
+                return make_alert_json(f"Feature extraction failed: {result.stderr}", status_code=500)
+            
+            status = "created"
+
+        # Cleanup temp file
+        if os.path.exists(labels_csv_path):
+            os.unlink(labels_csv_path)
+
+        # Return stats
+        df = pd.read_parquet(feature_path)
+        return {
+            "success": True,
+            "status": status,
+            "feature_file": feature_path,
+            "num_frames": len(df),
+            "num_labeled": int(df['label'].notna().sum()) if 'label' in df.columns else 0
+        }
+
+    except Exception as e:
+        module_logger.exception("Sync failed")
+        return make_alert_json(str(e), status_code=500)
+
+
+@app.get("/backend/features")
+async def list_features():
+    """List all extracted feature files."""
+    try:
+        files = []
+        for fname in os.listdir(FEATURES_DIR):
+            if fname.endswith('.parquet'):
+                fpath = os.path.join(FEATURES_DIR, fname)
+                stat = os.stat(fpath)
+                files.append({
+                    'filename': fname,
+                    'path': fpath,
+                    'size_mb': round(stat.st_size / (1024*1024), 2),
+                    'created': datetime.fromtimestamp(stat.st_birthtime).isoformat(),
+                })
+        files.sort(key=lambda x: x['created'], reverse=True)
+        return {'features': files}
+    except Exception as e:
+        return make_alert_json(f'Failed to list features: {e}', status_code=500)
+
+
+@app.get("/backend/features/{feature_file}")
+async def get_feature_info(feature_file: str):
+    """Get metadata about a feature file."""
+    try:
+        import pandas as pd
+        fpath = os.path.join(FEATURES_DIR, feature_file)
+        
+        if not os.path.exists(fpath):
+            return make_alert_json('Feature file not found', status_code=404)
+        
+        df = pd.read_parquet(fpath)
+        
+        info = {
+            'filename': feature_file,
+            'num_frames': len(df),
+            'columns': list(df.columns),
+            'video_id': df['video_id'].iloc[0] if 'video_id' in df.columns else None,
+            'has_labels': 'label' in df.columns and df['label'].notna().any(),
+        }
+        
+        if info['has_labels']:
+            info['label_distribution'] = df['label'].value_counts().to_dict()
+        
+        return info
+    
+    except Exception as e:
+        return make_alert_json(f'Failed to get feature info: {e}', status_code=500)
+
+@app.post("/backend/build_task_dataset")
+async def build_task_dataset(
+    feature_files: str = Form(...),  # Comma-separated list of feature filenames
+    window_sec: float = Form(2.0),
+    step_sec: float = Form(0.5),
+    balance_method: str = Form('downsample'),
+    train_ratio: float = Form(0.7),
+    val_ratio: float = Form(0.15),
+    test_ratio: float = Form(0.15),
+):
+    """Build sliding-window dataset from feature files.
+    
+    Args:
+        feature_files: Comma-separated list of feature filenames (from FEATURES_DIR)
+        window_sec: Window length in seconds
+        step_sec: Step size in seconds
+        balance_method: 'downsample', 'upsample', or 'none'
+        train_ratio: Training set proportion
+        val_ratio: Validation set proportion
+        test_ratio: Test set proportion
+    
+    Returns:
+        {
+            "dataset_dir": "path/to/dataset",
+            "train_size": 1234,
+            "val_size": 123,
+            "test_size": 123,
+            "status": "completed"
+        }
+    """
+    import subprocess
+    
+    try:
+        # Parse feature file list
+        fnames = [f.strip() for f in feature_files.split(',') if f.strip()]
+        fpaths = [os.path.join(FEATURES_DIR, fname) for fname in fnames]
+        
+        # Validate all files exist
+        for fpath in fpaths:
+            if not os.path.exists(fpath):
+                return make_alert_json(f'Feature file not found: {fpath}', status_code=404)
+        
+        # Generate dataset ID
+        dataset_id = str(uuid.uuid4())[:8]
+        dataset_dir = os.path.join(DATASETS_DIR, f"dataset_{dataset_id}")
+        
+        # Build dataset using subprocess
+        cmd = [
+            'python', 'scripts/build_task_dataset.py',
+            '--features', *fpaths,
+            '--output', dataset_dir,
+            '--window-sec', str(window_sec),
+            '--step-sec', str(step_sec),
+            '--balance', balance_method,
+            '--train-ratio', str(train_ratio),
+            '--val-ratio', str(val_ratio),
+            '--test-ratio', str(test_ratio),
+        ]
+        
+        module_logger.info(f"Building dataset: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        
+        if result.returncode != 0:
+            module_logger.error(f"Dataset build failed: {result.stderr}")
+            return make_alert_json(f"Dataset build failed: {result.stderr}", status_code=500)
+        
+        module_logger.info(f"Dataset build completed: {dataset_dir}")
+        
+        # Load metadata
+        with open(os.path.join(dataset_dir, 'metadata.json'), 'r') as f:
+            metadata = json.load(f)
+        
+        return {
+            "dataset_dir": dataset_dir,
+            "dataset_id": dataset_id,
+            "train_size": metadata['train_size'],
+            "val_size": metadata['val_size'],
+            "test_size": metadata['test_size'],
+            "labels": list(metadata['label_to_idx'].keys()),
+            "num_features": metadata['num_features'],
+            "status": "completed",
+        }
+    
+    except subprocess.TimeoutExpired:
+        return make_alert_json("Dataset build timed out (>5 min)", status_code=500)
+    except Exception as e:
+        module_logger.exception('Failed to build dataset')
+        return make_alert_json(f'Dataset build failed: {e}', status_code=500)
+
+
+@app.get("/backend/datasets")
+async def list_datasets():
+    """List all built datasets."""
+    try:
+        datasets = []
+        for dname in os.listdir(DATASETS_DIR):
+            dpath = os.path.join(DATASETS_DIR, dname)
+            if os.path.isdir(dpath):
+                meta_path = os.path.join(dpath, 'metadata.json')
+                if os.path.exists(meta_path):
+                    with open(meta_path, 'r') as f:
+                        meta = json.load(f)
+                    datasets.append({
+                        'id': dname,
+                        'path': dpath,
+                        'train_size': meta.get('train_size', 0),
+                        'val_size': meta.get('val_size', 0),
+                        'test_size': meta.get('test_size', 0),
+                        'labels': list(meta.get('label_to_idx', {}).keys()),
+                        'num_features': meta.get('num_features', 0),
+                    })
+        return {'datasets': datasets}
+    except Exception as e:
+        return make_alert_json(f'Failed to list datasets: {e}', status_code=500)
+
+
+@app.post("/backend/train_task_model")
+async def train_task_model(
+    dataset_dir: str = Form(...),
+    model_type: str = Form('rf'),
+    aggregation: str = Form('stats'),
+    n_estimators: int = Form(100),
+    max_depth: int = Form(None),
+    learning_rate: float = Form(0.1),
+):
+    """Train task classification model.
+    
+    Args:
+        dataset_dir: Path to dataset directory (relative to DATASETS_DIR or absolute)
+        model_type: 'rf' (RandomForest) or 'lgbm' (LightGBM)
+        aggregation: 'stats' or 'flatten'
+        n_estimators: Number of trees
+        max_depth: Max tree depth (None for unlimited)
+        learning_rate: Learning rate for LightGBM
+    
+    Returns:
+        {
+            "model_path": "path/to/model.pkl",
+            "model_id": "model_abc123",
+            "metrics": {...},
+            "status": "completed"
+        }
+    """
+    import subprocess
+    
+    try:
+        # Resolve dataset path
+        if not os.path.isabs(dataset_dir):
+            dataset_path = os.path.join(DATASETS_DIR, dataset_dir)
+        else:
+            dataset_path = dataset_dir
+        
+        if not os.path.exists(dataset_path):
+            return make_alert_json(f'Dataset not found: {dataset_path}', status_code=404)
+        
+        # Generate model ID
+        model_id = str(uuid.uuid4())[:8]
+        model_filename = f"task_classifier_{model_type}_{model_id}.pkl"
+        model_path = os.path.join(MODELS_DIR, model_filename)
+        
+        # Train model using subprocess
+        cmd = [
+            'python', 'scripts/train_task_classifier.py',
+            '--dataset', dataset_path,
+            '--model', model_type,
+            '--output', model_path,
+            '--agg', aggregation,
+            '--n-estimators', str(n_estimators),
+        ]
+        
+        if max_depth is not None:
+            cmd.extend(['--max-depth', str(max_depth)])
+        
+        if model_type == 'lgbm':
+            cmd.extend(['--learning-rate', str(learning_rate)])
+        
+        module_logger.info(f"Training model: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        
+        if result.returncode != 0:
+            module_logger.error(f"Model training failed: {result.stderr}")
+            return make_alert_json(f"Model training failed: {result.stderr}", status_code=500)
+        
+        module_logger.info(f"Model training completed: {model_path}")
+        
+        # Load metrics
+        metrics_path = model_path.replace('.pkl', '_metrics.json')
+        if os.path.exists(metrics_path):
+            with open(metrics_path, 'r') as f:
+                metrics = json.load(f)
+        else:
+            metrics = {}
+        
+        return {
+            "model_path": model_path,
+            "model_id": model_id,
+            "model_type": model_type,
+            "metrics": metrics,
+            "status": "completed",
+        }
+    
+    except subprocess.TimeoutExpired:
+        return make_alert_json("Model training timed out (>10 min)", status_code=500)
+    except Exception as e:
+        module_logger.exception('Failed to train model')
+        return make_alert_json(f'Model training failed: {e}', status_code=500)
+
+
+@app.get("/backend/models")
+async def list_models():
+    """List all trained models."""
+    try:
+        models = []
+        for fname in os.listdir(MODELS_DIR):
+            if fname.endswith('.pkl'):
+                fpath = os.path.join(MODELS_DIR, fname)
+                stat = os.stat(fpath)
+                
+                # Load metrics if available
+                metrics_path = fpath.replace('.pkl', '_metrics.json')
+                metrics = {}
+                if os.path.exists(metrics_path):
+                    with open(metrics_path, 'r') as f:
+                        metrics = json.load(f)
+                
+                models.append({
+                    'filename': fname,
+                    'path': fpath,
+                    'size_mb': round(stat.st_size / (1024*1024), 2),
+                    'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    'accuracy': metrics.get('accuracy'),
+                    'f1_macro': metrics.get('f1_macro'),
+                })
+        
+        models.sort(key=lambda x: x['created'], reverse=True)
+        return {'models': models}
+    except Exception as e:
+        return make_alert_json(f'Failed to list models: {e}', status_code=500)

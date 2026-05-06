@@ -14,3 +14,7 @@ pytest-asyncio
 httpx
 pytest-mock
 faiss-gpu
+pandas
+pyarrow
+scikit-learn
+lightgbm
